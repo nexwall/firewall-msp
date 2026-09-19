@@ -80,17 +80,17 @@ jobs:
           name: image
           compression-level: 0
           path: |
-            bin/targets/**/nethsecurity-*combined-efi.img.gz
+            bin/targets/**/nexwall-*combined-efi.img.gz
       - uses: actions/upload-artifact@v7
         name: Upload manifest file
         with:
           name: manifest
-          path: bin/targets/**/nethsecurity-*.manifest
+          path: bin/targets/**/nexwall-*.manifest
       - uses: actions/upload-artifact@v7
         name: Upload SBOM
         with:
           name: sbom
-          path: bin/targets/**/nethsecurity-*.bom.cdx.json
+          path: bin/targets/**/nexwall-*.bom.cdx.json
       - uses: actions/upload-artifact@v7
         if: always()
         name: Upload logs

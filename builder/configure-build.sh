@@ -32,17 +32,17 @@ done
 
 # Conclude configuration
 cat <<EOF >> .config
-CONFIG_GRUB_TITLE="NethSecurity"
-CONFIG_VERSION_BUG_URL="https://github.com/NethServer/nethsecurity/issues"
-CONFIG_VERSION_DIST="NethSecurity"
-CONFIG_VERSION_HOME_URL="https://github.com/nethserver/nethsecurity"
-CONFIG_VERSION_MANUFACTURER="Nethesis"
-CONFIG_VERSION_MANUFACTURER_URL="https://www.nethesis.it"
+CONFIG_GRUB_TITLE="Nexwall Firewall"
+CONFIG_VERSION_BUG_URL="https://nexwall.io/bugs"
+CONFIG_VERSION_DIST="Nexwall"
+CONFIG_VERSION_HOME_URL="https://nexwall.io"
+CONFIG_VERSION_MANUFACTURER="Nexwall"
+CONFIG_VERSION_MANUFACTURER_URL="https://nexwall.io"
 CONFIG_VERSION_NUMBER="${image_version}"
 CONFIG_VERSION_CODE="${owrt_version}"
-CONFIG_VERSION_PRODUCT="NethSecurity"
-CONFIG_VERSION_REPO="https://updates.nethsecurity.nethserver.org/${repo_channel}/${nethsecurity_version}"
-CONFIG_VERSION_SUPPORT_URL="https://community.nethserver.org"
+CONFIG_VERSION_PRODUCT="Nexwall Firewall"
+CONFIG_VERSION_REPO="https://updates.nexwall.io/${repo_channel}/${nethsecurity_version}"
+CONFIG_VERSION_SUPPORT_URL="https://nexwall.io/support"
 EOF
 cat "config/targets/${target}.conf" >> .config
 
