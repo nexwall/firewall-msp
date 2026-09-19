@@ -1,0 +1,200 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+#
+# Connect to a remote NethSecurity controller
+#
+
+UCI_CONF="ns-plug"
+CONFIG_FILE="/usr/share/ns-plug/client.conf"
+RSYSLOG_CONF="/var/etc/rsyslog.ns-plug.conf"
+source /etc/os-release
+
+server=$(uci -q get ${UCI_CONF}.config.server)
+unit_id=$(uci -q get ${UCI_CONF}.config.unit_id)
+unit_name=$(uci -q get ${UCI_CONF}.config.unit_name)
+system_id=$(uci -q get ${UCI_CONF}.config.system_id)
+token=$(uci -q get ${UCI_CONF}.config.token)
+subscription_type=$(uci -q get ${UCI_CONF}.config.type)
+
+# Exit early if no server has been set
+if [ -z "${server}" ]; then
+    exit 1
+fi
+
+# Exit early if no unit_id has been set
+if [ -z "${unit_id}" ]; then
+    exit 2
+fi
+
+# Exit early if no token been set
+if [ -z "${token}" ]; then
+    exit 3
+fi
+
+# If not set, use the hostname as unit_name
+if [ -z "${unit_name}" ]; then
+    unit_name=$(cat /proc/sys/kernel/hostname)
+fi
+
+# Create controller user if not exits
+user=$(uci -q get rpcd.controller.username 2>/dev/null)
+if [ -z "${user}" ]; then
+    user=$(openssl rand -hex 12)
+    uci set rpcd.controller=login
+    uci set rpcd.controller.username=${user}
+    uci add_list rpcd.controller.read='*'
+    uci add_list rpcd.controller.write='*'
+    uci commit rpcd
+fi
+
+# Generate random password at each restart
+secret=$(date +%s$RANDOM | sha256sum | awk '{print $1}')
+# Encrypt the password
+passwd=$(uhttpd -m ${secret})
+
+# Disable certificate verification if tls_verify is set to 0
+curl_opts="-sL"
+tls_verify=$(uci -q get ${UCI_CONF}.config.tls_verify)
+if [ "${tls_verify}" == "0" ]; then
+    curl_opts="${curl_opts}k"
+fi
+
+# Register the server
+valid=0
+max_attempts=5 # 10 seconds
+watchdog=0
+response=""
+until [ "${valid}" -eq 1 ] || [ "${watchdog}" -ge "${max_attempts}" ]
+do
+    response=$(curl ${curl_opts} -H "Content-Type: application/json" -H "RegistrationToken: ${token}" ${server}/api/units/register -X POST --data '{"unit_id": "'${unit_id}'", "username": "'${user}'", "password": "'${secret}'", "unit_name": "'${unit_name}'", "version": "'${VERSION_ID}'", "subscription_type": "'${subscription_type}'", "system_id": "'${system_id}'"}')
+    http_code=$(echo ${response} | jq -r .code)
+    if [ "${http_code}" == "409" ]; then
+        # Duplicate entry, cleanup uci config
+        uci delete rpcd.controller
+        uci commit rpcd
+        exit 4
+    elif [ "${http_code}" == "403" ]; then
+        sleep 10
+    elif [ "${http_code}" == "200" ]; then
+        valid=1
+    else
+        sleep 2 # wait for controller to be reacheable
+	watchdog=$(( watchdog + 1 ))
+    fi
+done
+
+if  [ "${watchdog}" -ge "${max_attempts}" ]; then
+    exit 5
+fi
+
+# Save the new password after successfull registration
+uci set rpcd.controller.password=${passwd}
+uci commit rpcd
+
+# Configuration received, setup the VPN
+host=$(echo ${response} | jq -r .data.host)
+port=$(echo ${response} | jq -r .data.port)
+cert=$(echo ${response} | jq -r .data.cert)
+key=$(echo ${response} | jq -r .data.key)
+ca=$(echo ${response} | jq -r .data.ca)
+
+# Save VPN address and API port for later use inside push scripts
+vpn_address=$(echo ${response} | jq -r '.data.vpn_address // empty')
+api_port=$(echo ${response} | jq -r '.data.api_port // empty')
+if [ -n "${vpn_address}" ] && [ -n "${api_port}" ]; then
+    uci set ${UCI_CONF}.config.vpn_address="${vpn_address}"
+    uci set ${UCI_CONF}.config.api_port="${api_port}"
+    uci commit ${UCI_CONF}
+fi
+
+cat <<EOF > ${CONFIG_FILE}
+client
+server-poll-timeout 5
+nobind
+float
+explicit-exit-notify 1
+remote ${host} ${port} udp
+connect-retry-max 5
+dev tun-nsplug
+tls-client
+script-security 2
+route-up /usr/sbin/ns-controller-push-info
+down /usr/sbin/ns-controller-telegraf-down
+<ca>
+${ca}
+</ca>
+<cert>
+${cert}
+</cert>
+<key>
+${key}
+</key>
+auth-nocache
+verb 3
+EOF
+
+tun_mtu="$(uci -q get ${UCI_CONF}.config.tun_mtu)"
+mssfix="$(uci -q get ${UCI_CONF}.config.mssfix)"
+if [ -n "${tun_mtu}" ] && [ -n "${mssfix}" ]; then
+    echo "tun-mtu ${tun_mtu}" >> ${CONFIG_FILE}
+    echo "mssfix ${mssfix}" >> ${CONFIG_FILE}
+else
+    echo "mtu-test" >> ${CONFIG_FILE}
+fi
+
+## Configure rsyslog to send to promtail
+cat <<EOF > ${RSYSLOG_CONF}
+# Rsyslog configuration for NethSecurity controller logging
+\$PreserveFQDN on
+
+ruleset(name="forward") {
+    *.* action(
+        type="omfwd"
+        target="$(echo "$response" | jq -r .data.promtail_address)"
+        port="$(echo "$response" | jq -r .data.promtail_port)"
+        protocol="tcp"
+        TCP_Framing="octet-counted"
+        Template="RSYSLOG_SyslogProtocol23Format"
+
+        KeepAlive="on"
+        KeepAlive.Probes="3"
+        KeepAlive.Time="60"
+        KeepAlive.Interval="20"
+
+        action.resumeRetryCount="-1"
+        queue.spoolDirectory="/var/spool"
+        queue.type="linkedList"
+        queue.size="50000"
+        queue.timeoutEnqueue="0"
+        queue.filename="forwardq"
+        queue.saveOnShutdown="on"
+        queue.maxDiskSpace="50000"
+    )
+}
+
+*.* call forward
+EOF
+# check if uci rsyslog.syslog.includes has ${RSYSLOG_CONF}, if not add it
+if ! uci -q get rsyslog.syslog.includes | grep -qF "${RSYSLOG_CONF}"; then
+    uci add_list rsyslog.syslog.includes="${RSYSLOG_CONF}"
+    uci commit rsyslog
+    reload_config
+fi
+/etc/init.d/rsyslog restart
+
+# Send data to controller every 15 minutes, only if subscription is enabled
+if [ ! -z "$subscription_type" ]; then
+    grep -qF '/usr/bin/ns-push-reports' /etc/crontabs/root || echo '*/15 * * * * sleep $(( RANDOM % 60 )); /usr/bin/ns-push-reports' >> /etc/crontabs/root && /etc/init.d/cron restart
+fi
+
+# Start the VPN
+if [ -f ${CONFIG_FILE} ]; then
+    exec openvpn ${CONFIG_FILE}
+else
+    exit 3
+fi

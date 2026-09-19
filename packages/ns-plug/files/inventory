@@ -1,0 +1,66 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import json
+import ipaddress
+from euci import EUci
+from nethsec import inventory
+from nethsec.inventory import _run
+
+uci = EUci()
+release = inventory.get_version()
+cpu_info = inventory.get_cpu_info()
+product = inventory.get_product()
+dns = inventory.info_dns_servers(uci)
+networks = inventory.get_networks(uci)
+mem_info = inventory.get_memory()
+mount_points = inventory.get_mount_points()
+
+features = {}
+for func in dir(inventory):
+    if func.startswith("fact_"):
+        method = getattr(inventory, func)
+        features[func.removeprefix('fact_')] = method(uci)
+# Prevent duplicated info
+del features['network']['configuration']
+
+data = {
+    # keep the value as a string, like the other numeric fields of this payload
+    "arp_macs": str(inventory.info_arp_macs(uci)),
+    "dmi": { "product": { "name": product, "uuid": _run("cat /sys/class/dmi/id/product_uuid") }, "bios": { "version": _run("cat /sys/devices/virtual/dmi/id/bios_version"), "vendor": _run("cat /sys/devices/virtual/dmi/id/bios_vendor")}, "board": { "product": product, "manufacturer": _run("cat /sys/devices/virtual/dmi/id/sys_vendor") }},
+    "virtual": inventory.is_virtual(),
+    "kernel": _run('uname'),
+    "kernelrelease": _run('uname -r'),
+    "networking": { "fqdn": _run('uname -n')},
+    "os": { "type": "nethsecurity", "name": "NethSec", "release": { "full": release, "major": 7 }, "family": "OpenWRT" },
+    "processors": { "count": _run("grep processor /proc/cpuinfo  | wc -l"), "models": [  cpu_info["model"] ], "isa": cpu_info["architecture"]},
+    "timezone": _run('uci get system.@system[0].zonename'),
+    "system_uptime": { "seconds": _run("cat /proc/uptime | awk -F. '{print $1}'") },
+    "esmithdb": {
+        "networks": list(networks.values()),
+        "configuration" : [
+            { "name": "sysconfig", "type": "configuration", "props": {"Version": release} },
+            { "name": "dns", "type": "configuration", "props": {"NameServers": ','.join(dns)} },
+            { "name" : "SystemName", "type" : _run("uname -n | cut -d'.' -f1") },
+            { "name" : "DomainName", "type" : _run("uname -n | cut -d'.' -f2-") }
+        ]
+    },
+    "memory": {
+        "swap": { "used_bytes": mem_info.get('SwapUsed', 0), "available_bytes": mem_info.get('SwapFree', 0), "total_bytes": mem_info.get('SwapTotal', 0) },
+        "system": {
+            "used_bytes": mem_info.get('MemUsed', 0),
+            "available_bytes": mem_info.get('MemAvailable', 0),
+            "total_bytes": mem_info.get('MemTotal', 0)
+        }
+    },
+    "mountpoints": mount_points,
+    "rpms": { "nethserver-firewall-base-ui": _run("apk info ns-ui 2>/dev/null | head -1 | sed 's/ns-ui-//;s/ .*//'") },
+    "public_ip": inventory.info_default_ipv4(uci),
+    "features": features
+}
+
+print(json.dumps(data))

@@ -1,0 +1,18 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import sys
+import subprocess
+import nsmigration
+
+(u, data, nmap) = nsmigration.init("subscription.json")
+
+if not data:
+    sys.exit(0)
+
+nsmigration.vprint("Activating the subscription")
+subprocess.run(["/usr/sbin/register", data['subscription']['type'], data['subscription']['secret']], check=False)

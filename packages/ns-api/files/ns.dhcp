@@ -1,0 +1,421 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Manage DHCP
+
+import sys
+import json
+import ipaddress
+import os
+import subprocess
+from euci import EUci
+from nethsec import utils, objects
+
+def ip2int(ip):
+    parts = ip.split('.')
+    return (int(parts[0]) << 24) | (int(parts[1]) << 16) | (int(parts[2]) << 8) | int(parts[3])
+
+def int2ip(ip_int):
+    octet1 = (ip_int >> 24) & 255
+    octet2 = (ip_int >> 16) & 255
+    octet3 = (ip_int >> 8) & 255
+    octet4 = ip_int & 255
+    return f"{octet1}.{octet2}.{octet3}.{octet4}"
+
+def range_to_conf(ip, mask, first, last):
+    net = str(ipaddress.ip_network(f"{ip}/{mask}", strict=False).network_address)
+    limit = ip2int(last) - ip2int(first) + 1
+    start = ip2int(first) - ip2int(net)
+    return (start,limit)
+
+def conf_to_range(ip, mask, start, limit):
+    net = str(ipaddress.ip_network(f"{ip}/{mask}", strict=False).network_address)
+    first = ip2int(net) + int(start)
+    last = first + int(limit) - 1
+    return (int2ip(first), int2ip(last))
+
+def list_custom_dhcp_options():
+    ret = {}
+    u = EUci()
+    for i in utils.get_all_by_type(u, 'dhcp', 'dhcp'):
+        try:
+            options = u.get_all('dhcp', i, 'dhcp_option')
+            for opt in options:
+                if not opt.startswith('option:'):
+                    tmp = opt.split(",")
+                    ret[tmp[0]] = opt.removeprefix(tmp[0] + ",")
+        except:
+            continue
+    return ret
+
+def list_dhcp_options():
+    ret = {}
+    pd = subprocess.run(["dnsmasq", "--help", "dhcp"], capture_output=True, text=True)
+    k = 0
+    for line in pd.stdout.rstrip().split("\n"):
+        k = k+1
+        if k == 1:
+            continue
+        tmp = line.strip().split(" ")
+        ret[tmp[1]] = tmp[0]
+    return ret | list_custom_dhcp_options()
+
+def list_interfaces():
+    ret = {}
+    u = EUci()
+    wans = []
+    zones = {}
+    interfaces = utils.get_all_by_type(u, 'network', 'interface')
+    for device in  utils.get_all_wan_devices(u):
+        iname = utils.get_interface_from_device(u, device)
+        if iname:
+            wans.append(iname)
+    for z in utils.get_all_by_type(u, 'firewall', 'zone'):
+        for zi in u.get('firewall', z, 'network', list=True, default=[]):
+            zones[zi] = u.get('firewall', z, 'name', default=z)
+    dhcps = utils.get_all_by_type(u, 'dhcp', 'dhcp')
+    if not dhcps:
+        dhcps = []
+    for i in interfaces:
+        record = {"device": "", "active": False, "options": {}, "force": False, "ns_binding": 0, "ranges": [] }
+        # skip loopback, bond devices, wans, aliases and interfaces with no IP address (e.g. DHCP interfaces)
+        if i == "loopback" or i in wans or not ('ipaddr' in interfaces[i]) or interfaces[i].get('proto') == 'bonding' or interfaces[i].get('device', '').startswith('@'):
+            continue
+
+        record['device'] = interfaces[i].get('device', '')
+        record['zone'] = zones.get(i, '')
+        for d in dhcps:
+            ds = dhcps[d]
+            if 'interface' in ds and ds['interface'] == i:
+                if 'ignore' in ds and ds['ignore'] == "1":
+                    continue
+                (first, last) = conf_to_range(interfaces[i]['ipaddr'], interfaces[i]['netmask'], ds.get('start', 100), ds.get('limit', 150))
+                record['active'] = ds.get('dhcpv4', 'server') == 'server'
+                # handle existing active configurations:
+                # - old default was force off, as OpenWrt
+                # - new default for non active-dhcp server should be on
+                if record['active']:
+                    force_default = '0'
+                else:
+                    force_default = '1'
+                record['force'] = ds.get('force', force_default) == '1'
+                record['ns_binding'] = int(ds.get('ns_binding', 0))
+                record['options']['leasetime'] = ds.get('leasetime', '12h')
+                if 'dhcp_option' in ds:
+                    for opt in ds['dhcp_option']:
+                        tmp = opt.split(",")
+                        tmp[0] = tmp[0].removeprefix('option:')
+                        record['options'][tmp[0]] = " ".join(tmp[1:])
+                record['ranges'].append({"first": first, "last": last})
+        ret[i] = record
+             
+    return ret
+
+def edit_interface(args):
+    u = EUci()
+    try:
+        u.get_all("network", args["interface"])
+    except:
+        return utils.generic_error("interface_not_found")
+    # ns-binding validation, this check is more controller-safe
+    if 'ns_binding' in args and args['ns_binding'] not in [0, 1, 2]:
+        return utils.validation_error("ns_binding", "invalid", args["ns_binding"])
+
+    ipaddr = u.get('network', args['interface'], 'ipaddr')
+    netmask = u.get('network', args['interface'], 'netmask')
+    network = ipaddress.ip_network(f"{ipaddr}/{netmask}", strict=False)
+    
+    # ranges validation
+    for r in args['ranges']:
+        r['first'] = r['first'].strip()
+        r['last'] = r['last'].strip()
+        if not r['first']:
+            return utils.validation_error("first", "first_is_empty", r["first"])
+        if not r['last']:
+            return utils.validation_error("last", "last_is_empty", r["last"])
+        first_ip = ipaddress.ip_address(r['first'])
+        last_ip = ipaddress.ip_address(r['last'])
+        if not (network.network_address < first_ip < network.broadcast_address):
+            return utils.validation_error("first", "ip_out_of_interface_network", r["first"])
+        if not (network.network_address < last_ip < network.broadcast_address):
+            return utils.validation_error("last", "ip_out_of_interface_network", r["last"])
+        if ip2int(r['last']) <= ip2int(r['first']):
+            return utils.validation_error("last", "last_must_be_greater_than_first", r["last"])
+
+    dhcp_servers = utils.get_all_by_type(u, 'dhcp', 'dhcp')
+    for server in dhcp_servers:
+        if dhcp_servers[server]['interface'] == args['interface']:
+            u.delete('dhcp', server)
+
+    for r in args['ranges']:
+        dhcp_id = f"{args['interface']}_{utils.get_random_id()}"
+        (start, limit) = range_to_conf(ipaddr, netmask, r["first"], r["last"])
+        u.set("dhcp", dhcp_id, 'dhcp')
+        if args['active']:
+            u.set("dhcp", dhcp_id, 'dhcpv4', 'server')
+        else:
+            u.set("dhcp", dhcp_id, 'dhcpv4', 'disabled')
+        u.set("dhcp", dhcp_id, "limit", limit)
+        u.set("dhcp", dhcp_id, "start", start)
+        u.set("dhcp", dhcp_id, "leasetime", args["leasetime"])
+        u.set("dhcp", dhcp_id, "interface", args['interface'])
+        u.set("dhcp", dhcp_id, "force", '1' if args.get('force', False) else '0')
+        u.set("dhcp", dhcp_id, "instance", "ns_dnsmasq")
+        if 'ns_binding' in args:
+            u.set("dhcp", dhcp_id, "ns_binding", args.get('ns_binding'))
+        u.set("dhcp", dhcp_id, "ignore", '0')
+        opts = []
+        for opt in args['options']:
+            k = list(opt.keys())[0]
+            v = opt[k].strip().rstrip(',')
+            if v:
+                if k.isdigit(): # custom option, no "option" prefix
+                    opts.append(f"{k},{v}")
+                else:
+                    opts.append(f"option:{k},{v}")
+        u.set("dhcp", dhcp_id, "dhcp_option", opts)
+
+    u.save("dhcp")
+    return {"interface": args["interface"]}
+
+def get_interface(args):
+    u = EUci()
+    ret = {"interface": args["interface"], "options": [], "active": False, "ranges": []}
+    try:
+        interface = u.get_all("network", args["interface"])
+    except:
+        interface = {}
+
+    items = utils.get_all_by_type(u, "dhcp", "dhcp")
+    dhcp_sections = []
+    for i in items:
+        if items[i].get('interface') == args['interface'] and items[i].get('ignore', '0') != '1':
+            dhcp_sections.append(u.get_all('dhcp', i))
+
+    if not dhcp_sections:
+        dhcp_sections = [{"start": 100, "limit": 150, "leasetime": "12h", "dhcpv4": "disabled", "dhcp_option": []}]
+
+    # get options from the first dhcp section since they are the same for all sections
+    dhcp = dhcp_sections[0]
+
+    if 'ipaddr' in interface:
+        for ds in dhcp_sections:
+            (first, last) = conf_to_range(interface['ipaddr'], interface['netmask'], ds.get('start', 100), ds.get('limit', 150))
+            ret['ranges'].append({"first": first, "last": last})
+
+    ret["leasetime"] = dhcp.get("leasetime")
+    ret["active"] = dhcp.get("dhcpv4", "server") == "server"
+    # handle existing active configurations:
+    # - old default was force off, as OpenWrt
+    # - new default for non active-dhcp server should be on
+    if ret['active']:
+        force_default = '0'
+    else:
+        force_default = '1'
+    ret['force'] = dhcp.get('force', force_default) == '1'
+    if "dhcp_option" in dhcp:
+        for opt in dhcp.get("dhcp_option"):
+            tmp = opt.split(",")
+            tmp[0] = tmp[0].removeprefix('option:')
+            ret["options"].append({tmp[0]: ",".join(tmp[1:])})
+    ret['ns_binding'] = int(dhcp.get('ns_binding', 0))
+    if 'ipaddr' in interface and 'netmask' in interface:
+        network = ipaddress.ip_network(f"{interface['ipaddr']}/{interface['netmask']}", strict=False)
+        ret['class_start_ip'] = str(network.network_address + 1)
+        ret['class_end_ip'] = str(network.broadcast_address - 1)
+
+    return ret
+
+def get_interface_device(uci, ip):
+    for i in utils.get_all_by_type(uci, 'network', 'interface'):
+        idata = uci.get_all('network', i)
+        if 'ipaddr' in idata and 'netmask' in idata:
+            if ipaddress.ip_address(ip) in ipaddress.ip_network(f'{idata["ipaddr"]}/{idata["netmask"]}', strict=False):
+                return (i, idata.get('device', ''))
+    return ('', '')
+
+def list_active_leases():
+    ret = {"leases": []}
+    u = EUci()
+
+    static_leases = []
+    for l in utils.get_all_by_type(u, 'dhcp', 'host'):
+        ldata = u.get_all('dhcp', l)
+        if 'mac' in ldata and 'ip' in ldata:
+            static_leases.append(ldata['mac'].lower())
+
+    leasefile = u.get('dhcp', 'ns_dnsmasq', 'leasefile', default='/tmp/dhcp.leases')
+    if not os.path.exists(leasefile):
+        return ret
+
+    with open(leasefile, "r") as fp:
+        for line in fp.readlines():
+            tmp = line.split(" ")
+            hostname = tmp[3]
+            if tmp[3] == "*":
+                hostname = ""
+            (interface, device) = get_interface_device(u, tmp[2])
+            # skip static leases
+            if tmp[1].lower() in static_leases:
+                continue
+            ret['leases'].append({"timestamp": tmp[0], "macaddr": tmp[1], "ipaddr": tmp[2], "hostname": hostname, 'interface': interface, "device": device})
+    return ret
+
+def list_static_leases():
+    ret = {"leases": []}
+    u = EUci()
+    for l in utils.get_all_by_type(u, 'dhcp', 'host'):
+        ldata = u.get_all('dhcp', l)
+        if 'mac' in ldata and 'ip' in ldata:
+            used, matches = objects.is_used_object(u, f'dhcp/{l}')
+            (interface, device) = get_interface_device(u, ldata['ip'])
+            ret['leases'].append({"lease": l, "macaddr": ldata['mac'], "ipaddr": ldata['ip'], "hostname": ldata.get('name',''), 'interface': interface, "device": device, "description": ldata.get('ns_description', ''), "used": used, "matches": matches})
+    return ret
+
+def is_reserved(u, mac, exclude_lease_id=''):
+    try:
+        for h in utils.get_all_by_type(u, 'dhcp', 'host'):
+            # check if MAC is already used, but don't consider exclude_lease_id (if present)
+            if u.get('dhcp', h, 'mac', default='') == mac and (not exclude_lease_id or exclude_lease_id != h):
+                return True
+    except:
+        return False
+
+    return False
+
+def count_ip_occurrences(e_uci, ip):
+    occurrences = 0
+    for item in utils.get_all_by_type(e_uci, 'dhcp', 'host'):
+        ip_address = e_uci.get('dhcp', item, 'ip', default=None)
+        if ip_address is None or ip_address != ip:
+            continue
+        occurrences += 1
+
+    return occurrences
+
+def add_static_lease(args):
+    u = EUci()
+    if is_reserved(u, args["macaddr"]):
+        return utils.validation_error("mac", "mac_already_reserved", args["macaddr"])
+    if count_ip_occurrences(u, args["ipaddr"]) > 0:
+        return utils.validation_error("ipaddr", "ip_already_reserved", args["ipaddr"])
+    lname = utils.get_random_id()
+    u.set('dhcp', lname, 'host')
+    u.set('dhcp', lname, 'ip', args["ipaddr"])
+    u.set('dhcp', lname, 'mac', args["macaddr"])
+    u.set('dhcp', lname, 'dns', "1")
+    if args['hostname']:
+        u.set('dhcp', lname, 'name', args["hostname"])
+    u.set('dhcp', lname, 'ns_description', args["description"])
+    u.save('dhcp')
+    return {"lease": lname}
+
+def edit_static_lease(args):
+    u = EUci()
+    try:
+        u.get('dhcp', args['lease'])
+    except:
+        return utils.generic_error("lease_not_found")
+
+    # exclude the lease we are editing from MAC duplication check
+    if is_reserved(u, args["macaddr"], args["lease"]):
+        return utils.validation_error("mac", "mac_already_reserved", args["macaddr"])
+    # check if the IP address is already reserved, but not for the current lease
+    if count_ip_occurrences(u, args["ipaddr"]) > 0 and u.get('dhcp', args['lease'], 'ip', default='') != args["ipaddr"]:
+        return utils.validation_error("ipaddr", "ip_already_reserved", args["ipaddr"])
+    lname = args["lease"]
+    u.set('dhcp', lname, 'host')
+    u.set('dhcp', lname, 'ip', args["ipaddr"])
+    u.set('dhcp', lname, 'mac', args["macaddr"])
+    u.set('dhcp', lname, 'dns', "1")
+    if args['hostname']:
+        u.set('dhcp', lname, 'name', args["hostname"])
+    else:
+        u.delete('dhcp', lname, 'name')
+    u.set('dhcp', lname, 'ns_description', args["description"])
+    u.save('dhcp')
+    return {"lease": lname}
+
+def get_static_lease(args):
+    u = EUci()
+    try:
+        lease = u.get_all('dhcp', args['lease'])
+    except:
+        return utils.generic_error("lease_not_found")
+    return {"hostname": lease.get('name', ''), "ipaddr": lease.get("ip", ''), 'macaddr': lease.get('mac',''), 'description': lease.get('ns_description', '')}
+
+def delete_static_lease(args):
+    u = EUci()
+    used, matches = objects.is_used_object(u, f'dhcp/{args["lease"]}')
+    if used:
+        return utils.validation_error("lease", "static_lease_is_used", matches)
+    try:
+        u.get('dhcp', args['lease'])
+        u.delete('dhcp', args['lease'])
+        u.save('dhcp')
+    except:
+        return utils.generic_error("lease_not_found")
+    return {"lease": args['lease']}
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        "list-interfaces": {},
+        "list-dhcp-options": {},
+        "get-interface": {"interface": "lan"},
+        "edit-interface": {
+            "interface": "lan",
+            "ranges": [
+                {"first": "192.168.100.2", "last": "192.168.100.150"},
+                {"first": "192.168.100.200", "last": "192.168.100.220"}
+            ],
+            "leasetime": "12h",
+            "active": True,
+            "force": True,
+            "ns_binding": 0,
+            "options": [
+                {"router": "192.168.100.1"},
+                {"domain-name": "nethserver.org"},
+                {"dns-server": "1.1.1.1,8.8.8.8"},
+                {"netbios-ns": ""},
+                {"tftp-server": ""},
+                {"120": "192.168.100.151"}
+            ]
+        },
+        "list-active-leases": {},
+        "list-static-leases": {},
+        "get-static-lease": {"lease": "ns_mylease"},
+        "edit-static-lease": {"lease": "ns_mylease"},
+        "delete-static-lease": {"lease": "ns_mylease"},
+        "add-static-lease": {"ipaddr": "192.168.100.22", "macaddr": "80:5e:c0:d9:c6:9a", "hostname": "myhost"},
+    }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    if action == "list-interfaces":
+        ret = list_interfaces()
+    elif action == "list-dhcp-options":
+        ret = list_dhcp_options()
+    elif action == "list-active-leases":
+        ret = list_active_leases()
+    elif action == "list-static-leases":
+        ret = list_static_leases()
+    else:
+        args = json.loads(sys.stdin.read())
+    if action == "get-static-lease":
+        ret = get_static_lease(args)
+    elif action == "delete-static-lease":
+        ret = delete_static_lease(args)
+    elif action == "edit-static-lease":
+        ret = edit_static_lease(args)
+    elif action == "edit-interface":
+        ret = edit_interface(args)
+    elif action == "add-static-lease":
+        ret = add_static_lease(args)
+    elif action == "get-interface":
+        ret = get_interface(args)
+    print(json.dumps(ret))

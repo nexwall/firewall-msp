@@ -1,0 +1,67 @@
+#!/usr/bin/python
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Check if the given account is enabled
+# 
+# Environment variables:
+# - common_name
+
+import os
+import sys
+from euci import EUci
+from nethsec import users
+
+# The certificate of a migrated user is not present inside the index.txt
+def is_migrated(instance, user):
+    try:
+        with open(f"/etc/openvpn/{instance}/pki/index.txt", "r") as fp:
+            lines = fp.readlines()
+            for line in lines:
+                (status, expiration, revocation, serial, filename, name) = line.split("\t")
+                if name == user:
+                    return False
+    except:
+        return True
+    return True
+
+if len(sys.argv) < 3:
+    print("Not enough script parameters", file=sys.stderr)
+    sys.exit(3)
+
+instance = sys.argv[1]
+
+uci = EUci()
+config = {}
+try:
+    config = uci.get_all("openvpn", instance)
+except:
+    # instance not found
+    sys.exit(3)
+
+if config.get("ns_auth_mode", None) is None:
+    # This is a tunnel VPN, skip the check
+    sys.exit(0)
+
+db = config.get("ns_user_db", None)
+if db is None:
+    # User db not configured
+    sys.exit(4)
+
+cn = os.environ.get("common_name")
+if '@' in cn and is_migrated(instance, os.environ.get("common_name")):
+    # remove domain suffix
+    cn = cn.split('@')[0]
+
+user = users.get_user_by_name(uci, cn, db)
+if user is None:
+    # User not found
+    sys.exit(2)
+
+if user.get("openvpn_enabled", "0") == "1":
+    sys.exit(0)
+else:
+    # User is disabled
+    sys.exit(1)

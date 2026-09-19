@@ -1,0 +1,93 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+#
+# Register the machine
+#
+
+function exit_error {
+    >&2 echo "[ERROR] $@"
+    exit 1
+}
+
+function help {
+    >&2 echo "Usage: $0 <community|enterprise> <system_secret> [timeout]"
+    exit 1
+}
+
+type="$1"
+secret="$2"
+timeout=${3:-180}
+
+if [ -z "$1" ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    help
+fi
+
+if [ -z "$secret" ]; then
+    exit_error "Invalid secret"
+fi
+
+# Setup URLs
+case "$type" in
+    community)
+        url="https://my.nethserver.com/api/"
+
+        system_id=$(curl -s -m $timeout --retry 3 -L \
+        -H "Content-Type: application/json" -H "Accept: application/json" \
+        -H "Authorization: token $secret" \
+        "${url}machine/info" | jq -r ".uuid" 2>/dev/null)
+        ;;
+    enterprise)
+        url="https://my.nethesis.it/api/"
+
+        system_id=$(curl -s -m $timeout --retry 3 -L \
+        -H "Content-Type: application/json" -H "Accept: application/json" \
+        -d '{"secret": "'$secret'"}' "${url}systems/info" | jq -r ".uuid" 2>/dev/null)
+        ;;
+    *)
+        exit_error "Invalid type '$type'"
+        ;;
+esac
+
+if [ "$system_id" == "null" ] || [ -z "$system_id" ]; then
+    exit_error "System ID not found"
+fi
+
+# Save config
+
+case "$type" in
+    community)
+        uci set ns-plug.config.type="community"
+        uci set ns-plug.config.alerts_url="https://my.nethserver.com/api/machine/"
+        uci set ns-plug.config.api_url="$url"
+        uci set ns-plug.config.inventory_url="https://my.nethserver.com/api/machine/inventories/store/"
+        ;;
+    enterprise)
+        uci set ns-plug.config.type="enterprise"
+        uci set ns-plug.config.alerts_url="https://my.nethesis.it/isa/"
+        uci set ns-plug.config.api_url="$url"
+        uci set ns-plug.config.inventory_url="https://my.nethesis.it/isa/inventory/store/"
+        ;;
+esac
+
+uci set ns-plug.config.system_id="$system_id"
+uci set ns-plug.config.secret="$secret"
+uci set ns-plug.config.repository_url="https://$system_id:$secret@distfeed.nethesis.it/repository/$type/nethsecurity"
+uci commit ns-plug
+reload_config
+# Register the machine by sending the inventory for the first time
+send-inventory
+send-heartbeat
+exit_code=$?
+
+# Execute register hooks
+for script in $(find /usr/share/ns-plug/hooks/register -maxdepth 1 -executable -type f,l | sort); do
+    $script
+done
+
+# Ignore hooks exit codes
+exit $exit_code

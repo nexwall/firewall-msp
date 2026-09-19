@@ -1,0 +1,721 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Manage IPSec tunnels
+
+import sys
+import json
+import subprocess
+from euci import EUci
+from nethsec import utils, firewall, ipsec, ovpn
+
+sas_list = None
+
+## Utils
+
+def get_wan_by_ip(u, ipaddr):
+    device = None
+    ip_map = utils.get_all_device_ips()
+    try:
+        fallback = get_all_wan_devices(u, True)[0] # fallback to first wan
+    except:
+        fallback = 'wan'
+    for d in ip_map:
+        if ipaddr in ip_map[d]:
+            device = d
+    if device:
+        ret = utils.get_interface_from_device(u, device)
+        if ret:
+            return ret
+        else:
+            return fallback
+    else:
+        return fallback
+
+def next_id():
+    max_id = 0
+    u = EUci()
+    for t in utils.get_all_by_type(u, 'ipsec', 'tunnel'):
+        try:
+            if_id = int(u.get('ipsec', t, 'if_id', default=-1))
+            max_id = max(if_id, max_id)
+        except:
+            continue
+    return max_id + 1
+
+def get_swanctl_list_sas():
+    global sas_list
+    if sas_list is None:
+        try:
+            p = subprocess.run(["swanctl", "--list-sas"], capture_output=True, text=True, check=True)
+            sas_list = p.stdout
+        except:
+            sas_list = ''
+    return sas_list.split("\n")
+
+def get_tunnel_status(id, swanctl_output=None):
+    """Get tunnel status from swanctl output. Returns dict with status, installed count, tunnel details, and raw output."""
+    result = {
+        'status': None,
+        'installed_count': 0,
+        'tunnel_count': 0,
+        'tunnels': {},  # Map of tunnel_name -> installed (bool)
+        'raw_output': ''  # Raw swanctl output for this remote
+    }
+    try:
+        lines = get_swanctl_list_sas() if swanctl_output is None else swanctl_output
+        in_remote = False
+        remote_lines = []
+        
+        for i, l in enumerate(lines):
+            # First line contains the status: "id: #n, STATUS, IKEv1/IKEv2, ..."
+            if f'{id}:' in l:
+                parts = l.split(',')
+                if len(parts) >= 2:
+                    result['status'] = parts[1].strip()
+                in_remote = True
+                remote_lines = [l]
+                continue
+            
+            if in_remote:
+                # Stop parsing when we hit the next remote or end
+                if l and not l[0].isspace() and ':' in l:
+                    break
+                
+                remote_lines.append(l)
+                
+                # Parse INSTALLED child SAs (they are indented and contain tunnel name)
+                if 'INSTALLED' in l and l.strip().startswith(f'{id}_tunnel'):
+                    # Extract tunnel name from line like: "ns_92bfe076_tunnel_2: #1, reqid 1, INSTALLED, ..."
+                    tunnel_name = l.strip().split(':')[0]
+                    result['tunnels'][tunnel_name] = True
+                    result['installed_count'] += 1
+        
+        # Store raw output for this remote
+        result['raw_output'] = '\n'.join(remote_lines)
+    except:
+        pass
+    
+    return result
+
+def is_connected(id, u, status_info=None):
+    """Check tunnel connection status with three states: yes, warning, no.
+    - yes: all children installed and status is ESTABLISHED
+    - warning: not all children installed but status is ESTABLISHED
+    - no: status is not ESTABLISHED
+    """
+    if status_info is None:
+        status_info = get_tunnel_status(id)
+    
+    # Get count of configured tunnels from UCI
+    try:
+        tunnels = u.get_all('ipsec', id, 'tunnel')
+        tunnel_count = len(tunnels) if tunnels else 0
+    except:
+        tunnel_count = 0
+    
+    installed_count = status_info['installed_count']
+    
+    if status_info['status'] != 'ESTABLISHED':
+        return 'no'
+    
+    # Status is ESTABLISHED
+    if installed_count == tunnel_count and tunnel_count > 0:
+        return 'yes'
+    else:
+        return 'warning'
+
+def uci_set_if_changed(u, config, section, option, value):
+    """Set UCI option only if it differs from current value to minimize changes."""
+    try:
+        current = u.get(config, section, option, default=None)
+        # Handle list values
+        if isinstance(value, list):
+            try:
+                current_list = set(sorted(list(u.get_all(config, section, option))))
+            except:
+                current_list = None
+            if current_list != set(sorted(value)):
+                u.set(config, section, option, value)
+                return True
+        elif str(current) != str(value):
+            u.set(config, section, option, value)
+            return True
+    except:
+        u.set(config, section, option, value)
+        return True
+    return False
+
+
+## APIs
+
+def list_tunnels():
+    ret = []
+    u = EUci()
+    swanctl_output = get_swanctl_list_sas()
+    for r in utils.get_all_by_type(u, 'ipsec', 'remote'):
+        local = set()
+        remote = set()
+        status_info = get_tunnel_status(r, swanctl_output)
+        
+        # Build children array with tunnel details
+        children = []
+        tunnels = u.get_all('ipsec', r, 'tunnel')
+        for t in tunnels:
+            child_local = []
+            child_remote = []
+            try:
+                child_local = u.get_all('ipsec', t, 'local_subnet')
+            except:
+                pass
+            try:
+                child_remote = u.get_all('ipsec', t, 'remote_subnet')
+            except:
+                pass
+            child = {
+                'name': t,
+                'installed': status_info['tunnels'].get(t, False),
+                'local_subnet': child_local,
+                'remote_subnet': child_remote
+            }
+            children.append(child)
+        
+        tunnel = {
+            'id': r,
+            'name': u.get('ipsec', r, 'ns_name', default=r),
+            'enabled': u.get('ipsec', r, 'enabled', default='1'),
+            'status': status_info['status'],
+            'connected': is_connected(r, u, status_info),
+            'children': children,
+            'raw_output': status_info['raw_output']
+        }
+        
+        for t in tunnels:
+            t_config = u.get_all('ipsec', t)
+            try:
+                tmp = u.get_all('ipsec', t, 'local_subnet')
+                local = local | set(tmp)
+            except:
+                continue
+            try:
+                tmp = u.get_all('ipsec', t, 'remote_subnet')
+                remote = remote | set(tmp)
+            except:
+               continue
+        tunnel['local'] = sorted(list(local))
+        tunnel['remote'] = sorted(list(remote))
+        ret.append(tunnel)
+
+    return {"tunnels": ret}
+
+def add_tunnel(args):
+    u = EUci()
+    iname = utils.get_random_id()
+    return setup_tunnel(u, iname, args)
+
+def setup_tunnel(u, iname, args):
+    ike_p = f'{iname}_ike'
+    esp_p = f'{iname}_esp'
+    tunnel_base = f'{iname}_tunnel'
+
+    link = f'ipsec/{iname}'
+    # create proposals
+    u.set('ipsec', ike_p, 'crypto_proposal')
+    for opt in ['encryption_algorithm', 'hash_algorithm', 'dh_group']:
+        u.set('ipsec', ike_p, opt, args['ike'][opt])
+    u.set('ipsec', ike_p, 'ns_link', link)
+    u.set('ipsec', esp_p, 'crypto_proposal')
+    for opt in ['encryption_algorithm', 'hash_algorithm', 'dh_group']:
+        u.set('ipsec', esp_p, opt, args['esp'][opt])
+    u.set('ipsec', esp_p, 'ns_link', link)
+
+    # create tunnels
+    tunnels = []
+    ti = 1
+    if_id = next_id()
+    for ls in args['local_subnet']:
+        for rs in args['remote_subnet']:
+            tunnel =  f'{tunnel_base}_{ti}'
+            u.set('ipsec', tunnel, 'tunnel')
+            for opt in ['ipcomp', 'dpdaction']:
+                u.set('ipsec', tunnel, opt, args[opt])
+            u.set('ipsec', tunnel, 'local_subnet', [ls])
+            u.set('ipsec', tunnel, 'remote_subnet', [rs])
+
+            u.set('ipsec', tunnel, 'rekeytime', args['esp']['rekeytime'])
+            u.set('ipsec', tunnel, 'crypto_proposal', [esp_p])
+            u.set('ipsec', tunnel, 'closeaction', args.get('closeaction', 'none'))
+            u.set('ipsec', tunnel, 'startaction', 'start')
+            u.set('ipsec', tunnel, 'if_id', if_id)
+            u.set('ipsec', tunnel, 'ns_link', link)
+            tunnels.append(tunnel)
+            ti = ti + 1
+
+    # create remote
+    u.set('ipsec', iname, 'remote')
+    u.set('ipsec', iname, 'ns_name', args['ns_name'])
+    u.set('ipsec', iname, 'authentication_method', 'psk')
+    for opt in ['gateway', 'keyexchange', 'local_identifier', 'local_ip', 'enabled', 'remote_identifier', 'pre_shared_key']:
+        u.set('ipsec', iname, opt, args[opt])
+    u.set('ipsec', iname, 'crypto_proposal', [ike_p])
+    u.set('ipsec', iname, 'rekeytime', args['ike']['rekeytime'])
+    u.set('ipsec', iname, 'keyingtries', 0)
+    u.set('ipsec', iname, 'tunnel', tunnels)
+
+    u.save('ipsec')
+
+    # create interface
+    dname = f'ipsec{if_id}'
+    u.set('network', dname, 'interface')
+    u.set('network', dname, 'ifid', if_id)
+    u.set('network', dname, 'mtu', '1438')
+    u.set('network', dname, 'zone', 'ipsec')
+    u.set('network', dname, 'proto', 'xfrm')
+    u.set('network', dname, 'multicast', 'true')
+    u.set('network', dname, 'tunlink', get_wan_by_ip(u, args['local_ip']))
+    u.set('network', dname, 'ns_link', link)
+
+    # create route
+    subnets = 1
+    for net in args['remote_subnet']:
+        rname = f'{iname}_route_{subnets}'
+        u.set('network', rname, 'route')
+        u.set('network', rname, 'target', net)
+        u.set('network', rname, 'interface', dname)
+        u.set('network', rname, 'ns_link', link)
+        u.set('network', rname, 'disabled', '0')
+        subnets = subnets + 1
+
+    u.save('network')
+
+    # Add interface to trusted zone
+    ipsec.add_trusted_interface(u, dname)
+
+    # Open firewall ports only if required
+    ipsec.open_firewall_ports(u)
+
+    return {"id": iname}
+
+def edit_tunnel(args):
+    u = EUci()
+    id = args['id']
+    
+    # Verify tunnel exists
+    try:
+        u.get("ipsec", id)
+    except:
+        return utils.validation_error("tunnel_not_found")
+    
+    ike_p = f'{id}_ike'
+    esp_p = f'{id}_esp'
+    tunnel_base = f'{id}_tunnel'
+    link = f'ipsec/{id}'
+    
+    # Update IKE proposal (only if changed)
+    for opt in ['encryption_algorithm', 'hash_algorithm', 'dh_group']:
+        uci_set_if_changed(u, 'ipsec', ike_p, opt, args['ike'][opt])
+    
+    # Update ESP proposal (only if changed)
+    for opt in ['encryption_algorithm', 'hash_algorithm', 'dh_group']:
+        uci_set_if_changed(u, 'ipsec', esp_p, opt, args['esp'][opt])
+    
+    # Build map of existing tunnels: (local_subnet, remote_subnet) -> tunnel_name
+    # Keep a deterministic order of tunnel ids to reuse them when pairs change
+    existing_tunnel_map = {}
+    ordered_tunnels = []
+    if_id = None
+    max_tunnel_index = 0
+    for t in utils.get_all_by_type(u, 'ipsec', 'tunnel'):
+        if t.startswith(tunnel_base):
+            if if_id is None:
+                if_id = u.get('ipsec', t, 'if_id', default=None)
+            # Extract tunnel index from name (e.g., ns_xxx_tunnel_1 -> 1)
+            try:
+                t_index = int(t.split('_')[-1])
+                max_tunnel_index = max(max_tunnel_index, t_index)
+            except:
+                t_index = 0
+            ordered_tunnels.append((t_index, t))
+            try:
+                local_subnets = u.get_all('ipsec', t, 'local_subnet')
+                remote_subnets = u.get_all('ipsec', t, 'remote_subnet')
+                # Each tunnel has one local and one remote subnet
+                for ls in local_subnets:
+                    for rs in remote_subnets:
+                        existing_tunnel_map[(ls, rs)] = t
+            except:
+                continue
+    ordered_tunnels.sort()
+    
+    # Build set of desired subnet pairs
+    desired_pairs = set()
+    for ls in args['local_subnet']:
+        for rs in args['remote_subnet']:
+            desired_pairs.add((ls, rs))
+    
+    existing_pairs = set(existing_tunnel_map.keys())
+    
+    # Determine what to keep and what is unmatched
+    pairs_to_keep = existing_pairs & desired_pairs
+    pairs_to_add = list(desired_pairs - existing_pairs)
+    pairs_to_reassign = list(existing_pairs - desired_pairs)  # candidates to reuse ids
+    
+    # Update existing tunnels that we're keeping (only if changed)
+    for pair in pairs_to_keep:
+        t = existing_tunnel_map[pair]
+        for opt in ['ipcomp', 'dpdaction']:
+            uci_set_if_changed(u, 'ipsec', t, opt, args[opt])
+        uci_set_if_changed(u, 'ipsec', t, 'rekeytime', args['esp']['rekeytime'])
+        uci_set_if_changed(u, 'ipsec', t, 'closeaction', args.get('closeaction', 'none'))
+    
+    # Reuse tunnel ids when changing subnet pairs: assign existing tunnel sections to new pairs before creating new ones
+    available_tunnels = [t for (_idx, t) in ordered_tunnels if t not in [existing_tunnel_map[p] for p in pairs_to_keep]]
+    ti = max_tunnel_index + 1
+    for (ls, rs) in pairs_to_add:
+        if available_tunnels:
+            tunnel = available_tunnels.pop(0)
+            # Reassign this tunnel to the new pair instead of deleting/creating
+            uci_set_if_changed(u, 'ipsec', tunnel, 'local_subnet', [ls])
+            uci_set_if_changed(u, 'ipsec', tunnel, 'remote_subnet', [rs])
+            for opt in ['ipcomp', 'dpdaction']:
+                uci_set_if_changed(u, 'ipsec', tunnel, opt, args[opt])
+            uci_set_if_changed(u, 'ipsec', tunnel, 'rekeytime', args['esp']['rekeytime'])
+            uci_set_if_changed(u, 'ipsec', tunnel, 'crypto_proposal', [esp_p])
+            uci_set_if_changed(u, 'ipsec', tunnel, 'closeaction', args.get('closeaction', 'none'))
+            uci_set_if_changed(u, 'ipsec', tunnel, 'startaction', 'start')
+            uci_set_if_changed(u, 'ipsec', tunnel, 'if_id', if_id)
+            uci_set_if_changed(u, 'ipsec', tunnel, 'ns_link', link)
+            # Remove from pairs_to_reassign since it's now reused
+            if pairs_to_reassign:
+                pairs_to_reassign.pop(0)
+        else:
+            # No reusable tunnel ids left, create a new one
+            tunnel = f'{tunnel_base}_{ti}'
+            u.set('ipsec', tunnel, 'tunnel')
+            for opt in ['ipcomp', 'dpdaction']:
+                u.set('ipsec', tunnel, opt, args[opt])
+            u.set('ipsec', tunnel, 'local_subnet', [ls])
+            u.set('ipsec', tunnel, 'remote_subnet', [rs])
+            u.set('ipsec', tunnel, 'rekeytime', args['esp']['rekeytime'])
+            u.set('ipsec', tunnel, 'crypto_proposal', [esp_p])
+            u.set('ipsec', tunnel, 'closeaction', args.get('closeaction', 'none'))
+            u.set('ipsec', tunnel, 'startaction', 'start')
+            u.set('ipsec', tunnel, 'if_id', if_id)
+            u.set('ipsec', tunnel, 'ns_link', link)
+            ti = ti + 1
+    
+    # Delete tunnels that were not reused
+    for pair in pairs_to_reassign:
+        t = existing_tunnel_map[pair]
+        u.delete('ipsec', t)
+    
+    # Update remote's tunnel list if tunnels changed
+    if pairs_to_add or pairs_to_reassign:
+        # Rebuild tunnel list from current state
+        final_tunnels = []
+        for t in utils.get_all_by_type(u, 'ipsec', 'tunnel'):
+            if t.startswith(tunnel_base):
+                final_tunnels.append(t)
+        uci_set_if_changed(u, 'ipsec', id, 'tunnel', final_tunnels)
+    
+    # Update routes if remote subnets changed
+    current_remote = set(rs for (ls, rs) in existing_pairs)
+    new_remote = set(args['remote_subnet'])
+    dname = f'ipsec{if_id}'
+    route_disabled = '0' if args['enabled'] == '1' else '1'
+
+    if current_remote != new_remote:
+        # Build map of existing routes: target -> route_name
+        existing_routes = {}
+        for r in utils.get_all_by_type(u, 'network', 'route'):
+            if u.get('network', r, 'ns_link', default='') == link:
+                target = u.get('network', r, 'target', default='')
+                existing_routes[target] = r
+        
+        # Remove routes for removed remote subnets
+        for net in (current_remote - new_remote):
+            if net in existing_routes:
+                u.delete('network', existing_routes[net])
+        
+        # Add routes for new remote subnets
+        # Find max route index
+        max_route_index = 0
+        for r in existing_routes.values():
+            try:
+                r_index = int(r.split('_')[-1])
+                max_route_index = max(max_route_index, r_index)
+            except:
+                pass
+        
+        ri = max_route_index + 1
+        for net in (new_remote - current_remote):
+            rname = f'{id}_route_{ri}'
+            u.set('network', rname, 'route')
+            u.set('network', rname, 'target', net)
+            u.set('network', rname, 'interface', dname)
+            u.set('network', rname, 'ns_link', link)
+            u.set('network', rname, 'disabled', route_disabled)
+            ri = ri + 1
+
+    # Sync disabled state on all existing routes
+    for r in utils.get_all_by_type(u, 'network', 'route'):
+        if u.get('network', r, 'ns_link', default='') == link:
+            uci_set_if_changed(u, 'network', r, 'disabled', route_disabled)
+
+    u.save('network')
+
+    # Update remote section (only if changed)
+    uci_set_if_changed(u, 'ipsec', id, 'ns_name', args['ns_name'])
+    for opt in ['gateway', 'keyexchange', 'local_identifier', 'local_ip', 'enabled', 'remote_identifier', 'pre_shared_key']:
+        uci_set_if_changed(u, 'ipsec', id, opt, args[opt])
+    uci_set_if_changed(u, 'ipsec', id, 'rekeytime', args['ike']['rekeytime'])
+    
+    # Update network interface tunlink if local_ip changed
+    uci_set_if_changed(u, 'network', dname, 'tunlink', get_wan_by_ip(u, args['local_ip']))
+    u.save('network')
+    
+    u.save('ipsec')
+    
+    return {"id": id}
+
+def delete_tunnel(id):
+    u = EUci()
+    if_id = None
+    try:
+        for tunnel in utils.get_all_by_type(u, 'ipsec', 'tunnel'):
+            if tunnel.startswith(f'{id}_tunnel'):
+                 if_id = u.get('ipsec', f'{id}_tunnel', 'if_id', default=None)
+                 u.delete('ipsec', tunnel)
+        u.delete('ipsec', id)
+        u.save('ipsec')
+    except:
+        return utils.generic_error('cant_delete_tunnel')
+
+    firewall.delete_linked_sections(u, f'ipsec/{id}')
+    firewall.remove_interface_from_zone(u, ipsec.IPSEC_ZONE, f'ipsec{if_id}')
+    return {"result": "success"}
+
+def disable_tunnel(id):
+    u = EUci()
+    try:
+        u.get("ipsec", id)
+    except:
+        return utils.validation_error("tunnel_not_found")
+    try:
+        u.set('ipsec', id, 'enabled', '0')
+        u.save('ipsec')
+
+        # disable route
+        for r in utils.get_all_by_type(u, 'network', 'route'):
+            if u.get('network', r, 'ns_link', default='') == f'ipsec/{id}':
+                u.set('network', r, 'disabled', '1')
+                u.save('network')
+
+        return {"result": "success"}
+    except:
+        return utils.generic_error("tunnel_not_disabled")
+
+def enable_tunnel(id):
+    u = EUci()
+    try:
+        u.get("ipsec", id)
+    except:
+        return utils.validation_error("tunnel_not_found")
+    try:
+        u.set('ipsec', id, 'enabled', '1')
+        u.save('ipsec')
+
+        # disable route
+        for r in utils.get_all_by_type(u, 'network', 'route'):
+            if u.get('network', r, 'ns_link', default='') == f'ipsec/{id}':
+                u.set('network', r, 'disabled', '0')
+                u.save('network')
+
+        return {"result": "success"}
+    except:
+        return utils.generic_error("tunnel_not_enabled")
+
+def get_tunnel(id):
+    u = EUci()
+    try:
+        u.get("ipsec", id)
+    except:
+        return utils.validation_error("tunnel_not_found")
+ 
+    ike_p = f'{id}_ike'
+    esp_p = f'{id}_esp'
+    tunnel = f'{id}_tunnel'
+    ret = {'ike': {}, 'esp': {}}
+    local = set()
+    remote = set()
+    for opt in ['encryption_algorithm', 'hash_algorithm', 'dh_group']:
+        ret['ike'][opt] = u.get('ipsec', ike_p, opt, default="")
+    for opt in ['encryption_algorithm', 'hash_algorithm', 'dh_group']:
+        ret['esp'][opt] = u.get('ipsec', esp_p, opt, default="")
+
+    for t in utils.get_all_by_type(u, 'ipsec', 'tunnel'):
+        if t.startswith(tunnel):
+            try:
+                if 'ipcomp' not in ret:
+                    ret['ipcomp'] = u.get('ipsec', t, 'ipcomp', default="")
+                if 'dpdaction' not in ret:
+                    ret['dpdaction'] = u.get('ipsec', t, 'dpdaction', default="")
+                if 'closeaction' not in ret:
+                    ret['closeaction'] = u.get('ipsec', t, 'closeaction', default="none")
+                if 'rekeytime' not in ret['esp']:
+                    ret['esp']['rekeytime'] = u.get('ipsec', t, 'rekeytime', default='3600')
+                tmpl = u.get_all('ipsec', t, 'local_subnet')
+                local = local | set(tmpl)
+                tmpr = u.get_all('ipsec', t, 'remote_subnet')
+                remote = remote | set(tmpr)
+            except:
+                continue
+    ret['local_subnet'] = list(local)
+    ret['remote_subnet'] = list(remote)
+
+    ret['ns_name'] = u.get('ipsec', id, 'ns_name', default=id)
+    for opt in ['gateway', 'keyexchange', 'local_identifier', 'local_ip', 'enabled', 'remote_identifier', 'pre_shared_key']:
+        ret[opt] = u.get('ipsec', id, opt, default="")
+    ret['ike']['rekeytime'] = u.get('ipsec', id, 'rekeytime', default='')
+
+    return ret
+
+def get_defaults():
+    u = EUci()
+    num = 1
+    for r in utils.get_all_by_type(u, 'ipsec', 'remote'):
+        num = num + 1
+    local = f"@tun{num}.local"
+    remote = f"@tun{num}.remote"
+    key = subprocess.run(["openssl", "rand", "-base64", "66"], capture_output=True, text=True).stdout.rstrip().replace('\n','')
+    return {"pre_shared_key": key, "local_identifier": local, "remote_identifier": remote, "local_networks": ovpn.get_local_networks(u)}
+
+def restart_swanctl():
+    """Restart the swanctl daemon."""
+    try:
+        subprocess.run(["/etc/init.d/swanctl", "restart"], check=True, capture_output=True, text=True)
+        return {"result": "success"}
+    except:
+        return utils.generic_error("restart_failed")
+
+def list_algs():
+    ret = {
+       "encryption" : [
+            {"name": "AES 128", "id": "aes128"},
+            {"name": "AES 192", "id": "aes192"},
+            {"name": "AES 256", "id": "aes256"},
+            {"name": "3DES", "id": "3des"},
+            {"name": "128 bit Blowfish-CBC", "id": "blowfish"}
+        ],
+       "integrity" : [
+            {"name": "MD5", "id": "md5"},
+            {"name": "SHA1", "id": "sha1"},
+            {"name": "SHA256", "id": "sha256"},
+            {"name": "SHA384", "id": "sha384"},
+            {"name": "SHA512", "id": "sha512"},
+            {"name": "AES CMAC", "id": "aescmac"},
+            {"name": "AES XCBX", "id": "aesxcbc"},
+
+        ],
+        "dh" : [
+            {"name": "-", "id": ""},
+            {"name": "1024 bit (DH-2)", "id": "modp1024"},
+            {"name": "1536 bit (DH-5)", "id": "modp1536"},
+            {"name": "2048 bit (DH-14)", "id": "modp2048"},
+            {"name": "3072 bit (DH-15)", "id": "modp3072"},
+            {"name": "4096 bit (DH-16)", "id": "modp4096"},
+            {"name": "6144 bit (DH-17)", "id": "modp6144"},
+            {"name": "8192 bit (DH-18)", "id": "modp8192"},
+            {"name": "ECP256 (DH-19)", "id": "ecp256"},
+            {"name": "ECP384 (DH-20)", "id": "ecp384"},
+            {"name": "ECP521 (DH-21)", "id": "ecp521"},
+            {"name": "Curve 25519", "id": "curve25519"},
+            {"name": "Newhope 128", "id": "newhope"},
+        ]
+    }
+    return ret
+
+cmd = sys.argv[1]
+
+# Make sure the config file exists
+ipsec.init_ipsec(EUci())
+
+if cmd == 'list':
+    print(json.dumps({
+        "list-tunnels": {},
+        "get-defaults": {},
+        "list-wans": {},
+        "list-algs": {},
+        "restart": {},
+        "add-tunnel": {
+            "ns_name": "tun1",
+            "ike": {"encryption_algorithm": "3des", "hash_algorithm": "md5", "encryption_algorithm": "3des", "dh_group": "mod1024", "rekeytime": "3600"},
+            "esp": {"encryption_algorithm": "3des", "hash_algorithm": "md5", "encryption_algorithm": "3des", "dh_group": "mod1024", "rekeytime": "3600"},
+            "pre_shared_key": "xxxxxxxxxxxxxxxxxxx",
+            "local_identifier": "@ipsec1.local",
+            "remote_identifier": "@ipsec1.remote",
+            "local_subnet": ["192.168.120.0/24"],
+            "remote_subnet": ["192.168.100.0/24"],
+            "enabled": "1",
+            "local_ip": "10.10.0.200",
+            "keyexchange": "ike", # ike, ikev1, ikev2
+            "ipcomp": "false", # compression
+            "dpdaction": "restart",
+            "closeaction": "none", # optional, default none
+            "gateway": "1.2.3.4" # remote server
+        },
+        "edit-tunnel": {
+            "id": "ns_tun1",
+            "ns_name": "tun1",
+            "ike": {"encryption_algorithm": "3des", "hash_algorithm": "md5", "encryption_algorithm": "3des", "dh_group": "mod1024", "rekeytime": "3600"},
+            "esp": {"encryption_algorithm": "3des", "hash_algorithm": "md5", "encryption_algorithm": "3des", "dh_group": "mod1024", "rekeytime": "3600"},
+            "pre_shared_key": "xxxxxxxxxxxxxxxxxxx",
+            "local_identifier": "@ipsec1.local",
+            "remote_identifier": "@ipsec1.remote",
+            "local_subnet": ["192.168.120.0/24"],
+            "remote_subnet": ["192.168.100.0/24"],
+            "enabled": "1",
+            "local_ip": "10.10.0.200",
+            "keyexchange": "ike", # ike, ikev1, ikev2
+            "ipcomp": "false", # compression
+            "dpdaction": "restart",
+            "closeaction": "none", # optional, default none
+            "gateway": "1.2.3.4" # remote server
+        },
+        "enable-tunnel": {"id": "ns_tun1"},
+        "disable-tunnel": {"id": "ns_tun1"},
+        "delete-tunnel": {"id": "ns_tun1"},
+        "get-tunnel": {"id": "ns_tun1"}
+    }))
+else:
+    action = sys.argv[2]
+    if action == "list-tunnels":
+        ret = list_tunnels()
+    elif action == "get-defaults":
+        ret = get_defaults()
+    elif action == "list-wans":
+        ret = {"wans": utils.get_all_wan_ips(EUci())}
+    elif action == "list-algs":
+        ret = list_algs()
+    elif action == "restart":
+        ret = restart_swanctl()
+    else:
+        args = json.loads(sys.stdin.read())
+
+    if action == "add-tunnel":
+        ret = add_tunnel(args)
+    elif action == "edit-tunnel":
+        ret = edit_tunnel(args)
+    elif action == "enable-tunnel":
+        ret = enable_tunnel(args["id"])
+    elif action == "disable-tunnel":
+        ret = disable_tunnel(args["id"])
+    elif action == "delete-tunnel":
+        ret = delete_tunnel(args["id"])
+    elif action == "get-tunnel":
+        ret = get_tunnel(args["id"])
+    print(json.dumps(ret))

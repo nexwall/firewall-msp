@@ -1,0 +1,69 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+
+import json
+import uuid
+from euci import EUci
+from nethsec import inventory
+from nethsec.inventory import _run
+
+# generate the UUID if not present
+u = EUci()
+sid = u.get('phonehome', 'config', 'uuid', default=None)
+if not sid:
+    sid = str(uuid.uuid4())
+    u.set('phonehome', 'config', 'uuid', sid)
+    u.commit('phonehome')
+
+cpu_info = inventory.get_cpu_info()
+pci = inventory.get_pci_info()
+dmi = inventory.get_dmi()
+# the hardware uuid identifies the machine: keep the payload anonymous
+if dmi["uuid"]:
+    dmi["uuid"] = inventory.anonymize(dmi["uuid"], u)
+version = inventory.get_version()
+mem_info = inventory.get_memory()
+mount_points = inventory.get_mount_points()
+
+features = {}
+info = {}
+for func in dir(inventory):
+    method = getattr(inventory, func)
+    if func.startswith("fact_"):
+        features[func.removeprefix('fact_')] = method(EUci())
+    if func.startswith("info_"):
+        info[func.removeprefix('info_')] = method(EUci())
+
+data = {
+    "$schema": "https://schema.nethserver.org/facts/2022-12.json",
+    "uuid": sid,
+    "installation": "nethsecurity",
+    "facts": {
+        "distro": {
+            "name": "NethSecurity",
+            "version": version
+        },
+        "processors": { 
+            "count": _run("grep processor /proc/cpuinfo  | wc -l"), 
+            "model":  cpu_info["model"],
+            "architecture": cpu_info["architecture"]
+        },
+        "product": dmi,
+        "virtual": inventory.is_virtual(),
+        "memory": {
+            "swap": { "used_bytes": mem_info.get('SwapUsed', 0) * 1024, "available_bytes": mem_info.get('SwapFree', 0) * 1024 },
+            "system": { "used_bytes": mem_info.get('MemUsed', 0) * 1024, "available_bytes": mem_info.get('MemAvailable', 0) * 1024 }
+        },
+        "pci": list(pci.values()),
+        "mountpoints": mount_points,
+        "features": features
+    }
+}
+
+data['facts'].update(info)
+print(json.dumps(data))

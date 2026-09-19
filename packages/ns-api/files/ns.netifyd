@@ -1,0 +1,70 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Manage netifyd sink
+
+import os
+import sys
+import json
+from nethsec import utils
+import subprocess
+import configparser
+
+def status():
+    uuid = ""
+    if not os.path.exists("/etc/netifyd/agent.uuid"):
+        # generate the uuid id not exists
+        try:
+            subprocess.run(["/usr/sbin/netifyd", "-p"], check=True, capture_output=True)
+        except:
+            return utils.generic_error("failed_to_generate_uuid")
+
+    try:
+        with open("/etc/netifyd/agent.uuid", "r") as f:
+            uuid = f.read().strip()
+    except:
+        return utils.generic_error("failed_to_read_uuid")
+
+    config = configparser.ConfigParser()
+    config.read('/etc/netifyd.conf')
+    if not config.has_section('netifyd') or not config.has_option('netifyd', 'auto_informatics'):
+        return utils.generic_error("failed_to_read_netifyd_conf")
+    enable_sink = config.get('netifyd', 'auto_informatics')
+    return {"enabled": enable_sink == "yes", "uuid": uuid}
+
+def enable():
+    try:
+        subprocess.run(["/usr/sbin/netifyd", "--enable-informatics"], check=True, capture_output=True)
+    except:
+        return utils.generic_error("failed_to_enable_sink")
+    return {"result": "success"}
+    
+def disable():
+    try:
+        subprocess.run(["/usr/sbin/netifyd", "--disable-informatics"], check=True, capture_output=True)
+    except:
+        return utils.generic_error("failed_to_disable_sink")
+    return {"result": "success"}
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        "enable": {},
+        "disable": {},
+        "status":{},
+        }))
+else:
+    action = sys.argv[2]
+    if action == "enable":
+        ret = enable()
+    elif action == "status":
+        ret = status()
+    elif action == "disable":
+        ret = disable()
+
+    print(json.dumps(ret))

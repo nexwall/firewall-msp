@@ -1,0 +1,94 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+from nethsec import utils, mwan
+
+import nsmigration
+import subprocess
+
+(u, data, nmap) = nsmigration.init('wan.json')
+
+# Cleanup default configuration, brutal way
+with open('/etc/config/mwan3', 'w') as file:
+    pass
+
+# Set default mask
+u.set('mwan3', 'globals', 'globals')
+u.set('mwan3', 'globals', 'mmx_mask', '0x3F00')
+
+# General configuration
+u.set('ns-api', 'defaults_mwan', 'ping_interval', data['general']['interval'])
+u.set('ns-api', 'defaults_mwan', 'tracking_reliability', data['general']['reliability'])
+u.set('ns-api', 'defaults_mwan', 'track_ip', data['general']['track_ip'])
+
+# Setup mwan policies
+# define interfaces, will be sent directly to `mwan.store_policy`
+interfaces = []
+# define base metric, will be incremented if needed to configure backup policies
+metric = 10
+# fetch what kind of policy we are migrating
+policy_type = data['general']['mode']
+# prep providers, sort by desc weight
+data['providers'].sort(key=lambda x: int(x['weight']), reverse=True)
+
+# do not enable mwan if not provider is configured
+if len(data['providers']) <= 0:
+    u.commit('mwan3')
+    u.commit('ns-api')
+    exit(0)
+
+# for each provider, generate interface
+for provider in data['providers']:
+    # get interface name, could have been moved during migration
+    interface_name = None
+    if provider['type'] == 'ethernet':
+        interface_name = utils.get_interface_from_mac(u, nsmigration.remap(provider['hwaddr'], nmap))
+    elif provider['type'] == 'vlan':
+        device = utils.get_device_name(nsmigration.remap(provider['hwaddr'], nmap))
+        interface_name = utils.get_interface_from_device(u, f"{device}.{provider['vid']}")
+    else:
+        interface_name = utils.get_interface_from_device(u, provider['device'])
+
+    # skip if interface is not found
+    if interface_name is None:
+        nsmigration.vprint(f"Skipping provider {provider['name']}")
+        continue
+
+    if policy_type == 'backup':
+        interfaces.append({
+            'name': interface_name,
+            'metric': metric,
+            'weight': '100',
+        })
+        metric = metric + 10
+    else:
+        # this is a balance policy by exclusion
+        interfaces.append({
+            'name': interface_name,
+            'weight': provider['weight'],
+            'metric': metric,
+        })
+
+# create mwan name
+if policy_type == 'balance':
+    policy_name = 'ns7balance'
+else:
+    policy_name = 'ns7backup'
+
+# create mwan policy
+mwan.store_policy(u, policy_name, interfaces)
+
+# divert rule are not migrated
+
+# push default rule to the end
+length = len(u.get_all('mwan3'))
+subprocess.run(["/sbin/uci", "reorder", f"mwan3.ns_default_rule={length}"])
+
+# Save configuration
+u.commit('ns-api')
+u.commit('mwan3')
+u.commit('network')

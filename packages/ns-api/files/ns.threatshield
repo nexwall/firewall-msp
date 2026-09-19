@@ -1,0 +1,1220 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import os
+import re
+import sys
+import json
+import urllib
+import urllib.request
+import urllib.error
+import logging
+import ipaddress
+from euci import EUci
+from nethsec.utils import ValidationError, validation_error, generic_error
+from nethsec import utils, firewall
+import base64
+import time
+import subprocess
+
+## continent codes map
+
+continent_table = {
+    "AF": "asia",
+    "AX": "europe",
+    "AL": "europe",
+    "DZ": "africa",
+    "AS": "oceania",
+    "AD": "europe",
+    "AO": "africa",
+    "AI": "americas",
+    "AQ": "others",
+    "AG": "americas",
+    "AR": "americas",
+    "AM": "asia",
+    "AW": "americas",
+    "AU": "oceania",
+    "AT": "europe",
+    "AZ": "asia",
+    "BS": "americas",
+    "BH": "asia",
+    "BD": "asia",
+    "BB": "americas",
+    "BY": "europe",
+    "BE": "europe",
+    "BZ": "americas",
+    "BJ": "africa",
+    "BM": "americas",
+    "BT": "asia",
+    "BO": "americas",
+    "BQ": "americas",
+    "BA": "europe",
+    "BW": "africa",
+    "BR": "americas",
+    "IO": "africa",
+    "BN": "asia",
+    "BG": "europe",
+    "BF": "africa",
+    "BI": "africa",
+    "KH": "asia",
+    "CM": "africa",
+    "CA": "americas",
+    "CV": "africa",
+    "KY": "americas",
+    "CF": "africa",
+    "TD": "africa",
+    "CL": "americas",
+    "CN": "asia",
+    "CC": "oceania",
+    "CO": "americas",
+    "KM": "africa",
+    "CG": "africa",
+    "CD": "africa",
+    "CK": "oceania",
+    "CR": "americas",
+    "CI": "africa",
+    "HR": "europe",
+    "CU": "americas",
+    "CW": "americas",
+    "CY": "asia",
+    "CZ": "europe",
+    "DK": "europe",
+    "DJ": "africa",
+    "DM": "americas",
+    "DO": "americas",
+    "EC": "americas",
+    "EG": "africa",
+    "SV": "americas",
+    "GQ": "africa",
+    "ER": "africa",
+    "EE": "europe",
+    "SZ": "africa",
+    "ET": "africa",
+    "FK": "americas",
+    "FO": "europe",
+    "FJ": "oceania",
+    "FI": "europe",
+    "FR": "europe",
+    "GF": "americas",
+    "PF": "oceania",
+    "GA": "africa",
+    "GM": "africa",
+    "GE": "asia",
+    "DE": "europe",
+    "GH": "africa",
+    "GI": "europe",
+    "GR": "europe",
+    "GL": "americas",
+    "GD": "americas",
+    "GP": "americas",
+    "GU": "oceania",
+    "GT": "americas",
+    "GG": "europe",
+    "GN": "africa",
+    "GW": "africa",
+    "GY": "americas",
+    "HT": "americas",
+    "HN": "americas",
+    "HK": "asia",
+    "HU": "europe",
+    "IS": "europe",
+    "IN": "asia",
+    "ID": "asia",
+    "IR": "asia",
+    "IQ": "asia",
+    "IE": "europe",
+    "IM": "europe",
+    "IL": "asia",
+    "IT": "europe",
+    "JM": "americas",
+    "JP": "asia",
+    "JE": "europe",
+    "JO": "asia",
+    "KZ": "asia",
+    "KE": "africa",
+    "KI": "oceania",
+    "KW": "asia",
+    "KG": "asia",
+    "LA": "asia",
+    "LV": "europe",
+    "LB": "asia",
+    "LS": "africa",
+    "LR": "africa",
+    "LY": "africa",
+    "LI": "europe",
+    "LT": "europe",
+    "LU": "europe",
+    "MO": "asia",
+    "MG": "africa",
+    "MW": "africa",
+    "MY": "asia",
+    "MV": "asia",
+    "ML": "africa",
+    "MT": "europe",
+    "MH": "oceania",
+    "MA": "africa",
+    "MQ": "americas",
+    "MR": "africa",
+    "MU": "africa",
+    "YT": "africa",
+    "MX": "americas",
+    "FM": "oceania",
+    "MD": "europe",
+    "MC": "europe",
+    "MN": "asia",
+    "ME": "europe",
+    "MS": "americas",
+    "MZ": "africa",
+    "MM": "asia",
+    "NA": "africa",
+    "NR": "oceania",
+    "NP": "asia",
+    "NL": "europe",
+    "NC": "oceania",
+    "NZ": "oceania",
+    "NI": "americas",
+    "NE": "africa",
+    "NG": "africa",
+    "NU": "oceania",
+    "NF": "oceania",
+    "KP": "asia",
+    "MK": "europe",
+    "MP": "oceania",
+    "NO": "europe",
+    "OM": "asia",
+    "PK": "asia",
+    "PW": "oceania",
+    "PS": "asia",
+    "PA": "americas",
+    "PG": "oceania",
+    "PY": "americas",
+    "PE": "americas",
+    "PH": "asia",
+    "PL": "europe",
+    "PT": "europe",
+    "PR": "americas",
+    "QA": "asia",
+    "RE": "africa",
+    "RO": "europe",
+    "RU": "europe",
+    "RW": "africa",
+    "BL": "americas",
+    "KN": "americas",
+    "LC": "americas",
+    "MF": "americas",
+    "PM": "americas",
+    "VC": "americas",
+    "WS": "oceania",
+    "SM": "europe",
+    "ST": "africa",
+    "SA": "asia",
+    "SN": "africa",
+    "RS": "europe",
+    "SC": "africa",
+    "SL": "africa",
+    "SG": "asia",
+    "SX": "americas",
+    "SK": "europe",
+    "SI": "europe",
+    "SB": "oceania",
+    "SO": "africa",
+    "ZA": "africa",
+    "KR": "asia",
+    "SS": "africa",
+    "ES": "europe",
+    "LK": "asia",
+    "SD": "africa",
+    "SR": "americas",
+    "SE": "europe",
+    "CH": "europe",
+    "SY": "asia",
+    "TW": "asia",
+    "TJ": "asia",
+    "TZ": "africa",
+    "TH": "asia",
+    "TL": "asia",
+    "TG": "africa",
+    "TK": "oceania",
+    "TO": "oceania",
+    "TT": "americas",
+    "TN": "africa",
+    "TR": "asia",
+    "TM": "asia",
+    "TC": "americas",
+    "TV": "oceania",
+    "UG": "africa",
+    "UA": "europe",
+    "AE": "asia",
+    "GB": "europe",
+    "US": "americas",
+    "UM": "oceania",
+    "UY": "americas",
+    "UZ": "asia",
+    "VU": "oceania",
+    "VA": "europe",
+    "VE": "americas",
+    "VN": "asia",
+    "VG": "americas",
+    "VI": "americas",
+    "WF": "oceania",
+    "YE": "asia",
+    "ZM": "africa",
+    "ZW": "africa"
+}
+
+## Utilities
+
+def has_bl_entitlement(e_uci):
+    cache_file = "/tmp/bl_entitlement_cache"
+    cache_timeout = 3600 * 6 # 6 hours
+
+    # Check if cache file exists and if it is still valid
+    if os.path.exists(cache_file) and time.time() - os.path.getmtime(cache_file) < cache_timeout:
+        with open(cache_file, 'r') as f:
+            return f.read() == "True"
+
+    system_id = e_uci.get('ns-plug', 'config', 'system_id', default='')
+    secret = e_uci.get('ns-plug', 'config', 'secret', default='')
+    type = e_uci.get('ns-plug', 'config', 'type', default='')
+    try:
+        with open('/etc/banip/banip.nethesis.feeds') as fp:
+            feeds = json.load(fp)
+        fkey = next(iter(feeds))
+        url = feeds[fkey]['url_4'].replace('__USER__:__PASSWORD__@','').replace('__TYPE__', type)
+    except:
+        return False
+    auth_string = f"{system_id}:{secret}".encode("utf-8")
+    auth_header = f"Basic {base64.b64encode(auth_string).decode('utf-8')}"
+    headers = {
+        "Accept": "application/json",
+        "Authorization": auth_header,
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        response = urllib.request.urlopen(req, timeout=20)  # Add timeout of 20 seconds
+    except urllib.error.URLError as e:
+        return False
+
+    has_bl = response.status == 200
+
+    # Cache the result in the file
+    with open(cache_file, 'w') as f:
+        f.write(str(has_bl))
+
+    return has_bl
+
+def list_feeds():
+    if os.path.exists('/etc/banip/banip.custom.feeds') and os.path.getsize('/etc/banip/banip.custom.feeds') > 0:
+        with open('/etc/banip/banip.custom.feeds') as f:
+            return json.loads(f.read())
+    else:
+        with open('/etc/banip/banip.feeds') as f:
+            return json.loads(f.read())
+
+def get_block_list():
+    return get_allow_list('/etc/banip/banip.blocklist')
+
+def get_allow_list(file='/etc/banip/banip.allowlist'):
+    ret = []
+    try:
+        with open(file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split('#')
+                if len(parts) > 1:
+                    ret.append({ "address": parts[0].strip(), "description": parts[1].strip() })
+                else:
+                    ret.append({ "address": parts[0].strip(), "description": '' })
+    except:
+        return []
+    return ret
+
+def write_allow_list(allow_list, file='/etc/banip/banip.allowlist'):
+    with open(file, 'w') as f:
+        for x in allow_list:
+            f.write(x['address'])
+            if x['description']:
+                f.write(' #' + x['description'])
+            f.write('\n')
+    subprocess.run(["/etc/init.d/banip", "reload"], capture_output=True)
+
+def dns_get_local_list(e_uci, list_type):
+    values = e_uci.get('adblock', 'ns_lists', list_type, list=True, default=[])
+    ret = []
+    for value in values:
+        parts = value.split('#', 1)
+        ret.append({'address': parts[0].strip(), 'description': parts[1].strip() if len(parts) > 1 else ''})
+    return ret
+
+def dns_write_local_list(e_uci, local_list, list_type):
+    option = 'allowlist' if list_type == 'allowlist' else 'blocklist'
+    e_uci.set('adblock', 'ns_lists', 'ns_lists')
+
+    values = tuple(
+        f"{entry['address']} #{entry['description']}" if entry.get('description') else entry['address']
+        for entry in local_list
+    )
+    if values:
+        e_uci.set('adblock', 'ns_lists', option, values)
+    elif e_uci.get('adblock', 'ns_lists', option, list=True, default=[]):
+        e_uci.delete('adblock', 'ns_lists', option)
+
+    e_uci.save('adblock')
+
+def write_block_list(block_list):
+    write_allow_list(block_list, '/etc/banip/banip.blocklist')
+
+def read_gz(file):
+    if os.path.exists(file) and os.path.getsize(file) > 0:
+        data = subprocess.run(["gunzip", "-c", file], capture_output=True).stdout
+        return json.loads(data)
+    else:
+        return {}
+
+def read_json(file):
+    if os.path.exists(file) and os.path.getsize(file) > 0:
+        with open(file, 'r') as f:
+            try:
+                return json.load(f)
+            except Exception:
+                return {}
+    return {}
+
+def list_dns_feeds(enterprise=False):
+    ret = {}
+    sources = '/etc/adblock/adblock.custom.feeds'
+    if not os.path.exists(sources):
+        ret = read_gz('/usr/share/threat_shield/community-dns.sources.gz')
+        if enterprise:
+            ret.update(read_gz('/usr/share/threat_shield/nethesis-dns.sources.gz'))
+    else:
+        ret = read_json(sources)
+    return ret
+
+def get_confidence(f, enterprise=False):
+    confidence = -1
+    if not enterprise:
+        return confidence
+    if f.endswith('lvl1') or f.endswith('level1'):
+        confidence = 10
+    elif f.endswith('lvl2') or f.endswith('level2'):
+        confidence = 8
+    elif f.endswith('lvl3') or f.endswith('level3'):
+        confidence = 6
+    elif f.endswith('lvl4') or f.endswith('level4'):
+        confidence = 5
+    return confidence
+
+def parse_feed_flag(flag):
+    protocols = []
+    ports = []
+    for token in (flag or '').split():
+        if token in ('tcp', 'udp'):
+            if token not in protocols:
+                protocols.append(token)
+        elif re.fullmatch(r'[0-9]+(-[0-9]+)?', token):
+            if token not in ports:
+                ports.append(token)
+    if not protocols or not ports:
+        return [], []
+    return protocols, ports
+
+def get_countries_from_banip(e_uci):
+    result = {
+        "africa": [],
+        "americas": [],
+        "asia": [],
+        "europe": [],
+        "oceania": [],
+        "others": []
+    }
+    blocked_countries = [c.upper() for c in e_uci.get('banip', 'global', 'ban_country', list=True, default=[])]
+    with open("/etc/banip/banip.countries", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            parts = line.split('\t')
+            code = parts[0].strip().upper()
+            description = parts[2].strip() if len(parts) > 2 else ""
+            continent = continent_table.get(code, "others")
+            result[continent].append({
+                "code": code,
+                "description": description,
+                "blocked": code in blocked_countries
+            })
+    return result
+
+## APIs
+
+def list_blocklist(e_uci):
+    ret = []
+    feeds = list_feeds()
+    has_bl = has_bl_entitlement(e_uci)
+    try:
+        enabled_feeds = list(e_uci.get_all('banip', 'global', 'ban_feed'))
+    except:
+        enabled_feeds = []
+    for f in feeds:
+        # skip the 'country' feed as it's handled separately by geoblocking
+        # skip the 'asn' feed as it requires a list of ASNs (ban_asn) not manageable from the UI
+        if f in ('country', 'asn'):
+            continue
+        feed = feeds[f]
+        enabled = f in enabled_feeds
+
+        if 'nethesis-blacklists' in feed.get('url_4'):
+            type = 'enterprise'
+        else:
+            type = 'community'
+
+        # list enabled enterprise lists, even if there is no Internet connection
+        if not enabled:
+            if type == 'enterprise' and not has_bl:
+                continue
+
+        protocols, ports = parse_feed_flag(feed.get('flag'))
+
+        ret.append({ 'name': f, 'type': type, 'enabled': enabled, 'confidence': get_confidence(f, type == 'enterprise'), 'description': feed.get('descr'), 'direction': feed.get('chain', 'in'), 'protocols': protocols, 'ports': ports})
+    return { "data": ret }
+
+def list_settings(e_uci):
+    ban_icmplimit_default = 25
+    ban_synlimit_default = 10
+    ban_udplimit_default = 100
+    return {
+        'data': {
+            'enabled': e_uci.get('banip', 'global', 'ban_enabled') == '1',
+            'ban_logprerouting': e_uci.get('banip', 'global', 'ban_logprerouting', default=False) == '1',
+            'ban_loginbound': e_uci.get('banip', 'global', 'ban_loginbound', default=False) == '1',
+            'ban_logoutbound': e_uci.get('banip', 'global', 'ban_logoutbound', default=False) == '1',
+            'ban_loglimit': True if int(e_uci.get('banip', 'global', 'ban_loglimit', default=100)) > 0 else False,
+            'ban_logcount': e_uci.get('banip', 'global', 'ban_logcount', default=1),
+            'ban_logterm': e_uci.get('banip', 'global', 'ban_logterm', list=True, default=[]),
+            'ban_icmplimit': e_uci.get('banip', 'global', 'ban_icmplimit', default=ban_icmplimit_default, dtype=int),
+            'ban_synlimit': e_uci.get('banip', 'global', 'ban_synlimit', default=ban_synlimit_default, dtype=int),
+            'ban_udplimit': e_uci.get('banip', 'global', 'ban_udplimit', default=ban_udplimit_default, dtype=int),
+            'ban_nftexpiry': e_uci.get('banip', 'global', 'ban_nftexpiry', default='30m'),
+            'ban_icmplimit_default': ban_icmplimit_default,
+            'ban_synlimit_default': ban_synlimit_default,
+            'ban_udplimit_default': ban_udplimit_default,
+        }
+    }
+
+def edit_blocklist(e_uci, payload):
+    try:
+        enabled = list(e_uci.get_all('banip', 'global', 'ban_feed'))
+    except:
+        enabled = []
+    if payload['enabled'] and payload['blocklist'] not in enabled:
+        enabled.append(payload['blocklist'])
+    if not payload['enabled'] and payload['blocklist'] in enabled:
+        enabled.remove(payload['blocklist'])
+    # cleanup invalid feeds
+    feeds = list_feeds()
+    enabled = [feed for feed in enabled if feed in feeds]
+    e_uci.set('banip', 'global', 'ban_feed', enabled)
+    e_uci.save('banip')
+    return {'message': 'success'}
+
+def set_default(e_uci, option, value):
+    try:
+        e_uci.get('banip', 'global', option)
+    except:
+        e_uci.set('banip', 'global', option, value)
+
+def edit_settings(e_uci, payload):
+    if 'enabled' not in payload:
+        raise ValidationError('enabled', 'required')
+    if not isinstance(payload['enabled'], bool):
+        raise ValidationError('enabled', 'invalid', payload['enabled'])
+
+    if payload['enabled']:
+        # validate all other payload options
+        if 'ban_logprerouting' not in payload:
+            raise ValidationError('ban_logprerouting', 'required')
+        if not isinstance(payload['ban_logprerouting'], bool):
+            raise ValidationError('ban_logprerouting', 'invalid', payload['ban_logprerouting'])
+        if 'ban_loginbound' not in payload:
+            raise ValidationError('ban_loginbound', 'required')
+        if not isinstance(payload['ban_loginbound'], bool):
+            raise ValidationError('ban_loginbound', 'invalid', payload['ban_loginbound'])
+        if 'ban_logoutbound' not in payload:
+            raise ValidationError('ban_logoutbound', 'required')
+        if not isinstance(payload['ban_logoutbound'], bool):
+            raise ValidationError('ban_logoutbound', 'invalid', payload['ban_logoutbound'])
+        if 'ban_icmplimit' not in payload:
+            raise ValidationError('ban_icmplimit', 'required')
+        if not (isinstance(payload['ban_icmplimit'], bool) or isinstance(payload['ban_icmplimit'], int)):
+            raise ValidationError('ban_icmplimit', 'invalid', payload['ban_icmplimit'])
+        if 'ban_synlimit' not in payload:
+            raise ValidationError('ban_synlimit', 'required')
+        if not (isinstance(payload['ban_synlimit'], bool) or isinstance(payload['ban_synlimit'], int)):
+            raise ValidationError('ban_synlimit', 'invalid', payload['ban_synlimit'])
+        if 'ban_udplimit' not in payload:
+            raise ValidationError('ban_udplimit', 'required')
+        if not (isinstance(payload['ban_udplimit'], bool) or isinstance(payload['ban_udplimit'], int)):
+            raise ValidationError('ban_udplimit', 'invalid', payload['ban_udplimit'])
+        if 'ban_loglimit' not in payload:
+            raise ValidationError('ban_loglimit', 'required')
+        if not isinstance(payload['ban_loglimit'], bool):
+            raise ValidationError('ban_loglimit', 'invalid', payload['ban_loglimit'])
+
+        if payload['ban_loglimit']:
+            if 'ban_logcount' not in payload:
+                raise ValidationError('ban_logcount', 'required')
+            if not isinstance(payload['ban_logcount'], int):
+                raise ValidationError('ban_logcount', 'invalid', payload['ban_logcount'])
+            if 'ban_logterm' not in payload:
+                raise ValidationError('ban_logterm', 'required')
+            if not isinstance(payload['ban_logterm'], list):
+                raise ValidationError('ban_logterm', 'invalid', payload['ban_logterm'])
+            if 'ban_nftexpiry' not in payload:
+                raise ValidationError('ban_nftexpiry', 'required')
+            if not isinstance(payload['ban_nftexpiry'], str):
+                raise ValidationError('ban_nftexpiry', 'invalid', payload['ban_nftexpiry'])
+
+        # Validation completed, set the values
+        e_uci.set('banip', 'global', 'ban_enabled', '1')
+        set_default(e_uci, 'ban_fetchcmd', 'curl')
+        set_default(e_uci, 'ban_protov4', '1')
+        set_default(e_uci, 'ban_protov6', '1')
+
+        e_uci.set('banip', 'global', 'ban_logprerouting', payload['ban_logprerouting'])
+        e_uci.set('banip', 'global', 'ban_loginbound', payload['ban_loginbound'])
+        e_uci.set('banip', 'global', 'ban_logoutbound', payload['ban_logoutbound'])
+        e_uci.set('banip', 'global', 'ban_loglimit', 100 if payload['ban_loglimit'] else 0)
+
+        if isinstance(payload['ban_icmplimit'], int):
+            e_uci.set('banip', 'global', 'ban_icmplimit', max(0, payload['ban_icmplimit']))
+        else:
+            e_uci.set('banip', 'global', 'ban_icmplimit', 10 if payload['ban_icmplimit'] else 0)
+        if isinstance(payload['ban_synlimit'], int):
+            e_uci.set('banip', 'global', 'ban_synlimit', max(0, payload['ban_synlimit']))
+        else:
+            e_uci.set('banip', 'global', 'ban_synlimit', 10 if payload['ban_synlimit'] else 0)
+        if isinstance(payload['ban_udplimit'], int):
+            e_uci.set('banip', 'global', 'ban_udplimit', max(0, payload['ban_udplimit']))
+        else:
+            e_uci.set('banip', 'global', 'ban_udplimit', 100 if payload['ban_udplimit'] else 0)
+
+        if payload['ban_loglimit']:
+            e_uci.set('banip', 'global', 'ban_logcount', payload['ban_logcount'])
+            e_uci.set('banip', 'global', 'ban_logterm', payload['ban_logterm'])
+            e_uci.set('banip', 'global', 'ban_nftexpiry', payload['ban_nftexpiry'])
+    else:
+        e_uci.set('banip', 'global', 'ban_enabled', '0')
+
+    e_uci.save('banip')
+    return {'message': 'success'}
+
+def list_allowed():
+    return { "data": get_allow_list() }
+
+
+def list_blocked():
+    return {"data": get_block_list()}
+
+def add_allowed(payload):
+    cur = get_allow_list()
+    # extract address from cur list
+    if payload['address'] in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_already_present', payload['address'])
+    cur.append({ "address": payload['address'], "description": payload['description'] })
+    write_allow_list(cur)
+    return {'message': 'success'}
+
+
+def add_blocked(payload):
+    cur = get_block_list()
+    if payload['address'] in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_already_present', payload['address'])
+    cur.append({"address": payload['address'], "description": payload['description']})
+    write_block_list(cur)
+    return {'message': 'success'}
+
+
+def delete_allowed(payload):
+    cur = get_allow_list()
+    if payload['address'] not in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    # remove address from cur list
+    for i in range(len(cur)):
+        if cur[i]['address'] == payload['address']:
+            del cur[i]
+            break
+    write_allow_list(cur)
+    return {'message': 'success'}
+
+
+def delete_blocked(payload):
+    cur = get_block_list()
+    if payload['address'] not in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    # remove address from cur list
+    for i in range(len(cur)):
+        if cur[i]['address'] == payload['address']:
+            del cur[i]
+            break
+    write_block_list(cur)
+    return {'message': 'success'}
+
+
+def edit_allowed(payload):
+    cur = get_allow_list()
+    if payload['address'] not in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    for i in range(len(cur)):
+        if cur[i]['address'] == payload['address']:
+            cur[i]['description'] = payload['description']
+            break
+    write_allow_list(cur)
+    return {'message': 'success'}
+
+
+def edit_blocked(payload):
+    cur = get_block_list()
+    if payload['address'] not in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    for i in range(len(cur)):
+        if cur[i]['address'] == payload['address']:
+            cur[i]['description'] = payload['description']
+            break
+    write_block_list(cur)
+    return {'message': 'success'}
+
+
+def dns_list_blocklist(e_uci):
+    ret = []
+    has_bl = has_bl_entitlement(e_uci)
+    feeds = list_dns_feeds(has_bl)
+    try:
+        enabled_feeds = list(e_uci.get_all('adblock', 'global', 'adb_feed'))
+    except:
+        enabled_feeds = []
+    for f in feeds:
+        feed = feeds[f]
+        enabled = f in enabled_feeds
+
+        if 'nethesis-blacklists' in feed.get('url'):
+            type = 'enterprise'
+        else:
+            type = 'community'
+
+        # list enabled enterprise lists, even if there is no Internet connection
+        if not enabled:
+            if type == 'enterprise' and not has_bl:
+                continue
+
+        ret.append({ 'name': f, 'type': type, 'enabled': enabled, 'confidence': get_confidence(f, type == 'enterprise'), 'description': feed.get('focus')})
+    return { "data": ret }
+
+def dns_edit_blocklist(e_uci, payload):
+    try:
+        enabled = list(e_uci.get_all('adblock', 'global', 'adb_feed'))
+    except:
+        enabled = []
+    if payload['enabled'] and payload['blocklist'] not in enabled:
+        enabled.append(payload['blocklist'])
+    if not payload['enabled'] and payload['blocklist'] in enabled:
+        enabled.remove(payload['blocklist'])
+    # cleanup invalid feeds
+    has_bl = has_bl_entitlement(e_uci)
+    feeds = list_dns_feeds(has_bl)
+    enabled = [feed for feed in enabled if feed in feeds]
+    e_uci.set('adblock', 'global', 'adb_feed', enabled)
+    e_uci.save('adblock')
+    return {'message': 'success'}
+
+def dns_list_zones(e_uci):
+    zones_no_wan = {zone_name: zone for zone_name, zone in firewall.list_zones_no_aliases(e_uci).items() if zone['name'] != 'wan'}
+    zones = []
+    for zone in zones_no_wan.values():
+        zones.append(zone['name'])
+    return { 'data': zones }
+
+def dns_zones_to_devices(e_uci, zones):
+    # adb_nftdevforce is rendered as an nft iifname match, so it needs the devices
+    # of the selected zones and not the zone names
+    devices = set()
+    for zone in zones:
+        devices.update(utils.get_all_devices_by_zone(e_uci, zone, exclude_aliases=True))
+    return sorted(devices)
+
+def dns_set_enforced_devices(e_uci, zones):
+    devices = dns_zones_to_devices(e_uci, zones)
+    if devices:
+        e_uci.set('adblock', 'global', 'adb_nftdevforce', devices)
+    elif e_uci.get('adblock', 'global', 'adb_nftdevforce', list=True, default=[]):
+        # no device in the selected zones: adblock skips the enforcement altogether
+        e_uci.delete('adblock', 'global', 'adb_nftdevforce')
+
+def dns_list_settings(e_uci):
+    ts_enabled = e_uci.get('adblock', 'global', 'ts_enabled', default='0')
+    # the user selection is stored in ns_tsdns_zones: adb_nftdevforce holds the devices
+    # derived from it and can't be mapped back to zones without ambiguity. Installations
+    # predating the device-based enforcement are converted by 96_ns-threat_shield, so the
+    # option is always set at this point
+    zones = list(e_uci.get('adblock', 'global', 'ns_tsdns_zones', list=True, default=['lan']))
+    try:
+        ports = list(e_uci.get_all('adblock', 'global', 'adb_nftportforce'))
+    except:
+        ports = ['53', '853']
+    return { 'data': {'enabled': ts_enabled == '1', "zones": zones, "ports": ports} }
+
+def dns_edit_settings(e_uci, payload):
+    if payload['enabled']:
+        zones = payload.get('zones', ['lan'])
+        if 'wan' in zones:
+            raise ValidationError('zones', 'wan_zone_not_allowed', zones)
+        e_uci.set('adblock', 'global', 'ts_enabled', '1')
+        e_uci.set('adblock', 'global', 'adb_enabled', '1')
+        e_uci.set('adblock', 'global', 'adb_triggerdelay', '30')
+        e_uci.set('adblock', 'global', 'adb_nftforce', '1')
+        e_uci.set('adblock', 'global', 'ns_tsdns_zones', zones)
+        dns_set_enforced_devices(e_uci, zones)
+        e_uci.set('adblock', 'global', 'adb_nftportforce', payload.get('ports', ['53', '853']))
+    else:
+        e_uci.set('adblock', 'global', 'ts_enabled', '0')
+        e_uci.set('adblock', 'global', 'adb_enabled', '0')
+        e_uci.set('adblock', 'global', 'adb_nftforce', '0')
+    e_uci.save('adblock')
+    return {'message': 'success'}
+
+def dns_list_allowed(e_uci):
+    return { "data": dns_get_local_list(e_uci, 'allowlist') }
+
+def dns_list_blocked(e_uci):
+    return { "data": dns_get_local_list(e_uci, 'blocklist') }
+
+def dns_add_allowed(e_uci, payload):
+    cur = dns_get_local_list(e_uci, 'allowlist')
+    # extract address from cur list
+    if payload['address'] in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_already_present', payload['address'])
+    cur.append({ "address": payload['address'], "description": payload['description'] })
+    dns_write_local_list(e_uci, cur, 'allowlist')
+    return {'message': 'success'}
+
+def dns_add_blocked(e_uci, payload):
+    cur = dns_get_local_list(e_uci, 'blocklist')
+    # extract address from cur list
+    if payload['address'] in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_already_present', payload['address'])
+    cur.append({ "address": payload['address'], "description": payload.get('description') })
+    dns_write_local_list(e_uci, cur, 'blocklist')
+    return {'message': 'success'}
+
+def dns_edit_allowed(e_uci, payload):
+    cur = dns_get_local_list(e_uci, 'allowlist')
+    if payload['address'] not in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    for i in range(len(cur)):
+        if cur[i]['address'] == payload['address']:
+            cur[i]['description'] = payload['description']
+            break
+    dns_write_local_list(e_uci, cur, 'allowlist')
+    return {'message': 'success'}
+
+def dns_edit_blocked(e_uci, payload):
+    cur = dns_get_local_list(e_uci, 'blocklist')
+    if payload['address'] not in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    for i in range(len(cur)):
+        if cur[i]['address'] == payload['address']:
+            cur[i]['description'] = payload.get('description')
+            break
+    dns_write_local_list(e_uci, cur, 'blocklist')
+    return {'message': 'success'}
+
+def dns_delete_allowed(e_uci, payload):
+    cur = dns_get_local_list(e_uci, 'allowlist')
+    if payload['address'] not in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    # remove address from cur list
+    for i in range(len(cur)):
+        if cur[i]['address'] == payload['address']:
+            del cur[i]
+            break
+    dns_write_local_list(e_uci, cur, 'allowlist')
+    return {'message': 'success'}
+
+def dns_delete_blocked(e_uci, payload):
+    cur = dns_get_local_list(e_uci, 'blocklist')
+    if payload['address'] not in [x['address'] for x in cur]:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    # remove address from cur list
+    for i in range(len(cur)):
+        if cur[i]['address'] == payload['address']:
+            del cur[i]
+            break
+    dns_write_local_list(e_uci, cur, 'blocklist')
+    return {'message': 'success'}
+
+def dns_list_bypass(e_uci):
+    # adblock.global.ns_tsdns_bypass
+    try:
+        bypass = e_uci.get_all('adblock', 'global', 'ns_tsdns_bypass')
+    except:
+        bypass = []
+    return { "data": bypass }
+
+def dns_add_bypass(e_uci, payload):
+    try:
+        bypass = list(e_uci.get_all('adblock', 'global', 'ns_tsdns_bypass'))
+    except:
+        bypass = []
+    if payload['address'] in bypass:
+        raise ValidationError('address', 'address_already_present', payload['address'])
+    bypass.append(payload['address'])
+    e_uci.set('adblock', 'global', 'ns_tsdns_bypass', bypass)
+    e_uci.save('adblock')
+    return {'message': 'success'}
+
+def dns_delete_bypass(e_uci, payload):
+    try:
+        bypass = list(e_uci.get_all('adblock', 'global', 'ns_tsdns_bypass'))
+    except:
+        bypass = []
+    if payload['address'] not in bypass:
+        raise ValidationError('address', 'address_not_found', payload['address'])
+    bypass.remove(payload['address'])
+    e_uci.set('adblock', 'global', 'ns_tsdns_bypass', bypass)
+    e_uci.save('adblock')
+    return {'message': 'success'}
+
+
+def __parse_expression(expression):
+    if isinstance(expression, str) or isinstance(expression, int):
+        return ipaddress.ip_address(expression)
+    if isinstance(expression, list):
+        return [__parse_expression(item) for item in expression]
+    if isinstance(expression, dict):
+        if "prefix" in expression:
+            return ipaddress.ip_network(expression["prefix"]["addr"] + "/" + str(expression["prefix"]["len"]))
+        elif "range" in expression:
+            return list(ipaddress.summarize_address_range(
+                __parse_expression(expression["range"][0]),
+                __parse_expression(expression["range"][1])
+            ))
+        elif "elem" in expression:
+            if "timeout" not in expression["elem"] or "expires" not in expression["elem"]:
+                return None
+            return {
+                "timeout": expression["elem"]["timeout"],
+                "expires": expression["elem"]["expires"],
+                "val": __parse_expression(expression["elem"]["val"]),
+            }
+
+    logging.warning('Unsupported expression type: {}'.format(type(expression)))
+    return None
+
+
+def __parse_set(blocklist):
+    """
+    This function parses any set returned by nftables and returns a list of entries
+    """
+    blocked_ips = []
+    if ("nftables" in blocklist
+            and len(blocklist["nftables"]) > 1
+            and "set" in blocklist["nftables"][1]
+            and "elem" in blocklist["nftables"][1]["set"]):
+        blocked_ips = [ip for ip in __parse_expression(blocklist["nftables"][1]["set"]["elem"]) if ip is not None]
+
+    return blocked_ips
+
+
+def list_active_blocks():
+    try:
+        output_ipv4 = subprocess.run(["nft", "-j", "list", "set", "inet", "banIP", "blocklist.v4"], check=True,
+                                    capture_output=True, text=True)
+        data = json.loads(output_ipv4.stdout)
+    except subprocess.CalledProcessError:
+        data = {}
+
+    blocks = __parse_set(data)
+
+    try:
+        output_ipv6 = subprocess.run(["nft", "-j", "list", "set", "inet", "banIP", "blocklist.v6"], check=True,
+                                    capture_output=True, text=True)
+        data = json.loads(output_ipv6.stdout)
+    except subprocess.CalledProcessError:
+        data = {}
+
+    blocks = blocks + __parse_set(data)
+    blocks = filter(lambda x: isinstance(x, dict) and "val" in x, blocks)
+    blocks = sorted(blocks, key=lambda x: x["timeout"] - x["expires"])
+    response = []
+    for block in blocks:
+        if not isinstance(block["val"], list):
+            block["val"] = [block["val"]]
+        for item in block["val"]:
+            if isinstance(item, ipaddress.IPv4Address) or isinstance(item, ipaddress.IPv6Address):
+                response.append({
+                    "ip": str(item),
+                    "timeout": block["timeout"],
+                    "expires": block["expires"],
+                })
+            if isinstance(item, ipaddress.IPv4Network) or isinstance(item, ipaddress.IPv6Network):
+                for addr in item:
+                    if isinstance(addr, ipaddress.IPv4Address) or isinstance(addr, ipaddress.IPv6Address):
+                        response.append({
+                            "ip": str(addr),
+                            "timeout": block["timeout"],
+                            "expires": block["expires"],
+                        })
+
+    return response
+
+
+def remove_active_block():
+    data = json.loads(sys.stdin.read())
+    if data.get("ip", "") == "":
+        return validation_error("ip", "required")
+
+    try:
+        ip = ipaddress.ip_address(data["ip"])
+    except ValueError:
+        return validation_error("ip", "invalid", data["ip"])
+
+    blocks = filter(lambda x: x["ip"] == str(ip), list_active_blocks())
+    found = len(list(blocks)) > 0
+    if not found:
+        return validation_error("ip", "invalid", str(ip))
+
+    if isinstance(ip, ipaddress.IPv4Address):
+        blocklist = "blocklist.v4"
+    else:
+        blocklist = "blocklist.v6"
+
+    try:
+        subprocess.run(["nft", "delete", "element", "inet", "banIP", blocklist, "{" + str(ip) + "}"], check=True)
+    except subprocess.CalledProcessError:
+        return generic_error("remove_active_block_failed")
+
+    return {'message': 'success'}
+
+
+def is_ip_blocked():
+    data = json.loads(sys.stdin.read())
+    if "ip" not in data or data["ip"] == "":
+        return validation_error("ip", "required")
+    try:
+        result = subprocess.run(["/etc/init.d/banip", "search", data["ip"]], check=True, capture_output=True, text=True)
+        matches = re.findall(r"Set '([^']+)'", result.stdout)
+        matches = [match for match in matches if not match.startswith("allow")]
+
+        if len(matches) > 0:
+            return {
+                'found': True,
+                'list': matches[0]
+            }
+    except subprocess.CalledProcessError:
+        return validation_error("banip", "processing")
+
+    return {
+        'found': False
+    }
+
+def geoblocking_configuration(e_uci):
+    feeds = list(e_uci.get('banip', 'global', 'ban_feed', list=True, default=[]))
+    enabled = 'country' in feeds
+    countries = get_countries_from_banip(e_uci)
+    regions = {
+        region: [c["code"] for c in countries_list]
+        for region, countries_list in countries.items()
+    }
+    blocked_regions = [
+        c["code"]
+        for countries_list in countries.values()
+        for c in countries_list
+        if c["blocked"]
+    ]
+    return {
+        "enabled": enabled,
+        "regions": regions,
+        "blocked_regions": blocked_regions
+    }
+
+def set_geoblocking_configuration(e_uci, payload):
+
+    if 'enabled' not in payload:
+        raise ValidationError('enabled', 'required')
+    if not isinstance(payload['enabled'], bool):
+        raise ValidationError('enabled', 'invalid', payload['enabled'])
+    
+    if 'countries' not in payload:
+        raise ValidationError('countries', 'required')
+    if not isinstance(payload['countries'], list):
+        raise ValidationError('countries', 'invalid', payload['countries'])
+    
+    # handle the country feed enable/disable
+    feeds = list(e_uci.get('banip', 'global', 'ban_feed', list=True, default=[]))
+    
+    if payload['enabled']:
+        # add 'country' feed if not present
+        if 'country' not in feeds:
+            feeds.append('country')
+    else:
+        # remove 'country' feed if present
+        if 'country' in feeds:
+            feeds.remove('country')
+    
+    # convert country codes to lowercase
+    countries = [c.lower() for c in payload['countries']]
+    e_uci.set('banip', 'global', 'ban_country', countries)
+
+    # Update the feeds list
+    e_uci.set('banip', 'global', 'ban_feed', feeds)
+    e_uci.save('banip')
+
+    return {'message': 'success'}
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        'list-blocklist': {},
+        'edit-blocklist': { "blocklist": "blocklist_name", "enabled": True },
+        'list-settings': {},
+        'edit-settings': {
+            'enabled': True,
+            'ban_logprerouting': True,
+            'ban_loginbound': True,
+            'ban_logoutbound': True,
+            'ban_loglimit': True,
+            'ban_logcount': 3,
+            'ban_logterm': ['string'],
+            'ban_icmplimit': True,
+            'ban_synlimit': True,
+            'ban_udplimit': True
+        },
+        'list-allowed': {},
+        'add-allowed': { 'address': '1.2.3.4', 'description': 'optional' },
+        'edit-allowed': { 'address': '1.2.3.4', 'description': 'optional' },
+        'delete-allowed': { 'address': '1.2.3.4' },
+        'list-blocked': {},
+        'add-blocked': {'address': '1.2.3.4', 'description': 'optional'},
+        'edit-blocked': {'address': '1.2.3.4', 'description': 'optional'},
+        'delete-blocked': {'address': '1.2.3.4'},
+        'list-active-blocks': {},
+        'remove-active-block': { 'ip': '' },
+        'is-ip-blocked': {'ip': ''},
+        'dns-list-blocklist': {},
+        'dns-edit-blocklist': { "blocklist": "blocklist_name", "enabled": True },
+        'dns-list-settings': {},
+        'dns-list-zones': {},
+        'dns-edit-settings': { 'enabled': True, 'zones': ["lan"], "ports": ["53", "853"] },
+        'dns-list-allowed': {},
+        'dns-add-allowed': { 'address': 'test.org' , 'description': 'optional'},
+        'dns-edit-allowed': { 'address': 'test.org', 'description': 'optional' },
+        'dns-delete-allowed' : { 'address': 'test.org' },
+        'dns-list-blocked': {},
+        'dns-add-blocked': {'address': '1.2.3.4', 'description': 'optional'},
+        'dns-edit-blocked': {'address': '1.2.3.4', 'description': 'optional'},
+        'dns-delete-blocked': {'address': '1.2.3.4'},
+        'dns-list-bypass': {},
+        'dns-add-bypass': { 'address': '1.2.3.4' },
+        'dns-delete-bypass': { 'address': '1.2.3.4' },
+        'geoblocking-configuration': {'enabled': True, 'regions': {'europe': ['IT'], 'americas': [], 'asia': [], 'africa': ['DZ'], 'oceania': [], 'others': []}, 'blocked_regions': ['DZ', 'IT']},
+        'set-geoblocking-configuration': {'enabled': True, 'countries': ['DZ', 'EG', 'US', 'BR']}
+    }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    e_uci = EUci()
+    try:
+        if action == 'list-blocklist':
+            ret = list_blocklist(e_uci)
+        elif action == 'edit-blocklist':
+            payload = json.loads(sys.stdin.read())
+            ret = edit_blocklist(e_uci, payload)
+        elif action == 'list-settings':
+            ret = list_settings(e_uci)
+        elif action == 'edit-settings':
+            payload = json.loads(sys.stdin.read())
+            ret = edit_settings(e_uci, payload)
+        elif action == 'list-allowed':
+            ret = list_allowed()
+        elif action == 'add-allowed':
+            payload = json.loads(sys.stdin.read())
+            ret = add_allowed(payload)
+        elif action == 'edit-allowed':
+            payload = json.loads(sys.stdin.read())
+            ret = edit_allowed(payload)
+        elif action == 'delete-allowed':
+            payload = json.loads(sys.stdin.read())
+            ret = delete_allowed(payload)
+        elif action == 'list-blocked':
+            ret = list_blocked()
+        elif action == 'add-blocked':
+            payload = json.loads(sys.stdin.read())
+            ret = add_blocked(payload)
+        elif action == 'edit-blocked':
+            payload = json.loads(sys.stdin.read())
+            ret = edit_blocked(payload)
+        elif action == 'delete-blocked':
+            payload = json.loads(sys.stdin.read())
+            ret = delete_blocked(payload)
+        elif action == 'list-active-blocks':
+            ret = list_active_blocks()
+        elif action == 'remove-active-block':
+            ret = remove_active_block()
+        elif action == 'is-ip-blocked':
+            ret = is_ip_blocked()
+
+        if action == 'dns-list-blocklist':
+            ret = dns_list_blocklist(e_uci)
+        elif action == 'dns-edit-blocklist':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_edit_blocklist(e_uci, payload)
+        elif action == 'dns-list-settings':
+            ret = dns_list_settings(e_uci)
+        elif action == 'dns-edit-settings':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_edit_settings(e_uci, payload)
+        elif action == 'dns-list-zones':
+            ret = dns_list_zones(e_uci)
+        elif action == 'dns-add-allowed':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_add_allowed(e_uci, payload)
+        elif action == 'dns-edit-allowed':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_edit_allowed(e_uci, payload)
+        elif action == 'dns-list-allowed':
+            ret = dns_list_allowed(e_uci)
+        elif action == 'dns-delete-allowed':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_delete_allowed(e_uci, payload)
+        elif action == 'dns-list-bypass':
+            ret = dns_list_bypass(e_uci)
+        elif action == 'dns-add-bypass':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_add_bypass(e_uci, payload)
+        elif action == 'dns-delete-bypass':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_delete_bypass(e_uci, payload)
+        elif action == 'dns-list-blocked':
+            ret = dns_list_blocked(e_uci)
+        elif action == 'dns-add-blocked':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_add_blocked(e_uci, payload)
+        elif action == 'dns-edit-blocked':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_edit_blocked(e_uci, payload)
+        elif action == 'dns-delete-blocked':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_delete_blocked(e_uci, payload)
+        elif action == 'geoblocking-configuration':
+            ret = geoblocking_configuration(e_uci)
+        elif action == 'set-geoblocking-configuration':
+            payload = json.loads(sys.stdin.read())
+            ret = set_geoblocking_configuration(e_uci, payload)
+
+        print(json.dumps(ret))
+    except ValidationError as ex:
+        print(json.dumps(utils.validation_error(ex.parameter, ex.message, ex.value)))

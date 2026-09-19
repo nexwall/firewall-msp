@@ -1,0 +1,141 @@
+name: "Build NethSecurity image"
+
+on:
+  workflow_call:
+    inputs:
+      repo_channel:
+        required: true
+        type: string
+      build_semver_suffix:
+        required: true
+        type: string
+      nethsecurity_version:
+        required: true
+        type: string
+      owrt_version:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+      base_version:
+        required: true
+        type: string
+      build_verbose:
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish_images:
+    name: 'Build NethSecurity image'
+    runs-on: self-hosted
+    env:
+      APK_PUB_KEY: ${{ secrets.APK_PUB_KEY }}
+      APK_PRIV_KEY: ${{ secrets.APK_PRIV_KEY }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      HAS_DO_SPACE_CREDS: ${{ secrets.DO_SPACE_ACCESS_KEY != '' && secrets.DO_SPACE_SECRET_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the image
+        env:
+          OWRT_VERSION: ${{ inputs.owrt_version }}
+          NETHSECURITY_VERSION: ${{ inputs.base_version }}
+          REPO_CHANNEL: ${{ inputs.repo_channel }}
+          TARGET: ${{ inputs.target }}
+          BUILD_SEMVER_SUFFIX: ${{ inputs.build_semver_suffix }}
+          BUILD_VERBOSE: ${{ inputs.build_verbose }}
+        run: ./build-nethsec.sh
+      - name: Summarize build errors
+        if: failure()
+        run: |
+          {
+            echo "## Build failure logs"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          mapfile -t error_logs < <(find build-logs -name 'error.txt' 2>/dev/null)
+
+          if [ "${#error_logs[@]}" -eq 0 ]; then
+            echo "No package error log found under \`build-logs/\`; download the \`build-logs\` artifact to inspect." >> "$GITHUB_STEP_SUMMARY"
+          else
+            for f in "${error_logs[@]}"; do
+              {
+                echo "### \`${f#build-logs/}\`"
+                echo '```'
+                cat "$f"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+      - name: Update latest_release file
+        run: |
+          FULL_VERSION="${{ inputs.nethsecurity_version }}"
+          echo "${FULL_VERSION}" > latest_release
+          echo "::notice title='Build published':: ${FULL_VERSION}"
+      - uses: actions/upload-artifact@v7
+        name: Upload image
+        with:
+          name: image
+          compression-level: 0
+          path: |
+            bin/targets/**/nethsecurity-*combined-efi.img.gz
+      - uses: actions/upload-artifact@v7
+        name: Upload manifest file
+        with:
+          name: manifest
+          path: bin/targets/**/nethsecurity-*.manifest
+      - uses: actions/upload-artifact@v7
+        name: Upload SBOM
+        with:
+          name: sbom
+          path: bin/targets/**/nethsecurity-*.bom.cdx.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        name: Upload logs
+        with:
+          name: build-logs
+          path: |
+            build-logs
+      - name: Setup rclone
+        if: ${{ env.HAS_DO_SPACE_CREDS == 'true' }}
+        uses: AnimMouse/setup-rclone@v1
+      - name: Copy Packages to repo
+        if: ${{ env.HAS_DO_SPACE_CREDS == 'true' }}
+        env:
+          RCLONE_CONFIG_REPO_PROVIDER: DigitalOcean
+          RCLONE_CONFIG_REPO_TYPE: s3
+          RCLONE_CONFIG_REPO_ENV_AUTH: true
+          RCLONE_CONFIG_REPO_ACL: public-read
+          RCLONE_CONFIG_REPO_ENDPOINT: ams3.digitaloceanspaces.com
+          RCLONE_CONFIG_REPO_ACCESS_KEY_ID: ${{ secrets.DO_SPACE_ACCESS_KEY }}
+          RCLONE_CONFIG_REPO_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACE_SECRET_KEY }}
+        run: |
+          RELEASE_DIR="repo:nethsecurity/${{ inputs.repo_channel }}/${{ inputs.nethsecurity_version }}"
+          TARGETS_DIR="${RELEASE_DIR}/targets"
+          PUBLISH_TARGETS=true
+
+          if [[ "${{ inputs.repo_channel }}" == 'stable' || "${{ inputs.repo_channel }}" == 'staging' ]]; then
+            if [[ -n "$(rclone lsf "${TARGETS_DIR}" --recursive --files-only 2>/dev/null | head -n 1 || true)" ]]; then
+              PUBLISH_TARGETS=false
+              echo "::notice title='Image upload skipped':: Image artifacts already exist for ${{ inputs.repo_channel }}/${{ inputs.nethsecurity_version }}"
+            fi
+          fi
+
+          rclone sync bin/packages "${RELEASE_DIR}/packages" --progress --create-empty-src-dirs
+
+          if [[ "${PUBLISH_TARGETS}" == 'true' ]]; then
+            rclone sync bin/targets "${TARGETS_DIR}" --progress --create-empty-src-dirs
+          fi
+
+          rclone copy latest_release repo:nethsecurity/${{ inputs.repo_channel }}/ --progress
+      - name: Archive packages (no repo secrets available)
+        if: ${{ env.HAS_DO_SPACE_CREDS != 'true' }}
+        run: tar -czf packages.tar.gz -C bin packages
+      - name: Upload packages archive
+        if: ${{ env.HAS_DO_SPACE_CREDS != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages-archive
+          path: packages.tar.gz

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+#
+# DPI: remove premium signatures, restore the ones from the rom if there are any
+#
+
+rm -f /etc/netifyd/{netify-categories.json,netify-apps.conf}
+
+if [ -d /rom/etc/netifyd ]; then
+  cp /rom/etc/netifyd/{netify-categories.json,netify-apps.conf} /etc/netifyd/
+fi
+
+/etc/init.d/netifyd reload

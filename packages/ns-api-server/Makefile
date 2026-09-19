@@ -1,0 +1,62 @@
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+include $(TOPDIR)/rules.mk
+ 
+PKG_NAME:=ns-api-server
+PKG_VERSION:=1.5.5
+PKG_RELEASE:=1
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+
+PKG_MAINTAINER:=Giacomo Sanchietti <giacomo.sanchietti@nethesis.it>
+PKG_LICENSE:=GPL-3.0-only
+
+PKG_BUILD_DEPENDS:=golang/host
+PKG_BUILD_PARALLEL:=1
+PKG_BUILD_FLAGS:=no-mips16
+
+GO_PKG:=github.com/NethServer/nethsecurity-api
+
+include $(INCLUDE_DIR)/package.mk
+include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
+
+define Build/Prepare
+	mkdir -p $(PKG_BUILD_DIR)
+	$(CP) ./files/src/. $(PKG_BUILD_DIR)/
+endef
+
+define Package/ns-api-server
+	SECTION:=base
+	CATEGORY:=NethSecurity
+	TITLE:=NethSecurity REST API server
+	URL:=https://github.com/NethServer/nethsecurity-api
+	DEPENDS:=$(GO_ARCH_DEPENDS) +victoria-metrics
+endef
+ 
+define Package/ns-api-server/description
+	NethSecurity REST API server
+endef
+
+
+define Package/ns-api-server/install
+	$(call GoPackage/Package/Install/Bin,$(1))
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/ns-api-server.initd $(1)/etc/init.d/ns-api-server
+	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
+	$(INSTALL_CONF) files/ns-api-server.keep $(1)/lib/upgrade/keep.d/ns-api-server
+endef
+
+define Package/ns-api-server/postinst
+#!/bin/sh
+if [ -z "$${IPKG_INSTROOT}" ]; then
+  /etc/init.d/ns-api-server restart
+fi
+exit 0
+endef
+
+
+$(eval $(call GoBinPackage,ns-api-server))
+$(eval $(call BuildPackage,ns-api-server))

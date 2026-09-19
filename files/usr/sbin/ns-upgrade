@@ -1,0 +1,20 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+#
+# Upgrade the system with latest available image
+#
+
+set -e
+
+sleep 3
+if [ -n "$(uci -q get ns-plug.config.server)" ]; then
+  /etc/init.d/ns-plug stop
+fi
+image=$(/usr/bin/ns-download -f -l)
+/sbin/sysupgrade -T "$image"
+/sbin/sysupgrade -k "$image"

@@ -1,0 +1,27 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import nsmigration
+import subprocess
+
+(u, data, nmap) = nsmigration.init("time.json")
+
+# Set global options
+for option in data['ntp']:
+    nsmigration.vprint(f"Setting NTP option {option}")
+    u.set("system", "ntp", option, data['ntp'][option])
+
+for section in u.get("system"):
+    if  u.get("system", section) == "system":
+        nsmigration.vprint(f"Setting timezone")
+        u.set("system", section, "zonename", data['timezone'])
+        tz = subprocess.run(["/usr/bin/zonename2timezone", data['timezone']], capture_output=True, text=True).stdout.rstrip()
+        if tz != '':
+            u.set("system", section, "timezone", tz)
+
+# Save configuration
+u.commit("system")

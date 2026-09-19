@@ -1,0 +1,387 @@
+diff --git a/net/coova-chilli/Makefile b/net/coova-chilli/Makefile
+index ece113869..bc3d79a5a 100644
+--- a/net/coova-chilli/Makefile
++++ b/net/coova-chilli/Makefile
+@@ -43,7 +43,7 @@ define Package/coova-chilli
+   SUBMENU:=Captive Portals
+   SECTION:=net
+   CATEGORY:=Network
+-  DEPENDS:=+kmod-tun +librt +COOVACHILLI_MINIPORTAL:haserl \
++  DEPENDS:=+kmod-tun +librt +libcurl +zlib +COOVACHILLI_MINIPORTAL:haserl \
+   +COOVACHILLI_WOLFSSL:libwolfssl +COOVACHILLI_OPENSSL:libopenssl \
+   +COOVACHILLI_JSONINTERFACE:libjson-c
+   TITLE:=Wireless LAN HotSpot controller (Coova Chilli Version)
+@@ -118,6 +118,7 @@ define Build/Configure
+ 	$(if $(CONFIG_COOVACHILLI_WOLFSSL),--with,--without)-cyassl \
+ 	$(if $(CONFIG_COOVACHILLI_OPENSSL),--with,--without)-openssl \
+ 	$(if $(CONFIG_PACKAGE_kmod-ipt-coova),--with-nfcoova) \
++	--with-curl="$(STAGING_DIR)/usr/" \
+ 	)
+ endef
+ 
+diff --git a/net/coova-chilli/patches/040-add-libcurl.patch b/net/coova-chilli/patches/040-add-libcurl.patch
+new file mode 100644
+index 000000000..1fe94a13c
+--- /dev/null
++++ b/net/coova-chilli/patches/040-add-libcurl.patch
+@@ -0,0 +1,55 @@
++Index: coova-chilli-1.6/configure.ac
++===================================================================
++--- coova-chilli-1.6.orig/configure.ac
+++++ coova-chilli-1.6/configure.ac
++@@ -509,15 +509,8 @@ AM_CONDITIONAL(WITH_PCAP, [test x"$with_
++ AC_ARG_WITH([curl],
++  [AS_HELP_STRING([--with-curl], [enable support for curl])],[],[with_curl=no])
++ 
++-AS_IF([test x"$with_curl" != xno],
++-  [AC_CHECK_LIB([curl], [curl_global_init],
++-              [AC_SUBST([LIBCURL], ["-lcurl -lz -lssl -lcrypto -lcares"])
++-               AC_DEFINE([USING_CURL], [1],
++-                         [Define if you have curl enabled])
++-              ],
++-              [AC_MSG_FAILURE(
++-                 [--with-curl was given, but test for curl failed])],
++-              [-lz -lssl -lcrypto -lcares])])
+++AC_SUBST([LIBCURL], ["-lcurl -lz"])
+++AC_DEFINE([USING_CURL], [1], [Define if you have curl enabled])
++ 
++ AM_CONDITIONAL(WITH_CURL, [test x"$with_curl" != xno])
++ 
++Index: coova-chilli-1.6/src/main-proxy.c
++===================================================================
++--- coova-chilli-1.6.orig/src/main-proxy.c
+++++ coova-chilli-1.6/src/main-proxy.c
++@@ -447,12 +447,10 @@ static int http_aaa_setup(struct radius_
++ 
++   char *user = 0;
++   char *pwd = 0;
++-#ifdef HAVE_OPENSSL
++   char *ca = 0;
++   char *cert = 0;
++   char *key = 0;
++   char *keypwd = 0;
++-#endif
++ 
++   req->radius = radius;
++ 
++@@ -465,7 +463,6 @@ static int http_aaa_setup(struct radius_
++     if (user && pwd) {
++     }
++ 
++-#ifdef HAVE_OPENSSL
++ 
++     if (cert && strlen(cert)) {
++ #if(_debug_)
++@@ -516,7 +513,6 @@ static int http_aaa_setup(struct radius_
++ 
++     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
++     curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_DEFAULT);
++-#endif
++ 
++     curl_easy_setopt(curl, CURLOPT_VERBOSE, /*debug ? 1 :*/ 0);
++
+diff --git a/net/coova-chilli/patches/060-fix-proxy-debug.patch b/net/coova-chilli/patches/060-fix-proxy-debug.patch
+new file mode 100644
+index 000000000..e41f09921
+--- /dev/null
++++ b/net/coova-chilli/patches/060-fix-proxy-debug.patch
+@@ -0,0 +1,265 @@
++--- a/src/main-proxy.c
+++++ b/src/main-proxy.c
++@@ -133,7 +133,8 @@ static proxy_request * get_request() {
++   }
++ 
++ #if(_debug_)
++-  syslog(LOG_DEBUG, "connections free %d", num_requests_free);
+++  if (_options.debug)
+++    syslog(LOG_DEBUG, "connections free %d", num_requests_free);
++ #endif
++ 
++   if (!req) {
++@@ -143,7 +144,8 @@ static proxy_request * get_request() {
++     return 0;
++   }
++ 
++-  syslog(LOG_DEBUG, "request index %d", req->index);
+++  if (_options.debug)
+++    syslog(LOG_DEBUG, "request index %d", req->index);
++   req->lasttime = time(NULL);
++   req->next = req->prev = 0;
++   req->inuse = 1;
++@@ -172,7 +174,8 @@ static void bunhex(bstring src, bstring
++ 
++ static void close_request(proxy_request *req) {
++ 
++-  syslog(LOG_DEBUG, "%s", __FUNCTION__);
+++  if (_options.debug)
+++    syslog(LOG_DEBUG, "%s", __FUNCTION__);
++ 
++   if (req->url)  bdestroy(req->url);
++   if (req->data) bdestroy(req->data);
++@@ -198,7 +201,8 @@ static void close_request(proxy_request
++   num_requests_free++;
++ 
++ #if(_debug_)
++-  syslog(LOG_DEBUG, "connections free %d", num_requests_free);
+++  if (_options.debug)
+++    syslog(LOG_DEBUG, "connections free %d", num_requests_free);
++ #endif
++ }
++ 
++@@ -208,10 +212,11 @@ static int http_aaa_finish(proxy_request
++ 
++ #ifdef USING_CURL
++ #if(_debug_)
++-  syslog(LOG_DEBUG, "calling curl_easy_cleanup()");
+++  if (_options.debug)
+++    syslog(LOG_DEBUG, "calling curl_easy_cleanup()");
++ #endif
++   if (req->curl) {
++-    if (req->error_buffer[0])
+++    if (req->error_buffer[0] && _options.debug)
++       syslog(LOG_DEBUG, "curl error %s", req->error_buffer);
++     curl_multi_remove_handle(curl_multi, req->curl);
++     curl_easy_cleanup(req->curl);
++@@ -224,7 +229,8 @@ static int http_aaa_finish(proxy_request
++ 
++   if (req->data && req->data->slen) {
++ #if(_debug_)
++-    syslog(LOG_DEBUG, "Received: %s\n",req->data->data);
+++    if (_options.debug)
+++      syslog(LOG_DEBUG, "Received: %s\n",req->data->data);
++ #endif
++     req->authorized = !memcmp(req->data->data, "Auth: 1", 7);
++     req->challenge = !memcmp(req->data->data, "Auth: 2", 7);
++@@ -234,15 +240,17 @@ static int http_aaa_finish(proxy_request
++   switch(req->radius_req.code) {
++     case RADIUS_CODE_ACCOUNTING_REQUEST:
++ #if(_debug_)
++-      syslog(LOG_DEBUG, "Accounting-Response");
+++      if (_options.debug)
+++        syslog(LOG_DEBUG, "Accounting-Response");
++ #endif
++       radius_default_pack(radius, &req->radius_res, RADIUS_CODE_ACCOUNTING_RESPONSE);
++       break;
++ 
++     case RADIUS_CODE_ACCESS_REQUEST:
++ #if(_debug_)
++-      syslog(LOG_DEBUG, "Access-%s", req->authorized ? "Accept" :
++-             req->challenge ? "Challenge" : "Reject");
+++      if (_options.debug)
+++        syslog(LOG_DEBUG, "Access-%s", req->authorized ? "Accept" :
+++               req->challenge ? "Challenge" : "Reject");
++ #endif
++       radius_default_pack(radius, &req->radius_res,
++                           req->authorized ? RADIUS_CODE_ACCESS_ACCEPT :
++@@ -329,7 +337,8 @@ static int http_aaa_finish(proxy_request
++                   if (v > 0) {
++                     radius_addattr(radius, &req->radius_res, attrs[i].a, attrs[i].v, attrs[i].va, v, NULL, 0);
++ #if(_debug_)
++-                    syslog(LOG_DEBUG, "Setting %s = %d", attrs[i].n, v);
+++		    if (_options.debug)
+++                      syslog(LOG_DEBUG, "Setting %s = %d", attrs[i].n, v);
++ #endif
++                   }
++                 }
++@@ -339,7 +348,8 @@ static int http_aaa_finish(proxy_request
++                   radius_addattr(radius, &req->radius_res, attrs[i].a, attrs[i].v, attrs[i].va, 0,
++                                  (uint8_t *)ptr+strlen(attrs[i].n), strlen(ptr)-strlen(attrs[i].n));
++ #if(_debug_)
++-                  syslog(LOG_DEBUG, "Setting %s = %s", attrs[i].n, ptr+strlen(attrs[i].n));
+++		  if (_options.debug)
+++                    syslog(LOG_DEBUG, "Setting %s = %s", attrs[i].n, ptr+strlen(attrs[i].n));
++ #endif
++                 }
++                 break;
++@@ -377,7 +387,8 @@ static int http_aaa_finish(proxy_request
++                   }
++ 
++ #if(_debug_)
++-                  syslog(LOG_DEBUG, "Setting %s = %s", attrs[i].n, ptr+strlen(attrs[i].n));
+++		  if (_options.debug)
+++                    syslog(LOG_DEBUG, "Setting %s = %s", attrs[i].n, ptr+strlen(attrs[i].n));
++ #endif
++                   bdestroy(tmp);
++                   bdestroy(tmp2);
++@@ -435,7 +446,10 @@ static int bstring_data(void *ptr, size_
++   if (size > 0 && nmemb > 0) {
++     int rsize = size * nmemb;
++     bcatblk(s,ptr,rsize);
++-    syslog(LOG_DEBUG, "read %d", rsize);
+++
+++    if (_options.debug)
+++      syslog(LOG_DEBUG, "read %d", rsize);
+++
++     return rsize;
++   }
++   return 0;
++@@ -466,7 +480,8 @@ static int http_aaa_setup(struct radius_
++ 
++     if (cert && strlen(cert)) {
++ #if(_debug_)
++-      syslog(LOG_DEBUG, "using cert [%s]",cert);
+++      if (_options.debug)
+++        syslog(LOG_DEBUG, "using cert [%s]",cert);
++ #endif
++       curl_easy_setopt(curl, CURLOPT_SSLCERT, cert);
++       curl_easy_setopt(curl, CURLOPT_SSLCERTTYPE, "PEM");
++@@ -474,13 +489,15 @@ static int http_aaa_setup(struct radius_
++ 
++     if (key && strlen(key)) {
++ #if(_debug_)
++-      syslog(LOG_DEBUG, "using key [%s]",key);
+++      if (_options.debug)
+++        syslog(LOG_DEBUG, "using key [%s]",key);
++ #endif
++       curl_easy_setopt(curl, CURLOPT_SSLKEY, key);
++       curl_easy_setopt(curl, CURLOPT_SSLKEYTYPE, "PEM");
++       if (keypwd && strlen(keypwd)) {
++ #if(_debug_)
++-	syslog(LOG_DEBUG, "using key pwd [%s]",keypwd);
+++	if (_options.debug)
+++	  syslog(LOG_DEBUG, "using key pwd [%s]",keypwd);
++ #endif
++ #ifdef CURLOPT_SSLCERTPASSWD
++ 	curl_easy_setopt(curl, CURLOPT_SSLCERTPASSWD, keypwd);
++@@ -499,7 +516,8 @@ static int http_aaa_setup(struct radius_
++     if (ca && strlen(ca)) {
++ #ifdef CURLOPT_ISSUERCERT
++ #if(_debug_)
++-      syslog(LOG_DEBUG, "using ca [%s]",ca);
+++      if (_options.debug)
+++        syslog(LOG_DEBUG, "using ca [%s]",ca);
++ #endif
++       curl_easy_setopt(curl, CURLOPT_ISSUERCERT, ca);
++       curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1);
++@@ -614,7 +632,8 @@ static int http_aaa(struct radius_t *rad
++ 	  curl_multi_perform(curl_multi, &still_running));
++ 
++ #if(_debug_ > 1)
++-    syslog(LOG_DEBUG, "curl still running %d", still_running);
+++    if (_options.debug)
+++      syslog(LOG_DEBUG, "curl still running %d", still_running);
++ #endif
++ #endif
++ 
++@@ -692,7 +711,8 @@ static void http_aaa_register(int argc,
++   if (http_aaa_setup(0, &req) == 0) {
++ 
++ #if(_debug_ > 1)
++-    syslog(LOG_DEBUG, "==> %s\npost:%s", req.url->data, req.post->data);
+++    if (_options.debug)
+++      syslog(LOG_DEBUG, "==> %s\npost:%s", req.url->data, req.post->data);
++ #endif
++ 
++ #ifdef USING_CURL
++@@ -700,7 +720,8 @@ static void http_aaa_register(int argc,
++ #endif
++ 
++ #if(_debug_ > 1)
++-    syslog(LOG_DEBUG, "<== %s", req.data->data);
+++    if (_options.debug)
+++      syslog(LOG_DEBUG, "<== %s", req.data->data);
++ #endif
++ 
++ #ifdef USING_CURL
++@@ -1028,7 +1049,8 @@ static void process_radius(struct radius
++       redir_md_param(req->url, _options.uamsecret, "&");
++ 
++ #if(_debug_ > 1)
++-    syslog(LOG_DEBUG, "==> %s", req->url->data);
+++    if (_options.debug)
+++      syslog(LOG_DEBUG, "==> %s", req->url->data);
++ #endif
++     if (http_aaa(radius, req) < 0)
++       close_request(req);
++@@ -1164,7 +1186,8 @@ int main(int argc, char **argv) {
++     for (idx=0; idx < max_requests; idx++) {
++       if (requests[idx].inuse &&
++ 	  requests[idx].lasttime < expired_time) {
++-	syslog(LOG_DEBUG, "remove expired index %d", idx);
+++	if (_options.debug)
+++	  syslog(LOG_DEBUG, "remove expired index %d", idx);
++ 	http_aaa_finish(&requests[idx]);
++       }
++     }
++@@ -1206,7 +1229,8 @@ int main(int argc, char **argv) {
++             int signo = chilli_handle_signal(0, 0);
++             if (signo) {
++ #if(_debug_)
++-              syslog(LOG_DEBUG, "main-proxy signal %d", signo);
+++              if (_options.debug)
+++                syslog(LOG_DEBUG, "main-proxy signal %d", signo);
++ #endif
++               switch(signo) {
++                 case SIGUSR2: print_requests(); break;
++@@ -1237,7 +1261,8 @@ int main(int argc, char **argv) {
++              */
++ 
++ #if(_debug_)
++-            syslog(LOG_DEBUG, "received accounting");
+++            if (_options.debug)
+++              syslog(LOG_DEBUG, "received accounting");
++ #endif
++ 
++             if ((status = recvfrom(radius_acct->fd,
++@@ -1256,13 +1281,15 @@ int main(int argc, char **argv) {
++               curl_multi_perform(curl_multi, &still_running));
++ 
++ #if(_debug_ > 1)
++-        syslog(LOG_DEBUG, "curl still running %d", still_running);
+++	if (_options.debug)
+++          syslog(LOG_DEBUG, "curl still running %d", still_running);
++ #endif
++ 
++         while ((msg = curl_multi_info_read(curl_multi, &msgs_left))) {
++ 
++ #if(_debug_ > 1)
++-          syslog(LOG_DEBUG, "curl messages left %d", msgs_left);
+++          if (_options.debug)
+++            syslog(LOG_DEBUG, "curl messages left %d", msgs_left);
++ #endif
++ 
++           if (msg->msg == CURLMSG_DONE) {
++@@ -1276,7 +1303,8 @@ int main(int argc, char **argv) {
++             if (found) {
++               --idx;
++ #if(_debug_)
++-              syslog(LOG_DEBUG, "HTTP completed with status %d\n", msg->data.result);
+++	      if (_options.debug)
+++                syslog(LOG_DEBUG, "HTTP completed with status %d\n", msg->data.result);
++ #endif
++               http_aaa_finish(&requests[idx]);
++             } else {
+diff --git a/net/coova-chilli/patches/070-curl_http11_fix.patch b/net/coova-chilli/patches/070-curl_http11_fix.patch
+new file mode 100644
+index 000000000..d438ac382
+--- /dev/null
++++ b/net/coova-chilli/patches/070-curl_http11_fix.patch
+@@ -0,0 +1,10 @@
++--- a/src/main-proxy.c
+++++ b/src/main-proxy.c
++@@ -471,6 +471,7 @@ static int http_aaa_setup(struct radius_
++
++     curl_easy_setopt(curl, CURLOPT_URL, req->url->data);
++
+++    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
++     curl_easy_setopt(curl, CURLOPT_USERAGENT, "CoovaChilli " VERSION);
++     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
++     curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
+diff --git a/net/coova-chilli/patches/080-fix-tls-verify.patch b/net/coova-chilli/patches/080-fix-tls-verify.patch
+new file mode 100644
+index 000000000..0f1e2d3c4
+--- /dev/null
++++ b/net/coova-chilli/patches/080-fix-tls-verify.patch
+@@ -0,0 +1,12 @@
++--- a/src/main-proxy.c
+++++ b/src/main-proxy.c
++@@ -529,7 +529,8 @@
++       curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
++     }
++ 
++-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+++    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+++    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
++     curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_DEFAULT);
++ 
++     curl_easy_setopt(curl, CURLOPT_VERBOSE, /*debug ? 1 :*/ 0);

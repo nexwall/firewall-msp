@@ -1,0 +1,10 @@
+uci -q batch << EOI
+set nginx._lan.error_log=syslog:server=unix:/dev/log,nohostname
+set nginx._lan.access_log=off
+commit nginx
+EOI
+
+# make sure nginx does not listen on port 80 to avoid conflicts with acme.sh
+uci -q delete nginx._redirect2ssl
+
+exit 0

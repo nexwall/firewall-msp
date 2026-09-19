@@ -1,0 +1,58 @@
+#!/bin/sh
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+#
+# Setup the given device as persistent storage mounting it to /mnt/data
+# The device should already have a valid ext4 file system.
+#
+# Parameters:
+# - the device to use, like /dev/vda3
+
+set -e
+
+device=$1
+if [ -z "$device" ]; then
+    exit 3
+fi
+
+if [ ! -e "$device" ]; then
+    exit 2
+fi
+mdir=/mnt/data
+
+# mount the device
+mkdir -p "$mdir"
+mount "$device" "$mdir"
+
+# find label and create automount config
+eval $(block info | grep "$device" | awk '{print $3}')
+uci set fstab.ns_data=mount
+uci set fstab.ns_data.target="$mdir"
+uci set fstab.ns_data.label="$LABEL"
+uci set fstab.ns_data.enabled=1
+uci commit fstab
+
+# setup rsyslog to write log into the device
+mkdir -p "$mdir/log"
+uci set rsyslog.ns_data=selector
+uci set rsyslog.ns_data.source='*.*'
+uci set rsyslog.ns_data.destination="$mdir/log/messages"
+uci commit rsyslog
+/etc/init.d/rsyslog restart
+
+crontab -l | grep -q '/usr/sbin/sync-data' || echo '40 1 * * * /usr/sbin/sync-data' >> /etc/crontabs/root
+/etc/init.d/cron restart
+
+# check for existing OpenVPN RW connection records in /var and merge them into storage if needed
+/usr/libexec/ns-openvpn/openvpn-merge-connections-db
+
+# Setup persistent dnsmasq leases file
+/usr/libexec/ns-storage-dhcp-leases
+
+# Restart services that will use the storage
+/etc/init.d/dnsmasq restart
+/etc/init.d/victoria-metrics restart
+/etc/init.d/victoria-logs restart 2>/dev/null || :

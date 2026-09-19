@@ -1,0 +1,649 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+
+from euci import EUci
+from nethsec import reverse_proxy
+from nethsec import utils
+from nethsec.utils import ValidationError
+
+
+
+
+def __validate_certificate_pem(cert_path, cert_type='certificate_path'):
+    """
+    Validates that the certificate file is a valid PEM X.509 certificate.
+    Raises ValidationError if validation fails.
+    """
+    result = subprocess.run(
+        ['openssl', 'x509', '-noout', '-in', cert_path],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        raise ValidationError(cert_type, 'invalid_format', cert_path)
+
+
+def __validate_key_pem(key_path):
+    """
+    Validates that the key file is a valid PEM private key.
+    Raises ValidationError if validation fails.
+    """
+    result = subprocess.run(
+        ['openssl', 'pkey', '-noout', '-in', key_path],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        raise ValidationError('key_path', 'invalid_format', key_path)
+
+
+def __validate_key_certificate_match(cert_path, key_path):
+    """
+    Validates that the certificate and private key are a matching pair.
+    Compares the public key from both files.
+    Raises ValidationError if they don't match.
+    """
+    cert_pubkey = subprocess.run(
+        ['openssl', 'x509', '-noout', '-pubkey', '-in', cert_path],
+        capture_output=True, text=True
+    )
+    if cert_pubkey.returncode != 0:
+        raise ValidationError('certificate_path', 'invalid_format', cert_path)
+
+    key_pubkey = subprocess.run(
+        ['openssl', 'pkey', '-pubout', '-in', key_path],
+        capture_output=True, text=True
+    )
+    if key_pubkey.returncode != 0:
+        raise ValidationError('key_path', 'invalid_format', key_path)
+
+    if cert_pubkey.stdout.strip() != key_pubkey.stdout.strip():
+        raise ValidationError('key_path', 'key_mismatch', key_path)
+
+
+def __validate_certificate_expiry(cert_path):
+    """
+    Validates that the certificate has not expired.
+    Raises ValidationError if the certificate is expired.
+    """
+    result = subprocess.run(
+        ['openssl', 'x509', '-noout', '-enddate', '-in', cert_path],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        raise ValidationError('certificate_path', 'invalid_format', cert_path)
+
+    # Parse output like: notAfter=Feb  2 14:12:21 2036 GMT
+    enddate_line = result.stdout.strip()
+    if enddate_line.startswith('notAfter='):
+        date_str = enddate_line.split('=')[1].strip()
+        try:
+            expiry_dt = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
+            if datetime.utcnow() > expiry_dt:
+                raise ValidationError('certificate_path', 'expired', cert_path)
+        except ValueError:
+            # If we can't parse the date, let it through
+            pass
+
+def __parse_proxy_pass(e_uci, location):
+    """
+    Parses the proxy_pass directive, replacing $upstream with the actual upstream address.
+    """
+    proxy_pass = e_uci.get('nginx', location, 'proxy_pass', dtype=str)
+    if '$upstream' not in proxy_pass:
+        return proxy_pass
+    else:
+        protocol = proxy_pass.split('://')[0]
+        destination = proxy_pass.split('://')[1]
+        path = destination.split('/')[1:]
+        if len(path) > 0:
+            path = '/' + '/'.join(path)
+        elif destination.endswith('/'):
+            path = '/'
+        else:
+            path = ''
+
+        host = ''
+        for set in e_uci.get('nginx', location, 'set', dtype=str, list=True):
+            if set.startswith('$upstream'):
+                host = set.split(' ')[1]
+                break
+
+        return protocol + '://' + host + path
+
+
+def __dns_providers():
+    """
+    Returns a list of available dns providers, by scanning the dnsapi folder and stripping the .sh extension and the
+    _dns prefix.
+    """
+    return [entry.name[4:-3]
+            for entry in os.scandir('/usr/lib/acme/client/dnsapi')
+            if entry.is_file() and entry.name.startswith('dns_') and entry.name.endswith('.sh')]
+
+
+def __start_acme(uci):
+    """
+    Handle acme service startup and setup.
+    """
+    # check if mail is default, otherwise change it
+    for key, entry in utils.get_all_by_type(e_uci, 'acme', 'acme').items():
+        if 'account_email' in entry:
+            if entry['account_email'] == 'email@example.org':
+                # set email
+                uci.set('acme', key, 'account_email', 'no-reply@nethsecurity.org')
+                uci.save('acme')
+            break
+    # check if acme has been started at least once
+    service_status = subprocess.run(['/etc/init.d/acme', 'status'], capture_output=True, text=True)
+    if 'inactive' in service_status.stdout:
+        # run acme service in background, don't care if it fails
+        subprocess.run('/etc/init.d/acme start &', shell=True)
+
+def __update_nsui_certificate():
+    file = '/etc/nginx/conf.d/ns-ui.conf'
+    if not os.path.isfile(file):
+        return
+
+    uci = EUci()
+    crt = uci.get("nginx", "_lan", "ssl_certificate", default=None)
+    key = uci.get("nginx", "_lan", "ssl_certificate_key", default=None)
+    if crt is None or key is None:
+        return
+
+    cert_pattern = r'(ssl_certificate\s+)[^;]+;'
+    key_pattern = r'(ssl_certificate_key\s+)[^;]+;'
+
+    # Replacement strings
+    new_cert_line = r'\1' + crt + ';'
+    new_key_line = r'\1' + key + ';'
+
+    # Replace the lines in the file content
+
+    with open(file, 'r') as fp:
+        content = fp.read()
+    content = re.sub(cert_pattern, new_cert_line, content)
+    content = re.sub(key_pattern, new_key_line, content)
+
+    with open(file, 'w') as fp:
+        fp.write(content)
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        'list-certificates': {},
+        'list-dns-providers': {},
+        'request-certificate': {
+            'name': 'str',
+            'domains': ['str'],
+            'validation_method': 'str',
+            'dns_provider': 'str',
+            'dns_provider_options': ['str']
+        },
+        'add-certificate': {
+            'name': 'str',
+            'certificate_path': 'str',
+            'key_path': 'str',
+            'chain_path': 'str'
+        },
+        'delete-certificate': {
+            'name': 'str'
+        },
+        'set-default-certificate': {
+            'name': 'str'
+        },
+        'add-path': {
+            'path': 'str',
+            'destination': 'str',
+            'description': 'str',
+            'allow': ['str']
+        },
+        'add-domain': {
+            'domain': 'str',
+            'certificate': 'str',
+            'destination': 'str',
+            'description': 'str',
+            'allow': ['str']
+        },
+        'delete-proxy': {
+            'id': 'str'
+        },
+        'list-proxies': {},
+        'edit-path': {
+            'id': 'str',
+            'path': 'str',
+            'destination': 'str',
+            'description': 'str',
+            'allow': ['str']
+        },
+        'edit-domain': {
+            'id': 'str',
+            'domain': 'str',
+            'certificate': 'str',
+            'destination': 'str',
+            'description': 'str',
+            'allow': ['str']
+        },
+        'check-config': {}
+    }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    try:
+        e_uci = EUci()
+        if action == 'list-certificates':
+            print(json.dumps({
+                'values': reverse_proxy.certificate_list(e_uci)
+            }))
+
+        if action == 'add-certificate':
+            data = json.loads(sys.stdin.read())
+            if 'name' not in data:
+                raise ValidationError('name', 'required')
+            if data['name'] in reverse_proxy.certificate_list(e_uci):
+                raise ValidationError('name', 'unique', data['name'])
+            if utils.sanitize(data['name']) != data['name']:
+                raise ValidationError('name', 'invalid', data['name'])
+            if 'certificate_path' not in data:
+                raise ValidationError('certificate_path', 'required')
+            if os.path.isfile(data['certificate_path']) is False:
+                raise ValidationError('certificate_path', 'invalid', data['certificate_path'])
+            if 'key_path' not in data:
+                raise ValidationError('key_path', 'required')
+            if os.path.isfile(data['key_path']) is False:
+                raise ValidationError('key_path', 'invalid', data['key_path'])
+            if 'chain_path' in data and os.path.isfile(data['chain_path']) is False:
+                raise ValidationError('chain_path', 'invalid', data['chain_path'])
+
+            # Cryptographic validation
+            __validate_certificate_pem(data['certificate_path'])
+            __validate_key_pem(data['key_path'])
+            __validate_key_certificate_match(data['certificate_path'], data['key_path'])
+            __validate_certificate_expiry(data['certificate_path'])
+            if 'chain_path' in data:
+                __validate_certificate_pem(data['chain_path'])
+
+            # store certificate
+            with open(data['certificate_path'], 'r') as cert_file:
+                with open(f'/etc/nginx/custom_certs/{data["name"]}.crt', 'w') as cert:
+                    cert.write(cert_file.read())
+
+                if 'chain_path' in data:
+                    with open(f'/etc/nginx/custom_certs/{data["name"]}.crt', 'a') as cert:
+                        cert.write("\n")
+                        with open(data['chain_path'], 'r') as chain_file:
+                            cert.write(chain_file.read())
+
+            # store key
+            with open(data['key_path'], 'r') as key_file:
+                with open(f'/etc/nginx/custom_certs/{data["name"]}.key', 'w') as key:
+                    key.write(key_file.read())
+
+            # changes successfully applied, delete old files
+            os.remove(data['certificate_path'])
+            os.remove(data['key_path'])
+            if 'chain_path' in data:
+                os.remove(data['chain_path'])
+
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'list-dns-providers':
+            # lists the available dns providers, from the dnsapi folder, stripping them of the .sh extension and the
+            # _dns prefix
+            print(json.dumps({
+                'values': __dns_providers()
+            }))
+
+        elif action == 'request-certificate':
+            validation_methods = ['standalone', 'dns']
+            data = json.loads(sys.stdin.read())
+            # validate all the things!
+            if 'name' not in data:
+                raise ValidationError('name', 'required')
+            certificate_list = reverse_proxy.certificate_list(e_uci)
+            if data['name'] in certificate_list:
+                raise ValidationError('name', 'unique', data['name'])
+            if utils.sanitize(data['name']) != data['name']:
+                raise ValidationError('name', 'invalid', data['name'])
+            if 'domains' not in data:
+                raise ValidationError('domains', 'required')
+            if not isinstance(data['domains'], list):
+                raise ValidationError('domains', 'invalid', data['domains'])
+            if len(data['domains']) == 0:
+                raise ValidationError('domains', 'required')
+            # checking if the domain has been already requested, this only applies to acme certificates
+            for domain in data['domains']:
+                for certificate in certificate_list:
+                    if 'requested_domains' in certificate_list[certificate]:
+                        if domain in certificate_list[certificate]['requested_domains']:
+                            raise ValidationError('domains', 'certificate_already_requested', domain)
+            if 'validation_method' not in data:
+                raise ValidationError('validation_method', 'required')
+            if data['validation_method'] not in validation_methods:
+                raise ValidationError('validation_method', 'invalid', data['validation_method'])
+            if data['validation_method'] == 'dns':
+                if 'dns_provider' not in data:
+                    raise ValidationError('dns_provider', 'required')
+                if data['dns_provider'] not in __dns_providers():
+                    raise ValidationError('dns_provider', 'invalid', data['dns_provider'])
+                if 'dns_provider_options' not in data:
+                    raise ValidationError('dns_provider_options', 'required')
+                if not isinstance(data['dns_provider_options'], list):
+                    raise ValidationError('dns_provider_options', 'invalid', data['dns_provider_options'])
+                if len(data['dns_provider_options']) == 0:
+                    raise ValidationError('dns_provider_options', 'required')
+
+            e_uci.set('acme', data['name'], 'cert')
+            e_uci.set('acme', data['name'], 'enabled', '1')
+            e_uci.set('acme', data['name'], 'domains', data['domains'])
+            e_uci.set('acme', data['name'], 'key_type', 'rsa2048')
+            e_uci.set('acme', data['name'], 'validation_method', data['validation_method'])
+            if data['validation_method'] == 'dns':
+                e_uci.set('acme', data['name'], 'dns', f'dns_{data["dns_provider"]}')
+                e_uci.set('acme', data['name'], 'credentials', data['dns_provider_options'])
+
+            __start_acme(e_uci)
+            e_uci.save('acme')
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'set-default-certificate':
+            data = json.loads(sys.stdin.read())
+            if 'name' not in data:
+                raise ValidationError('name', 'required')
+            certificates = reverse_proxy.certificate_list(e_uci)
+            valid_certificates = {certificate: certificates[certificate] for certificate in certificates if
+                                  'cert_path' in certificates[certificate]}
+            if data['name'] not in valid_certificates:
+                raise ValidationError('name', 'invalid', data['name'])
+
+            # set default certificate for _lan
+            e_uci.set('nginx', '_lan', 'ssl_certificate', valid_certificates[data['name']]['cert_path'])
+            e_uci.set('nginx', '_lan', 'ssl_certificate_key', valid_certificates[data['name']]['key_path'])
+            e_uci.set('nginx', '_lan', 'uci_manage_ssl', 'custom')
+
+            # submit changes
+            e_uci.save('nginx')
+
+            __update_nsui_certificate()
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'delete-certificate':
+            data = json.loads(sys.stdin.read())
+            if 'name' not in data:
+                raise ValidationError('name', 'required')
+            valid_certificates = {}
+            for key, value in reverse_proxy.certificate_list(e_uci).items():
+                if key == '_lan':
+                    continue
+                if 'servers' in value and len(value['servers']) > 0:
+                    continue
+                valid_certificates[key] = value
+            if data['name'] not in valid_certificates:
+                raise ValidationError('name', 'invalid', data['name'])
+
+            # if acme certificate, delete it from acme configuration
+            if valid_certificates[data['name']]['type'] == 'acme':
+                e_uci.delete('acme', data['name'])
+                # generate certificate prefix using requested_domains first domain
+                prefix = valid_certificates[data['name']]['requested_domains'][0]
+                # clean up acme certificates from /etc/ssl/certs
+                for entry in os.scandir('/etc/ssl/acme'):
+                    if entry.name.startswith(prefix):
+                        os.remove(entry.path)
+
+                # clean up acme directories from /etc/acme
+                for entry in os.scandir('/etc/acme'):
+                    if entry.name.startswith(prefix) and entry.is_dir():
+                        shutil.rmtree(entry.path)
+
+                __start_acme(e_uci)
+                e_uci.commit('acme')
+            else:
+                os.remove(valid_certificates[data['name']]['cert_path'])
+                os.remove(valid_certificates[data['name']]['key_path'])
+
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'add-path':
+            paths = [entry['location'] for entry in utils.get_all_by_type(e_uci, 'nginx', 'location').values()
+                     if entry['uci_server'] == '_lan']
+            # load and validate data
+            data = json.loads(sys.stdin.read())
+            if 'path' not in data:
+                raise ValidationError('path', 'required')
+            if data['path'] in paths:
+                raise ValidationError('path', 'unique', data['path'])
+            if 'destination' not in data:
+                raise ValidationError('destination', 'required')
+            if not data['destination'].startswith('http://') and not data['destination'].startswith('https://'):
+                raise ValidationError('destination', 'invalid', data['destination'])
+            if 'description' not in data or data['description'] == '':
+                raise ValidationError('description', 'required')
+            if 'allow' in data and not isinstance(data['allow'], list):
+                raise ValidationError('allow', 'invalid', data['allow'])
+
+            # normalize optional parameters
+            allow = data.get('allow', [])
+            # create location for _lan
+            reverse_proxy.add_path(data['path'], data['destination'], data['description'], allow)
+            # submit changes
+            e_uci.save('nginx')
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'add-domain':
+            # load and validate data
+            data = json.loads(sys.stdin.read())
+            if 'domain' not in data:
+                raise ValidationError('domain', 'required')
+            if 'destination' not in data:
+                raise ValidationError('destination', 'required')
+            if not data['destination'].startswith('http://') and not data['destination'].startswith('https://'):
+                raise ValidationError('destination', 'invalid', data['destination'])
+            if 'description' not in data or data['description'] == '':
+                raise ValidationError('description', 'required')
+            if 'certificate' not in data:
+                raise ValidationError('certificate', 'required')
+            certificates = reverse_proxy.certificate_list(e_uci)
+            valid_certificates = {name: certificate for (name, certificate) in certificates.items()
+                                  if 'cert_path' in certificate}
+            if data['certificate'] not in valid_certificates:
+                raise ValidationError('certificate', 'invalid', data['certificate'])
+            if 'allow' in data and not isinstance(data['allow'], list):
+                raise ValidationError('allow', 'invalid', data['allow'])
+
+            # normalize optional parameters
+            allow = data.get('allow', [])
+            reverse_proxy.add_domain(data['domain'], data['destination'], data['certificate'], data['description'],
+                                     allow)
+            # submit changes
+            e_uci.save('nginx')
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'delete-proxy':
+            # fetch all configurations
+            paths = utils.get_all_by_type(e_uci, 'nginx', 'location')
+            default_paths = {entry_id: entry for (entry_id, entry) in
+                             paths.items()
+                             if entry['uci_server'] == '_lan'}
+            servers = {server_id: server for (server_id, server) in
+                       utils.get_all_by_type(e_uci, 'nginx', 'server').items()
+                       if server_id != '_lan' and server_id != '_redirect2ssl'}
+            # list of possible deletions
+            available_deletions = []
+            available_deletions.extend(default_paths.keys())
+            available_deletions.extend(servers.keys())
+            # load and validate data
+            data = json.loads(sys.stdin.read())
+            if 'id' not in data:
+                raise ValidationError('id', 'required')
+            if data['id'] not in available_deletions:
+                raise ValidationError('id', 'invalid', data['id'])
+            # delete proxy
+            if data['id'] in servers:
+                for path in paths:
+                    if paths[path]['uci_server'] == data['id']:
+                        e_uci.delete('nginx', path)
+                e_uci.delete('nginx', data['id'])
+            else:
+                e_uci.delete('nginx', data['id'])
+            # submit changes
+            e_uci.save('nginx')
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'list-proxies':
+            response = []
+            # fetch all the locations configured
+            lan_paths = {entry_id: entry for (entry_id, entry)
+                         in utils.get_all_by_type(e_uci, 'nginx', 'location').items()
+                         if entry_id.startswith('ns_')}
+            # if lan is in _lan server add it to the response as a location
+            for (entry_id, entry) in lan_paths.items():
+                if entry['uci_server'] == '_lan':
+                    item = {
+                        'id': entry_id,
+                        'type': 'location',
+                        'description': entry.get('uci_description'),
+                        'location': entry.get('location'),
+                        'destination': __parse_proxy_pass(e_uci, entry_id)
+                    }
+                    if 'allow' in entry:
+                        item['allow'] = entry['allow']
+                    response.append(item)
+
+            # fetch all servers that are not defaults
+            servers = {server_id: server for (server_id, server)
+                       in utils.get_all_by_type(e_uci, 'nginx', 'server').items()
+                       if server_id != '_lan' and server_id != '_redirect2ssl'}
+
+            # add locations assigned to domains to response
+            certificates = reverse_proxy.certificate_list(e_uci)
+            for entry_id, entry in lan_paths.items():
+                if entry['uci_server'] in servers:
+                    server = servers[entry['uci_server']]
+                    item = {
+                        'id': entry['uci_server'],
+                        'type': 'domain',
+                        'description': server.get('uci_description'),
+                        'location': entry.get('location'),
+                        'domain': server.get('server_name'),
+                        'destination': __parse_proxy_pass(e_uci, entry_id)
+                    }
+                    for certificate in certificates:
+                        if ('cert_path' in certificates[certificate]
+                                and certificates[certificate]['cert_path'] == server['ssl_certificate']):
+                            item['certificate'] = certificate
+                    if 'allow' in entry:
+                        item['allow'] = entry['allow']
+                    response.append(item)
+
+            port_open = e_uci.get('firewall', 'ns_allow_https', 'enabled', dtype=bool, default=True)
+
+            print(json.dumps({
+                'data': response,
+                'port_open': port_open
+            }))
+
+        elif action == 'edit-path':
+            # load available paths
+            paths = {entry_id: entry for (entry_id, entry)
+                     in utils.get_all_by_type(e_uci, 'nginx', 'location').items()
+                     if entry['uci_server'] == '_lan'}
+            # load and validate data
+            data = json.loads(sys.stdin.read())
+            if 'id' not in data:
+                raise ValidationError('id', 'required')
+            if data['id'] not in paths:
+                raise ValidationError('id', 'invalid', data['id'])
+            if 'path' not in data:
+                raise ValidationError('path', 'required')
+            used_paths = [entry['location'] for (entry_id, entry) in paths.items() if entry_id != data['id']]
+            if data['path'] in used_paths:
+                raise ValidationError('path', 'unique', data['path'])
+            if 'destination' not in data:
+                raise ValidationError('destination', 'required')
+            if 'description' not in data or data['description'] == '':
+                raise ValidationError('description', 'required')
+            if 'allow' in data and not isinstance(data['allow'], list):
+                raise ValidationError('allow', 'invalid', data['allow'])
+            # update location
+            e_uci.set('nginx', data['id'], 'location', data['path'])
+            reverse_proxy.set_proxy_pass(e_uci, data['id'], data['destination'])
+            e_uci.set('nginx', data['id'], 'uci_description', data['description'])
+            e_uci.set('nginx', data['id'], 'allow', data.get('allow', []))
+            # submit changes
+            e_uci.save('nginx')
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'edit-domain':
+            # load servers
+            servers = {server_id: server for (server_id, server)
+                       in utils.get_all_by_type(e_uci, 'nginx', 'server').items()
+                       if server_id != '_lan' and server_id != '_redirect2ssl'}
+            # load and validate data
+            data = json.loads(sys.stdin.read())
+            if 'id' not in data:
+                raise ValidationError('id', 'required')
+            if data['id'] not in servers:
+                raise ValidationError('id', 'invalid', data['id'])
+            if 'domain' not in data:
+                raise ValidationError('domain', 'required')
+            if 'destination' not in data:
+                raise ValidationError('destination', 'required')
+            if 'description' not in data or data['description'] == '':
+                raise ValidationError('description', 'required')
+            if 'certificate' not in data:
+                raise ValidationError('certificate', 'required')
+            certificates = reverse_proxy.certificate_list(e_uci)
+            valid_certificates = {name: certificate for (name, certificate) in certificates.items()
+                                  if 'cert_path' in certificate}
+            if data['certificate'] not in valid_certificates:
+                raise ValidationError('certificate', 'invalid', data['certificate'])
+            # update server
+            e_uci.set('nginx', data['id'], 'server_name', data['domain'])
+            e_uci.set('nginx', data['id'], 'ssl_certificate', valid_certificates[data['certificate']]['cert_path'])
+            e_uci.set('nginx', data['id'], 'ssl_certificate_key', valid_certificates[data['certificate']]['key_path'])
+            e_uci.set('nginx', data['id'], 'uci_description', data['description'])
+            # update location
+            for location_id, location in utils.get_all_by_type(e_uci, 'nginx', 'location').items():
+                if location['uci_server'] == data['id']:
+                    # Fix issue 723: set allow to location
+                    e_uci.set('nginx', location_id, 'allow', data.get('allow', []))
+                    reverse_proxy.set_proxy_pass(e_uci, location_id, data['destination'])
+                    break
+            # Fix issue 723: delete allow from server
+            try:
+                e_uci.delete('nginx', data['id'], 'allow')
+            except:
+                pass
+            # submit changes
+            e_uci.save('nginx')
+            print(json.dumps({'message': 'success'}))
+
+        elif action == 'check-config':
+            try:
+                process = subprocess.run(['nginx', '-t', '-c', '/etc/nginx/uci.conf'], check=True,
+                                         capture_output=True)
+                print(json.dumps({
+                    'status': 'ok',
+                    'output': process.stderr.decode('utf-8')
+                }))
+            except subprocess.CalledProcessError as ex:
+                print(json.dumps({
+                    'status': 'invalid',
+                    'output': ex.stderr.decode('utf-8')
+                }))
+
+    except ValidationError as ex:
+        print(json.dumps(utils.validation_error(ex.parameter, ex.message, ex.value)))
+    except RuntimeError as ex:
+        print(json.dumps(utils.generic_error(ex.args[0])))

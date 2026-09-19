@@ -1,0 +1,53 @@
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+include $(TOPDIR)/rules.mk
+ 
+PKG_NAME:=python3-nethsec
+PKG_VERSION:=1.7.3
+PKG_RELEASE:=1
+
+PKG_MAINTAINER:=Giacomo Sanchietti <giacomo.sanchietti@nethesis.it>
+PKG_LICENSE:=GPL-3.0-only
+PKG_LICENSE_FILES:=LICENSE
+
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
+
+PYTHON3_PKG_WHEEL_NAME=nethsec
+PYTHON3_PKG_WHEEL_VERSION:=$(PKG_VERSION)
+# setup.py has no hardcoded version: it reads NETHSEC_PKG_VERSION so PKG_VERSION
+# above stays the single source of truth for the wheel version.
+PYTHON3_PKG_BUILD_VARS:=NETHSEC_PKG_VERSION=$(PKG_VERSION)
+
+include $(INCLUDE_DIR)/package.mk
+include $(TOPDIR)/feeds/packages/lang/python/python3-package.mk
+ 
+define Package/python3-nethsec
+	SECTION:=base
+	CATEGORY:=NethSecurity
+	TITLE:=NethSecurity python libraries
+	URL:=https://github.com/NethServer/nethsecurity/tree/master/packages/python3-nethsec
+	DEPENDS:=+python3-uci +python3-libpass
+	PKGARCH:=all
+endef
+
+define Package/python3-nethsec/description
+    NethSecurity python utilities
+endef
+
+# Source lives in this repository under ./src, so build the wheel from the
+# local tree instead of fetching it. Only the files needed to build the wheel
+# are copied; tests/ and the CI helpers are intentionally left out.
+define Build/Prepare
+	mkdir -p $(PKG_BUILD_DIR)
+	$(CP) ./src $(PKG_BUILD_DIR)/
+	$(CP) ./setup.py $(PKG_BUILD_DIR)/
+	# setup.py reads README.md for the wheel long_description
+	$(CP) ./README.md $(PKG_BUILD_DIR)/
+endef
+
+$(eval $(call Py3Package,python3-nethsec))
+$(eval $(call BuildPackage,python3-nethsec))
+$(eval $(call BuildPackage,python3-nethsec-src))

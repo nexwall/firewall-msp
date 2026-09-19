@@ -1,0 +1,185 @@
+#!/usr/bin/python
+
+import subprocess
+import json
+import sys
+import argparse
+
+parser = argparse.ArgumentParser(description="Fetch changelog items from a GitHub project board")
+parser.add_argument("--org", required=True, help="GitHub organization name")
+parser.add_argument("--project-id", required=True, type=int, help="GitHub project number")
+parser.add_argument("--column", default="Done", help="Status column name to filter by (default: Done)")
+args = parser.parse_args()
+
+org = args.org
+project_id = args.project_id
+column_name = args.column
+
+# GraphQL queries
+query_id = '''
+query($org: String!, $number: Int!) {
+  organization(login: $org) {
+    projectV2(number: $number) {
+      id
+    }
+  }
+}
+'''
+
+query_items = '''
+query($id: ID!, $cursor: String) {
+  node(id: $id) {
+    ... on ProjectV2 {
+      items(first: 100, after: $cursor) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          id
+          fieldValues(first: 20) {
+            nodes {
+              ... on ProjectV2ItemFieldTextValue {
+                text
+                field {
+                  ... on ProjectV2FieldCommon {
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldDateValue {
+                date
+                field {
+                  ... on ProjectV2FieldCommon {
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field {
+                  ... on ProjectV2FieldCommon {
+                    name
+                  }
+                }
+              }
+            }
+          }
+          content {
+            ... on DraftIssue {
+              title
+              body
+            }
+            ... on Issue {
+              title
+              body
+              number
+              repository {
+                nameWithOwner
+              }
+            }
+            ... on PullRequest {
+              title
+              body
+            }
+          }
+        }
+      }
+    }
+  }
+}
+'''
+
+query_prs = '''
+query($search_query: String!, $cursor: String) {
+  search(query: $search_query, type: ISSUE, first: 100, after: $cursor) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      ... on PullRequest {
+        title
+        body
+      }
+    }
+  }
+}
+'''
+
+
+# Function to search for PRs that reference an issue
+def search_related_prs(repo, issue_number):
+    """Search for pull requests that reference a specific issue"""
+    search_query = f"repo:{repo} is:pr closes:#{issue_number}"
+    
+    all_prs = []
+    cursor = None
+    while True:
+        kwargs = {"search_query": search_query}
+        if cursor:
+            kwargs["cursor"] = cursor
+        try:
+            page = graphql_request(query_prs, **kwargs)['data']['search']
+            all_prs.extend(page['nodes'])
+            if not page['pageInfo']['hasNextPage']:
+                break
+            cursor = page['pageInfo']['endCursor']
+        except:
+            # If search fails, return empty list
+            break
+    
+    return all_prs
+
+
+# Function to make a GraphQL request using gh CLI
+def graphql_request(query, **variables):
+    cmd = ['gh', 'api', 'graphql', '-f', f'query={query}']
+    for key, value in variables.items():
+        if isinstance(value, int):
+            cmd += ['-F', f'{key}={value}']
+        else:
+            cmd += ['-f', f'{key}={value}']
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        sys.exit(f"gh API error: {result.stderr.strip()}")
+    return json.loads(result.stdout)
+
+# Get project node ID
+response_id = graphql_request(query_id, org=org, number=project_id)
+project_node_id = response_id["data"]["organization"]["projectV2"]["id"]
+
+# Get all project items with pagination
+all_items = []
+cursor = None
+while True:
+    kwargs = {"id": project_node_id}
+    if cursor:
+        kwargs["cursor"] = cursor
+    page = graphql_request(query_items, **kwargs)['data']['node']['items']
+    all_items.extend(page['nodes'])
+    if not page['pageInfo']['hasNextPage']:
+        break
+    cursor = page['pageInfo']['endCursor']
+
+issues = []
+for item in all_items:
+    issue = {"title": "", "body": ""}
+    for node in item['fieldValues']['nodes']:
+        if 'field' in node and node['field'].get('name', '') == 'Status':
+            if node.get('name').startswith(column_name):
+                issue['title'] = item['content']['title']
+                issue['body'] = item['content']['body']
+                
+                # Search for related PRs if this is an Issue (has repository and number)
+                issue_number = item['content'].get('number')
+                repo = item['content'].get('repository', {}).get('nameWithOwner')
+                if issue_number and repo:
+                    related_prs = search_related_prs(repo, issue_number)
+                    if related_prs:
+                        issue['prs'] = related_prs
+                
+                issues.append(issue)
+                continue
+
+print(json.dumps(issues, indent=2))

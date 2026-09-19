@@ -1,0 +1,1354 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Setup default OpenVPN roadwarrior instance
+
+import re
+import os
+import shutil
+import sys
+import json
+import pyotp
+import ipaddress
+import subprocess
+from euci import EUci
+from nethsec import utils, ovpn, firewall, users, objects
+from datetime import datetime, timezone
+import tarfile
+import io
+import sqlite3
+import csv
+from zoneinfo import ZoneInfo
+
+## Utils
+
+def is_bridge(name):
+    u = EUci()
+    devices = utils.get_all_by_type(u, "network", "device")
+    for d in devices:
+        device = devices[d]
+        if device.get("name") == name and device.get("type") == "bridge":
+            return True
+    return False
+
+def get_bridge_by_ip(ip):
+    u = EUci()
+    for section in utils.get_all_by_type(u, "network", "interface"):
+        if u.get("network", section, "proto", default="") == "static":
+            device = u.get("network", section, "device", default="")
+            if is_bridge(device) and u.get("network", section, "ipaddr", default="") == ip:
+                return section
+    return None
+
+def add_tap_to_bridge(u, bridge, interface):
+    if bridge is None or interface is None:
+        return
+    bridge_device = u.get("network", bridge, "device", default=None)
+    if not bridge_device:
+        return
+    devices = utils.get_all_by_type(u, "network", "device")
+    for d in devices:
+        device = devices[d]
+        if device.get("name") == bridge_device and device.get("type") == "bridge":
+            try:
+                ports = u.get_all("network", d, "ports")
+                if interface not in ports:
+                    ports = list(ports)
+                    ports.append(interface)
+                    u.set("network", d, "ports", ports)
+                    u.save("network")
+            except:
+                pass
+            return
+
+def remove_tap_from_bridge(u, bridge, interface):
+    if bridge is None or interface is None:
+        return
+    bridge_device = u.get("network", bridge, "device", default=None)
+    if not bridge_device:
+        return
+    devices = utils.get_all_by_type(u, "network", "device")
+    for d in devices:
+        device = devices[d]
+        if device.get("name") == bridge_device and device.get("type") == "bridge":
+            try:
+                ports = u.get_all("network", d, "ports")
+                if interface in ports:
+                    ports = list(ports)
+                    ports.remove(interface)
+                    u.set("network", d, "ports", ports)
+                    u.save("network")
+            except:
+                pass
+            return
+
+def get_ip_and_mask(bridge):
+    u = EUci()
+    interfaces = utils.get_all_by_type(u, "network", "interface")
+    for i in interfaces:
+        interface = interfaces[i]
+        if i == bridge and interface.get("proto") == "static" and is_bridge(interface.get("device")):
+            return (interface.get("ipaddr"), interface.get("netmask"))
+    return (None, None)
+
+def is_valid_ip(ovpninstance, ip):
+    u = EUci()
+    instance = u.get_all("openvpn", ovpninstance)
+    if instance.get("dev_type") == "tap":
+        (server_ip, mask, start, end) = instance.get("server_bridge").split(" ")
+        ipnet = ipaddress.IPv4Network(f"{server_ip}/{mask}", strict=False).network_address
+        if ip == server_ip:
+            return False, "reserved_ip_must_not_be_server_ip"
+        if ipaddress.ip_address(ip) not in ipaddress.ip_network(f'{ipnet}/{mask}'):
+            return False, "reserved_ip_must_be_in_server_network"
+        return True, None
+    else:
+        (server_net, server_mask, _) = instance.get("server").split(" ")
+        # ip must be inside the server network
+        if not ipaddress.ip_address(ip) in ipaddress.ip_network(f'{server_net}/{server_mask}'):
+            return False, "reserved_ip_must_be_in_server_network"
+        # ip must be outside the DHCP pool
+        start_ip, end_ip, mask = instance.get("ifconfig_pool").split(" ")
+        if ipaddress.ip_address(ip) >= ipaddress.ip_address(start_ip) and ipaddress.ip_address(ip) <= ipaddress.ip_address(end_ip):
+            return False, "reserved_ip_must_be_outside_dhcp_pool"
+        return True, None
+
+def is_free_ip(ovpninstance, ip):
+    u = EUci()
+    instance = u.get_all("openvpn", ovpninstance)
+    # check against server ip
+    try:
+        if instance.get("dev_type") == "tap":
+            (server_ip, mask, start, end) = instance.get("server_bridge").split(" ")
+            ipnet = ipaddress.IPv4Network(f"{server_ip}/{mask}", strict=False).network_address
+            if ip == server_ip:
+                return False
+            else:
+                (server_net, server_mask, _) = instance.get("server", "").split(" ")
+                net = ipaddress.ip_network(f'{server_net}/{server_mask}', strict=False)
+                if ip == f'{net.hosts()[1]}':
+                    return False
+    except:
+        pass
+    # check against reserved IP for users
+    users = utils.get_all_by_type(u, "openvpn", "user")
+    for u in users:
+        user = users[u]
+        if user.get("instance") == ovpninstance and user.get("ipaddr") == ip:
+            return False
+    return True
+
+def list_user_expirations(openvpninstance):
+    ret = {}
+    try:
+        with open(f"/etc/openvpn/{openvpninstance}/pki/index.txt", "r") as fp:
+            lines = fp.readlines()
+            for line in lines:
+                (status, expiration, revocation, serial, filename, name) = line.split("\t")
+                # remove /CN= from name
+                dt = datetime.strptime(expiration, "%y%m%d%H%M%SZ")
+                name = name.strip()[4:]
+                ret[name] = dt.timestamp()
+    except:
+        return ret
+    return ret
+
+def user_pki_path(instance, subdir, filename):
+    # resolve a user-derived filename under the instance PKI directory,
+    # rejecting anything that would escape it
+    base = os.path.realpath(f"/etc/openvpn/{instance}/pki/{subdir}")
+    path = os.path.realpath(os.path.join(base, filename))
+    if path != base and not path.startswith(base + os.sep):
+        return None
+    return path
+
+def get_cert_expiration(instance, user):
+    # used for migrated certificates not present inside the index
+    crt_path = user_pki_path(instance, "issued", f"{user}.crt")
+    if not crt_path:
+        return 0
+    try:
+        p = subprocess.run(
+            ["openssl", "x509", "-enddate", "-noout", "-in", crt_path],
+            capture_output=True, text=True, check=True
+        )
+        dt = datetime.strptime(p.stdout.strip().removeprefix("notAfter="), "%b %d %H:%M:%S %Y %Z")
+        return dt.timestamp()
+    except Exception:
+        return 0
+
+def generate_2fa_secret():
+    return pyotp.random_base32()
+
+def user_db_exists(u, user_db):
+    return u.get("users", user_db, default=None) != None
+
+def get_user_id(username, db_users):
+    for user in db_users:
+        if user['name'] == username:
+            return user['id'] if user['id'] else user['name'] # id is null for remote users
+    return None
+
+def hostname():
+    with open('/proc/sys/kernel/hostname', 'r') as fp:
+        return fp.read().strip()
+    
+def slurp(path):
+    with open(path) as fp:
+        return fp.read()
+
+def get_certificate_expiration(pem_path, label):
+    """Extract certificate expiration date from PEM file"""
+    try:
+        result = subprocess.run(
+            ["openssl", "x509", "-noout", "-subject", "-nameopt", "RFC2253", "-enddate"],
+            stdin=open(pem_path, 'r'),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Parse notAfter line: notAfter=Feb 21 13:04:51 2036 GMT
+        for line in result.stdout.split('\n'):
+            if line.startswith("notAfter="):
+                date_str = line.split("=")[1].strip()
+                try:
+                    expiry_dt = datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")
+                    return {label: int(expiry_dt.timestamp())}
+                except:
+                    pass
+        return {}
+    except:
+        return {}
+
+def instance2number(input_string):
+    numbers = re.findall(r'\d+', input_string)
+    return int(numbers[0]) if numbers else None
+
+def get_user_extra_config(u, user_id):
+    try:
+        details = u.get_all("users", user_id)
+        extra_config = {}
+        for opt in details:
+            if opt.startswith("openvpn_") or opt.startswith("wireguard_"):
+                extra_config[opt] = details[opt]
+        return extra_config
+    except:
+        return {}
+
+def archive_connections_db(instance):
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    db_path = get_connections_db_path(instance)
+    # archive the currently used database
+    if os.path.exists(db_path):
+        archive_path = db_path.replace('connections.db', f'connections-{timestamp}.db')
+        try:
+            subprocess.run(['mv', db_path, archive_path], check=True)
+        except:
+            pass
+
+def get_connections_db_path(ovpninstance):
+    u = EUci()
+    base_path = u.get('fstab', 'ns_data', 'target', default='')
+    if not os.path.isdir(base_path):
+        base_path = '/var'
+    return os.path.join(base_path, 'openvpn', ovpninstance, 'connections.db')
+
+## APIs
+
+def list_bridges():
+    u = EUci()
+    ret = []
+    interfaces = utils.get_all_by_type(u, "network", "interface")
+    for i in interfaces:
+        interface = interfaces[i]
+        if interface.get("proto") == "static":
+            if is_bridge(interface.get("device")):
+                ret.append(i)
+    return {"bridges": ret}
+
+def list_instances():
+    u = EUci()
+    ret = []
+    instances = utils.get_all_by_type(u, "openvpn", "openvpn")
+    for i in instances:
+        instance = instances[i]
+        if instance.get("ns_tag") and "automated" in instance.get("ns_tag"):
+            ret.append(i)
+    return {"instances": ret}
+
+def add_instance():
+    u = EUci()
+    instances = list_instances()
+    next_instance = len(instances['instances']) + 1
+    instance = utils.get_id(f"roadwarrior{next_instance}")
+    if u.get("openvpn", instance, default=None) != None:
+        return utils.validation_error("instance", "instance_already_exists", instance)
+
+    tun = f'tunrw{next_instance}'
+    if os.path.isdir(f'/etc/openvpn/{instance}') and instance not in instances:
+        # cleanup pki dir: the directory may contain rubbish on some corner cases
+        shutil.rmtree(f"/etc/openvpn/{instance}", ignore_errors=True)
+
+    zone_link = ""
+    fw_link = f"openvpn/{instance}"
+    port = ""
+    # use default port for the first instance
+    if next_instance == 1:
+        port = 1194
+        # zones rules inserted by the first instance can't be removed, otherwise other
+        # instances will be broken
+        zone_link = "openvpn/ns_roadwarrior_noremove"
+    else:
+        port = ovpn.generate_random_port(u, 1300, 1400)
+        zone_link = fw_link
+    firewall.add_service(u, f'OpenVPNRW{next_instance}', port, ['tcp', 'udp'], link=fw_link)
+    firewall.add_trusted_zone(u, "rwopenvpn", link=zone_link)
+    firewall.add_device_to_zone(u, tun, 'rwopenvpn')
+
+    # convert from '10.0.0.1/24' to '10.0.0.0 255.255.255.0'
+    network =  ipaddress.ip_network(ovpn.generate_random_network(u))
+    network_str = network.with_netmask.replace('/', ' ')
+    start_ip = ipaddress.ip_address(network.network_address) + 50
+    end_ip = ipaddress.ip_address(network.broadcast_address) - 1
+
+    u.set('openvpn', instance, 'openvpn')
+    u.set('openvpn', instance, 'proto', 'udp')
+    u.set('openvpn', instance, 'port', port)
+    u.set('openvpn', instance, 'dev', tun)
+    u.set("openvpn", instance, 'dev_type', 'tun')
+    u.set('openvpn', instance, 'topology', 'subnet')
+    u.set('openvpn', instance, 'float', '1')
+    u.set('openvpn', instance, 'passtos', '1')
+    u.set('openvpn', instance, 'multihome', '1')
+    u.set('openvpn', instance, 'verb', '3')
+    u.set('openvpn', instance, 'enabled', '1')
+    u.set('openvpn', instance, 'keepalive', '20 120')
+    u.set('openvpn', instance, 'server', f'{network_str} nopool')
+    u.set('openvpn', instance, 'ifconfig_pool', f'{start_ip} {end_ip} {network.netmask}')
+    u.set('openvpn', instance, 'client_connect', f'"/usr/libexec/ns-openvpn/openvpn-connect {instance}"')
+    u.set('openvpn', instance, 'client_disconnect', f'"/usr/libexec/ns-openvpn/openvpn-disconnect {instance}"')
+    u.set('openvpn', instance, 'dh', f'/etc/openvpn/{instance}/pki/dh.pem')
+    u.set('openvpn', instance, 'ca', f'/etc/openvpn/{instance}/pki/ca.crt')
+    u.set('openvpn', instance, 'cert', f'/etc/openvpn/{instance}/pki/issued/server.crt')
+    u.set('openvpn', instance, 'crl_verify', f'/etc/openvpn/{instance}/pki/crl.pem')
+    u.set('openvpn', instance, 'key', f'/etc/openvpn/{instance}/pki/private/server.key')
+    u.set('openvpn', instance, 'ns_description', "")
+    u.set("openvpn", instance, 'management', f'/var/run/openvpn_{instance}.socket unix')
+    u.set("openvpn", instance, 'client_to_client','0')
+    u.set("openvpn", instance, 'compress','')
+    u.set("openvpn", instance, 'auth','SHA256') # digest
+    u.set("openvpn", instance, 'cipher','AES-256-GCM')
+    u.set("openvpn", instance, 'tls_version_min','1.2')
+    u.set("openvpn", instance, 'ns_auth_mode', 'certificate')
+    u.set('openvpn', instance, 'ns_tag', ["automated"])
+    u.set('openvpn', instance, 'tun_mtu', '1500')
+    u.set('openvpn', instance, 'mssfix', '1450')
+
+    # commit everything, otherwise a future revert will break the configuration
+    # drawback: openvpn zone and network will be created even if the instance is not saved
+    u.commit('openvpn')
+    u.commit('firewall')
+    u.commit('network')
+    # make sure the firewall is reloaded to open the port
+    subprocess.run(["/etc/init.d/firewall", "reload"], capture_output=True)
+
+    # initialize pki
+    try:
+       subprocess.run(["/usr/sbin/ns-openvpnrw-init-pki", instance], check=True)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        return utils.validation_error("instance", "pki_init_failed", instance)
+
+    return {"instance": instance}
+
+def remove_instance(instance):
+    u = EUci()
+    if u.get("openvpn", instance, default=None) == None:
+        return utils.validation_error("instance", "instance_not_found", instance)
+
+    db = u.get("openvpn", instance, "ns_user_db", default=None)
+    if db:
+        db_users = users.list_users(u, db)
+        for user in db_users:
+            delete_user(instance, user["name"])
+    device = u.get("openvpn", instance, "dev", default='')
+    if device:
+        firewall.remove_device_from_zone(u, device, 'rwopenvpn')
+
+    old_bridge = u.get("openvpn", instance, "ns_bridge", default=None)
+    if old_bridge:
+        old_dev = u.get("openvpn", instance, "dev", default=None)
+        remove_tap_from_bridge(u, old_bridge, old_dev)
+
+    u.delete("openvpn", instance)
+    
+    # archive connection history databases before removing the instance directory
+    archive_connections_db(instance)
+    shutil.rmtree(f"/etc/openvpn/{instance}", ignore_errors=True)
+    try:
+        # workaround: manually delete config since it's not removed from init script
+        os.unlink(f"/var/etc/openvpn-{instance}.conf")
+    except:
+        pass
+    u.commit("openvpn")
+    try:
+        firewall.delete_linked_sections(u, f"openvpn/{instance}")
+    except:
+        pass
+    u.commit('firewall')
+    u.commit('network')
+    # make sure the firewall is reloaded to open the port
+    subprocess.run(["/etc/init.d/firewall", "reload"], capture_output=True)
+    
+    return {"result": "success"}
+
+def get_configuration(ovpninstance):
+    # Make sure the configuration is set up
+    u = EUci()
+    ret = u.get_all("openvpn", ovpninstance)
+
+    for opt in ['dev', 'float', 'nobind', 'passtos', 'verb', 'keepalive', 'crl_verify', 'management', 'ns_tag', 'dh', 'ca', 'cert', 'key', 'client_connect', 'client_disconnect', 'persist_tun', 'multihome', 'ping_timer_rem', 'persist_key']:
+        ret.pop(opt, None)
+
+    ret['server'] = ovpn.opt2cidr(ret.get('server'))
+    ret["ns_redirect_gateway"] = "0"
+    ret["ns_local"] = ovpn.get_local_networks(u)
+    ret["ns_dhcp_options"] = []
+    if not "ns_user_db" in ret:
+        ret["ns_user_db"] = ""
+    # the UI assumes that if ns_description is not set, it's a new instance
+    if not "ns_description" in ret:
+        ret["ns_description"] = ""
+    if not ret.get("tun_mtu"):
+        ret["tun_mtu"] = "1500"
+    if not ret.get("mssfix"):
+        ret["mssfix"] = "1450"
+
+    if ret.get('push'):
+        local = []
+        dhcp_options = []
+        for r in ret.pop('push'):
+            if r.startswith("route"):
+                 local.append(ovpn.opt2cidr(r.removeprefix("route ")))
+            elif r.startswith("redirect-gateway"):
+                ret['ns_redirect_gateway'] = "1"
+            elif r.startswith("dhcp-option"):
+                opt = r.removeprefix("dhcp-option ").split(" ")
+                dhcp_options.append({"option": opt[0], "value": " ".join(opt[1:])})
+        if local:
+            ret['ns_local'] = local
+        ret['ns_dhcp_options'] = dhcp_options
+
+    if ret['dev_type'] == "tap":
+        (ip, mask, ret['ns_pool_start'], ret['ns_pool_end']) = ret.pop("server_bridge").split(" ")
+        ret['ns_bridge'] = get_bridge_by_ip(ip)
+    else:
+        if ret.get("ifconfig_pool"):
+            ret['ifconfig_pool'] = ret.pop("ifconfig_pool").split(" ")
+            # remove netmask
+            ret['ifconfig_pool'].pop()
+        else:
+            ret['ifconfig_pool'] = []
+
+    if 'ns_public_ip' not in ret:
+        ret['ns_public_ip'] = ovpn.get_public_addresses(u)
+
+    # add certificate expiration dates
+    certificates = {}
+    ca_path = f'/etc/openvpn/{ovpninstance}/pki/ca.crt'
+    cert_path = f'/etc/openvpn/{ovpninstance}/pki/issued/server.crt'
+    
+    if os.path.exists(ca_path):
+        certificates.update(get_certificate_expiration(ca_path, 'CA'))
+    if os.path.exists(cert_path):
+        certificates.update(get_certificate_expiration(cert_path, 'server'))
+    
+    if certificates:
+        ret['certificates'] = certificates
+
+    return ret
+
+def set_configuration(args):
+    u = EUci()
+    push_options = []
+    ovpninstance = args["instance"]
+    instance_num = instance2number(ovpninstance)
+    u.set("openvpn", ovpninstance, "enabled", args["enabled"])
+    if args["ns_redirect_gateway"] == "1":
+        push_options.append("redirect-gateway")
+    for opt in args["ns_dhcp_options"]:
+        push_options.append(f"dhcp-option {opt['option']} {opt['value']}")
+    for route in args["ns_local"]:
+        (ip, prefix) = route.split("/")
+        push_options.append(f"route {ip} {ovpn.to_netmask(prefix)}")
+    u.set("openvpn", ovpninstance, "push", push_options)
+    u.set("openvpn", ovpninstance, "ns_public_ip", args["ns_public_ip"])
+    if not user_db_exists(u, args["ns_user_db"]):
+        return utils.validation_error("ns_user_db", "user_db_not_found", args["ns_user_db"])
+    u.set("openvpn", ovpninstance, "ns_user_db", args["ns_user_db"])
+    db_is_local = users.get_database_type(u, args["ns_user_db"]) == "local"
+
+    if args["dev_type"] == "tap":
+        u.set("openvpn", ovpninstance, "dev", f"taprw{instance_num}")
+        u.set("openvpn", ovpninstance, "ns_bridge", args["ns_bridge"])
+        (ip, mask) = get_ip_and_mask(args["ns_bridge"])
+        if not ip or not mask:
+            return utils.validation_error("ns_bridge", "bridge_not_found", args["ns_bridge"])
+        add_tap_to_bridge(u, args["ns_bridge"], f"taprw{instance_num}")
+        ipnet = ipaddress.IPv4Network(f"{ip}/{mask}", strict=False).network_address
+        if ipaddress.ip_address(args['ns_pool_start']) not in ipaddress.ip_network(f'{ipnet}/{mask}'):
+            return utils.validation_error("ns_pool_start", "start_not_in_network", args['ns_pool_start'])
+        if ipaddress.ip_address(args['ns_pool_end']) not in ipaddress.ip_network(f'{ipnet}/{mask}'):
+            return utils.validation_error("ns_pool_end", "end_not_in_network", args['ns_pool_end'])
+        if not is_free_ip(ovpninstance, args['ns_pool_start']):
+            return utils.validation_error("ns_pool_start", "ip_already_used", args['ns_pool_start'])
+        if not is_free_ip(ovpninstance, args['ns_pool_end']):
+            return utils.validation_error("ns_pool_end", "ip_already_used", args['ns_pool_end'])
+        if ipaddress.ip_address(args['ns_pool_start']) >= ipaddress.ip_address(args['ns_pool_end']):
+            return utils.validation_error("ns_pool_start", "start_must_be_greater_then_end", args['ns_pool_start'])
+        u.set("openvpn", ovpninstance, "server_bridge", f"{ip} {mask} {args['ns_pool_start']} {args['ns_pool_end']}")
+        u.set("openvpn", ovpninstance, "client_connect", f"\"/usr/libexec/ns-openvpn/openvpn-connect {ovpninstance}\"")
+        u.set("openvpn", ovpninstance, "client_disconnect", f"\"/usr/libexec/ns-openvpn/openvpn-disconnect {ovpninstance}\"")
+        try:
+            u.delete("openvpn", ovpninstance, "server")
+            u.delete("openvpn", ovpninstance, "ifconfig_pool")
+        except:
+            pass
+    else:
+        (server_net, server_mask) = args["server"].split("/")
+        u.set("openvpn", ovpninstance, "server", f"{server_net} {ovpn.to_netmask(server_mask)} nopool")
+        u.set("openvpn", ovpninstance, "client_connect", f"\"/usr/libexec/ns-openvpn/openvpn-connect {ovpninstance}\"")
+        u.set("openvpn", ovpninstance, "client_disconnect", f"\"/usr/libexec/ns-openvpn/openvpn-disconnect {ovpninstance}\"")
+        old_dev = u.get("openvpn", ovpninstance, "dev", default=None)
+        old_bridge = u.get("openvpn", ovpninstance, "ns_bridge", default=None)
+        u.set("openvpn", ovpninstance, "dev", f"tunrw{instance_num}")
+        try:
+            if old_bridge:
+                remove_tap_from_bridge(u, old_bridge, old_dev)
+                u.delete("openvpn", ovpninstance, "server_bridge")
+                u.delete("openvpn", ovpninstance, "ns_bridge")
+        except:
+            pass
+        if not args.get("ifconfig_pool"):
+            # set default ifconfig_pool
+            start_ip = ipaddress.ip_address(server_net) + 50
+            end_ip = ipaddress.ip_address(server_net) + 254
+            u.set("openvpn", ovpninstance, "ifconfig_pool", f"{start_ip} {end_ip} {ovpn.to_netmask(server_mask)}")
+        else:
+            start_ip = ipaddress.ip_address(args['ifconfig_pool'][0])
+            end_ip = ipaddress.ip_address(args['ifconfig_pool'][1])
+            if end_ip <= start_ip:
+                return utils.validation_error("ifconfig_pool_end", "end_must_be_greater_then_start", args['ifconfig_pool'])
+            if start_ip not in ipaddress.ip_network(f'{server_net}/{server_mask}'):
+                return utils.validation_error("ifconfig_pool_start", "start_not_in_network", args['ifconfig_pool'])
+            if end_ip not in ipaddress.ip_network(f'{server_net}/{server_mask}'):
+                return utils.validation_error("ifconfig_pool_end", "end_not_in_network", args['ifconfig_pool'])
+            # start_ip can't be the first IP of the network, it's reserved for the server
+            if start_ip == ipaddress.ip_address(server_net) + 1:
+                return utils.validation_error("ifconfig_pool_start", "start_reserved", args['ifconfig_pool'])
+            u.set("openvpn", ovpninstance, "ifconfig_pool", f"{args['ifconfig_pool'][0]} {args['ifconfig_pool'][1]} {server_mask}")
+
+    if args.get("port") != u.get("openvpn", ovpninstance, "port", default=''):
+        try:
+            instance_num = int(re.search(r"\d+$", ovpninstance).group())
+        except:
+            instance_num = 1
+        firewall.remove_service(u, f'OpenVPNRW{instance_num}')
+        firewall.add_service(u, f'OpenVPNRW{instance_num}', args.get("port"), ['tcp', 'udp'], link= f"openvpn/{ovpninstance}")
+
+    for opt in ["client_to_client", "dev_type", "ns_public_ip", "ns_auth_mode", "proto", "ns_description", "auth", "cipher", "compress", "port"]:
+        u.set("openvpn", ovpninstance, opt, args.get(opt,''))
+
+    if args["ns_auth_mode"] == "username_password":
+        if db_is_local:
+            u.set("openvpn", ovpninstance, "auth_user_pass_verify", "/usr/libexec/ns-openvpn/openvpn-local-auth via-env")
+        else:
+            u.set("openvpn", ovpninstance, "auth_user_pass_verify", "/usr/libexec/ns-openvpn/openvpn-remote-auth via-env")
+        u.set("openvpn", ovpninstance, "verify_client_cert", "none")
+        u.set("openvpn", ovpninstance, "username_as_common_name", "1")
+        u.set("openvpn", ovpninstance, "script_security", "3")
+        u.set("openvpn", ovpninstance, "reneg_sec", "0")
+    elif args["ns_auth_mode"] == "certificate":
+        u.set("openvpn", ovpninstance, "reneg_sec", "0")
+        try:
+            u.delete("openvpn", ovpninstance, "auth_user_pass_verify")
+            u.delete("openvpn", ovpninstance, "verify_client_cert")
+            u.delete("openvpn", ovpninstance, "username_as_common_name")
+            u.delete("openvpn", ovpninstance, "script_security")
+        except:
+            pass
+    elif args["ns_auth_mode"] == "username_otp_certificate":
+        u.set("openvpn", ovpninstance, "auth_user_pass_verify", "/usr/libexec/ns-openvpn/openvpn-otp-auth via-env")
+        u.set("openvpn", ovpninstance, "script_security", "3")
+        u.set("openvpn", ovpninstance, "reneg_sec", "0")
+        try:
+            u.delete("openvpn", ovpninstance, "verify_client_cert")
+            u.delete("openvpn", ovpninstance, "username_as_common_name")
+        except:
+            pass
+    elif args["ns_auth_mode"] == "username_password_certificate":
+        if db_is_local:
+            u.set("openvpn", ovpninstance, "auth_user_pass_verify", "/usr/libexec/ns-openvpn/openvpn-local-auth via-env")
+        else:
+            u.set("openvpn", ovpninstance, "auth_user_pass_verify", "/usr/libexec/ns-openvpn/openvpn-remote-auth via-env")
+        u.set("openvpn", ovpninstance, "script_security", "3")
+        u.set("openvpn", ovpninstance, "reneg_sec", "0")
+        try:
+            u.delete("openvpn", ovpninstance, "verify_client_cert")
+            u.delete("openvpn", ovpninstance, "username_as_common_name")
+        except:
+            pass
+    else:
+        return utils.validation_error("ns_auth_mode", "invalid_auth_mode", args["ns_auth_mode"])
+
+    # MTU and MSSFix settings
+    u.set("openvpn", ovpninstance, "tun_mtu", args.get("tun_mtu", '1500'))
+    u.set("openvpn", ovpninstance, "mssfix", args.get("mssfix", '1450'))
+
+    u.save("openvpn")
+
+    return {"result": "success"}
+
+def list_auth_modes():
+    return {"options": ["username_password", "certificate", "username_password_certificate", "username_otp_certificate"]}
+
+def list_dhcp_options():
+    return {"options": ["DOMAIN", "DNS", "WINS", "NBDD", "NBT", "NBS", "DISABLE-NBT"]}
+
+def list_users(ovpninstance):
+    u = EUci()
+    ret = []
+    connected = ovpn.list_connected_clients(ovpninstance)
+    connected_lower_case = {k.lower(): v for k, v in connected.items()}
+    expirations = list_user_expirations(ovpninstance)
+    db = u.get("openvpn", ovpninstance, "ns_user_db", default=None)
+    if not db:
+        return {"users": []}
+    db_users = users.list_users(u, db)
+    try:
+       tags = u.get_all("openvpn", ovpninstance, "ns_tag")
+       migrated = 'migrated' in tags
+    except:
+       tags = []
+    if 'migrated' in tags:
+        # migrated users can have the form <user>@>domain>
+        # make sure to duplicate connected info also removing the domain part
+        normalized = {}
+        for user in connected_lower_case:
+            if '@' in user:
+                nuser = user.split('@')[0]
+                normalized[nuser] = connected_lower_case[user]
+        connected_lower_case.update(normalized)
+    for user in db_users:
+        # exclude users not enabled for OpenVPN
+        if "openvpn_enabled" not in user:
+            continue
+        is_enabled = user.get('openvpn_enabled', '0') == '1'
+        if is_enabled and user['name'].lower() in connected_lower_case:
+            user["connected"] = True
+            user = user | connected_lower_case[user['name'].lower()]
+        else:
+            user["connected"] = False
+        user["expiration"] = ""
+        user["expired"] = False
+        if user['name'] in expirations:
+            user["expiration"] = expirations[user['name']]
+        else:
+            user["expiration"] = get_cert_expiration(ovpninstance, user["name"])
+        if user["expiration"] and user["expiration"] < int(datetime.now(timezone.utc).timestamp()):
+            user["expired"] = True
+        used, matches = objects.is_used_object(u, f'users/{user["id"]}')
+        user['used'] = used
+        user['matches'] = matches
+        user['valid'] = True
+        ret.append(user)
+    for configured_user in utils.get_all_by_option(u, 'users', 'database', db):
+        if u.get('users', configured_user, 'openvpn_enabled', default='0') != '1':
+            continue
+        username = u.get('users', configured_user, 'name')
+        # Search for the user inside the ret array
+        found = any(user['name'] == username for user in ret)
+        used, matches = objects.is_used_object(u, f'users/{configured_user}')
+        if not found:
+            ret.append( {
+                "id": configured_user,
+                "name": username,
+                "expiration": 0,
+                "expired": False,
+                "used": used,
+                "matches": matches,
+                "connected": False,
+                "valid": False
+            })
+    return {"users": sorted(ret, key=lambda u: u['name'])}
+
+def disconnect_user(ovpninstance, username):
+    u = EUci()
+    try:
+        db = u.get("openvpn", ovpninstance, "ns_user_db")
+    except:
+        return utils.validation_error("instance", "user_db_not_configured", ovpninstance)
+
+    db_users = users.list_users(u, db)
+    user_id = get_user_id(username, db_users)
+    if user_id == None:
+        return utils.validation_error("username", "user_not_found", username)
+
+    try:
+        subprocess.run(["/usr/bin/openvpn-kill", f'/var/run/openvpn_{ovpninstance}.socket', username], capture_output=True, check=True)
+    except:
+        return utils.generic_error("user_disconnect_failed")
+    return {"result": "success"}
+
+def disable_user(ovpninstance, username):
+    u = EUci()
+    try:
+        db = u.get("openvpn", ovpninstance, "ns_user_db")
+    except:
+        return utils.validation_error("instance", "user_db_not_configured", ovpninstance)
+
+    db_users = users.list_users(u, db)
+    user_id = get_user_id(username, db_users)
+    if user_id == None:
+        return utils.validation_error("username", "user_not_found", username)
+
+    # try to disconnect the user, ignore the error
+    disconnect_user(ovpninstance, username)
+
+    u.set("users", user_id, "openvpn_enabled", "0")
+    u.commit("users")
+    return {"result": "success"}
+
+def enable_user(ovpninstance, username):
+    u = EUci()
+    try:
+        db = u.get("openvpn", ovpninstance, "ns_user_db")
+    except:
+        return utils.validation_error("instance", "user_db_not_configured", ovpninstance)
+
+    db_users = users.list_users(u, db)
+    user_id = get_user_id(username, db_users)
+    if user_id == None:
+        return utils.validation_error("username", "user_not_found", username)
+
+    u.set("users", user_id, "openvpn_enabled", "1")
+    u.commit("users")
+    return {"result": "success"}
+
+def add_user(args):
+    u = EUci()
+    ovpninstance = args["instance"]
+    try:
+        db = u.get("openvpn", ovpninstance, "ns_user_db")
+    except:
+        return utils.validation_error("instance", "user_db_not_configured", ovpninstance)
+
+    db_users = users.list_users(u, db)
+    user_id = get_user_id(args["username"], db_users)
+    if user_id == None:
+        return utils.validation_error("username", "user_not_in_db", args["username"])
+
+    crt_path = user_pki_path(ovpninstance, "issued", f"{args['username']}.crt")
+    if not crt_path:
+        return utils.validation_error("username", "invalid_username", args["username"])
+    if os.path.exists(crt_path):
+        return utils.validation_error("username", "user_certificate_already_exists", args["username"])
+    if "ipaddr" in args and args["ipaddr"]:
+        valid, error = is_valid_ip(ovpninstance, args["ipaddr"])
+        if not valid:
+            return utils.validation_error("ipaddr", error, args["ipaddr"])
+        if not is_free_ip(ovpninstance, args["ipaddr"]):
+            return utils.validation_error("ipaddr", "reserved_ip_already_used", args["ipaddr"])
+    try:
+        subprocess.run(["/usr/sbin/ns-openvpnrw-add", ovpninstance, args["username"], args["expiration"]], check=True, capture_output=True)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        return utils.validation_error("username", "user_add_failed", args["username"])
+
+    extra_fields = get_user_extra_config(u, user_id)
+    ovpn_config = {"openvpn_enabled":  args.get("enabled", "1"), "openvpn_ipaddr": args.get("ipaddr", ""), "openvpn_2fa": generate_2fa_secret()}
+    ovpn_config.update(extra_fields)
+
+    if u.get("users", db) == "ldap":
+        # remote user
+        if users.get_user_by_name(u, args['username'], db):
+            users.edit_remote_user(u, args["username"], db, extra_fields=ovpn_config)
+        else:
+            users.add_remote_user(u, args["username"], db, extra_fields=ovpn_config)
+    else:
+        users.edit_local_user(u, args['username'], extra_fields=ovpn_config)
+    u.commit("users")
+    return {"result": "success"}
+
+def import_users(ovpninstance):
+    u = EUci()
+    try:
+        db = u.get("openvpn", ovpninstance, "ns_user_db")
+    except:
+        return utils.validation_error("instance", "user_db_not_configured", ovpninstance)
+
+    errors = []
+    db_users = users.list_users(u, db)
+    db_is_remote = users.get_database_type(u, db) == "ldap"
+    for user in db_users:
+        ret = add_user({"instance": ovpninstance, "enabled": "1", "username": user["name"], "expiration": "3650", "ipaddr": ""})
+        if not ret ==  {"result": "success"}:
+            errors.append(user["id"])
+    if errors:
+        return utils.generic_error("user_import_failed")
+    else:
+        return {"result": "success"}
+
+def edit_user(args):
+    u = EUci()
+    ovpninstance = args["instance"]
+    try:
+        db = u.get("openvpn", ovpninstance, "ns_user_db")
+    except:
+        return utils.validation_error("instance", "user_db_not_configured", ovpninstance)
+
+    db_users = users.list_users(u, db)
+    user_id = get_user_id(args["username"], db_users)
+    if user_id == None:
+        return utils.validation_error("username", "user_not_found", args["username"])
+
+    if args["ipaddr"] and u.get("users", user_id, 'openvpn_ipaddr', default="") != args["ipaddr"]:
+        valid, error = is_valid_ip(ovpninstance, args["ipaddr"])
+        if not valid:
+            return utils.validation_error("ipaddr", error, args["ipaddr"])
+        if not is_free_ip(ovpninstance, args["ipaddr"]):
+            return utils.validation_error("ipaddr", "reserverd_ip_already_used", args["ipaddr"])
+        u.set("users", user_id, "openvpn_ipaddr", args["ipaddr"])
+    # delete ipaddr if not set
+    if not args["ipaddr"]:
+        try:
+            u.delete("users", user_id, "openvpn_ipaddr")
+        except:
+            pass
+    u.set("users", user_id, "openvpn_enabled", args["enabled"])
+    u.commit("users")
+    return {"result": "success"}
+
+def delete_user(ovpninstance, username):
+    u = EUci()
+    try:
+        db = u.get("openvpn", ovpninstance, "ns_user_db")
+    except:
+        return utils.validation_error("instance", "user_db_not_configured", ovpninstance)
+    db_users = users.list_users(u, db)
+    user_id = get_user_id(username, db_users)
+    if user_id == None:
+        # this could be a user deleted from remote but still present locally
+        local_users = utils.get_all_by_type(u, "users", "user")
+        for lu in local_users:
+            user = local_users[lu]
+            if user.get('database') == db and user.get('name') == username:
+                user_id = lu
+                break
+        if user_id == None:
+            return utils.validation_error("username", "user_not_found", username)
+    used, matches = objects.is_used_object(u, f'users/{user_id}')
+    if used:
+        return utils.validation_error("username", "user_is_used", matches)
+
+    try:
+        u.delete("users", user_id, "openvpn_enabled")
+        u.delete("users", user_id, "openvpn_ipaddr")
+        u.delete("users", user_id, "openvpn_2fa")
+        u.commit("users")
+    except:
+        pass
+    try:
+        env = os.environ.copy()
+        env["EASYRSA_BATCH"] = "1"
+        env["EASYRSA_PKI"] = f'/etc/openvpn/{ovpninstance}/pki'
+        env["EASYRSA_CRL_DAYS"] = "3650"
+        subprocess.run(["/usr/bin/easyrsa", "revoke", username], env=env, check=True, capture_output=True)
+        subprocess.run(["/usr/bin/easyrsa", "gen-crl"], env=env, check=True, capture_output=True)
+    except:
+        return utils.validation_error("username", "user_delete_failed", username)
+    return {"result": "success"}
+    
+def regenerate_user_certificate(ovpninstance, user, expiration):
+    pki_dir = f"/etc/openvpn/{ovpninstance}/pki"
+    req_f = user_pki_path(ovpninstance, "reqs", f"{user}.req")
+    key_f = user_pki_path(ovpninstance, "private", f"{user}.key")
+    crt_f = user_pki_path(ovpninstance, "issued", f"{user}.crt")
+    if not (req_f and key_f and crt_f):
+        return utils.validation_error("username", "invalid_username", user)
+
+    for file_path in [req_f, key_f, crt_f]:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    env = os.environ.copy()
+    env["EASYRSA_PKI"] = pki_dir
+    env["EASYRSA_CERT_EXPIRE"] = str(expiration)
+    env["EASYRSA_BATCH"] = "1"
+
+    try:
+        subprocess.run(["/usr/bin/easyrsa", "build-client-full", user, "nopass"], env=env, check=True, capture_output=True)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        return utils.validation_error("username", "certificate_generation_failed", user)
+    return {"result": "success"}
+
+def download_user_certificate(ovpninstance, username):
+    cert_dir=f"/etc/openvpn/{ovpninstance}/pki"
+    crt_path = user_pki_path(ovpninstance, "issued", f"{username}.crt")
+    key_path = user_pki_path(ovpninstance, "private", f"{username}.key")
+    if not crt_path or not key_path or not os.path.exists(crt_path):
+        return utils.validation_error("user", "user_not_found", username)
+    pem = slurp(os.path.join(cert_dir, "ca.crt")) + slurp(crt_path) + slurp(key_path)
+    return {"data": pem}
+
+def download_all_user_configurations(ovpninstance):
+    cert_dir = f"/etc/openvpn/{ovpninstance}/pki"
+    issued_dir = os.path.join(cert_dir, "issued")
+    download = "/var/run/ns-api-server/downloads"
+    # Create the download directory if it doesn't exist
+    if not os.path.exists(download):
+        os.makedirs(download)
+    tar_file_path = f"{download}/{ovpninstance}_user_configurations.tar.gz"
+    if not os.path.exists(issued_dir):
+        return utils.validation_error("directory", "issued_directory_not_found", issued_dir)
+    with tarfile.open(tar_file_path, "w:gz") as tar:
+        for cert_file in os.listdir(issued_dir):
+            if cert_file.endswith(".crt"):
+                username = cert_file[:-4]  # Remove the .crt extension to get the username
+                if username == "server":
+                    continue
+                # Generate the user configuration
+                user_config = download_user_configuration(ovpninstance, username)["data"]
+                # Create an in-memory file-like object for the config content
+                config_bytes = user_config.encode()
+                config_info = tarfile.TarInfo(name=f"{username}.ovpn")
+                config_info.size = len(config_bytes)
+                # Add the config content directly to the tar archive
+                tar.addfile(config_info, io.BytesIO(config_bytes))
+    # Set the file permissions to 400 (read-only for the owner)
+    os.chmod(tar_file_path, 0o0400)
+    return {"archive_path": tar_file_path}
+
+def download_user_configuration(ovpninstance, username):
+    cert_dir=f"/etc/openvpn/{ovpninstance}/pki"
+    crt_file = user_pki_path(ovpninstance, "issued", f"{username}.crt")
+    key_file = user_pki_path(ovpninstance, "private", f"{username}.key")
+    if not crt_file or not key_file or not os.path.exists(crt_file):
+        return utils.validation_error("username", "user_not_found", username)
+    u = EUci()
+    config = ''
+    if u.get("openvpn", ovpninstance, "dev").startswith("tun"):
+        config = config + "dev tun\n"
+    else:
+        config = config + "dev tap\n"
+    if u.get("openvpn", ovpninstance, "proto") == "udp":
+        config = config + "proto udp\n"
+        config = config + "explicit-exit-notify 1\n"
+    else:
+        config = config + "proto tcp-client\n"
+    if u.get("openvpn", ovpninstance, "auth_user_pass_verify", default=""):
+        config = config + "auth-user-pass\n"
+        config = config + "auth-nocache\n"
+    # Always add reneg-sec 0, since Windows clients are bugged see #1236
+    config = config + "reneg-sec 0\n"
+    config = config + f"port {u.get('openvpn', ovpninstance, 'port')}\n"
+    try:
+        remote = u.get_all("openvpn", ovpninstance, 'ns_public_ip')
+        for r in remote:
+          config = config + f"remote {r}\n"
+    except:
+        config = config + f"remote {hostname()}"
+    config = config + f'<ca>\n{slurp(os.path.join(cert_dir, "ca.crt"))}\n</ca>\n'
+    config = config + f'<cert>\n{slurp(crt_file)}\n</cert>\n'
+    config = config + f'<key>\n{slurp(key_file)}\n</key>\n'
+    for option in ["auth", "digest", "compress"]:
+        try:
+            config = config + f'{option} {u.get("openvpn", ovpninstance, option)}\n'
+        except:
+            pass
+    config = config + "client\n"
+    config = config + "float\n"
+    config = config + "verb 3\n"
+    config = config + "persist-key\n"
+    config = config + "persist-tun\n"
+    config = config + "nobind\n"
+    config = config + "passtos\n"
+    config = config + f"tun-mtu {u.get('openvpn', ovpninstance, 'tun_mtu', default='1500')}\n"
+    config = config + f"mssfix {u.get('openvpn', ovpninstance, 'mssfix', default='1450')}\n"
+
+    # add certificate verification if supported by certificate
+    # this is not supported by migrated instances
+    input_crt = f'/etc/openvpn/{ovpninstance}/pki/issued/server.crt'
+    command = ['openssl', 'x509', '-noout', '-ext', 'keyUsage']
+    try:
+        p = subprocess.run(command, stdin=open(input_crt, 'r'), text=True, capture_output=True, check=True)
+        if "Digital Signature, Key Encipherment" in p.stdout:
+            config = config + "remote-cert-tls server\n"
+    except:
+        pass
+    return {"data": config}
+
+def download_user_2fa(ovpninstance, username):
+    u = EUci()
+    try:
+        db = u.get("openvpn", ovpninstance, "ns_user_db")
+    except:
+        return utils.validation_error("instance", "user_db_not_configured", ovpninstance)
+    db_users = users.list_users(u, db)
+    user_id = get_user_id(username, db_users)
+    if user_id == None:
+        return utils.validation_error("username", "user_not_found", username)
+
+    secret = u.get("users", user_id, "openvpn_2fa", default='')
+    instance_num = instance2number(ovpninstance)
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=f"{username}@{hostname()}", issuer_name=f"OpenVPN {instance_num}")
+    if secret:
+        p = subprocess.run(["/usr/bin/qrencode", "-t", "svg", uri], capture_output=True, text=True)
+        return {"data": p.stdout}
+    else:
+        return utils.validation_error("username", "2fa_download_failed", username)
+
+def connection_history_csv(ovpninstance, timezone):
+    database_path = get_connections_db_path(ovpninstance)
+
+    try:
+        conn = sqlite3.connect(database_path)
+    except:
+        return utils.generic_error("database_not_found")
+
+    try:
+        # Attempt to create a ZoneInfo object
+        ZoneInfo(timezone)
+    except:
+        timezone = "UTC" # Default to UTC if the timezone is not found
+
+    try:
+        c = conn.cursor()
+
+        # Define the CSV file path
+        csv_directory = '/var/run/ns-api-server/downloads'
+        csv_file_path = os.path.join(csv_directory, 'connection_history.csv')
+
+        # Ensure the directory exists
+        os.makedirs(csv_directory, exist_ok=True)
+
+        with open(csv_file_path, 'w', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file)
+            # Write the CSV header
+            csv_writer.writerow(["Started ("+timezone+")", "Ended ("+timezone+")", "Duration (seconds)", "User", "Virtual IP", "Remote IP", "Received (bytes)", "Sent (bytes)"]) 
+
+
+            rows = c.execute('''SELECT virtual_ip_addr, remote_ip_addr, start_time, duration, bytes_received, bytes_sent, common_name
+                                FROM connections
+                                ORDER BY start_time DESC''')
+
+            for row in rows:
+                virtual_ip_addr = row[0]
+                remote_ip_addr = row[1]
+                start_time = row[2]
+                duration = 0 if not row[3] else row[3]
+                bytes_received = 0 if not row[4] else row[4]
+                bytes_sent = 0 if not row[5] else row[5]
+                username = row[6]
+                end_time = start_time + duration if duration else None
+
+                try:
+                    # Convert and format start_time to local time (e.g., Europe/Rome)
+                    start_formatted = datetime.fromtimestamp(start_time, tz=ZoneInfo("UTC"))
+                    localized_start_datetime = start_formatted.astimezone(ZoneInfo(timezone))
+                    start_time_local = localized_start_datetime.strftime('%Y-%m-%d %H:%M:%S')
+
+                    if end_time:
+                        # Convert and format end_time to local time (e.g., Europe/Rome)
+                        end_formatted = datetime.fromtimestamp(end_time, tz=ZoneInfo("UTC"))
+                        localized_end_datetime = end_formatted.astimezone(ZoneInfo(timezone))
+                        end_time_local = localized_end_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        end_time_local = ""
+                except:
+                    conn.close()
+                    return utils.generic_error("date_conversion_error")
+
+                # Write the row to the CSV
+                csv_writer.writerow([start_time_local, end_time_local, duration, username, virtual_ip_addr, remote_ip_addr, bytes_received, bytes_sent])
+    except:
+        conn.close()
+        return utils.generic_error("database_error")
+
+    conn.close()
+
+    # Set the file permissions to 400 (read-only for the owner)
+    os.chmod(csv_file_path, 0o0400)
+
+    # Return the path of the CSV file
+    return {"csv_path": csv_file_path}
+
+def connection_history(ovpninstance, q='', start_time=0, accounts=None, page=1, per_page=10, sort_by='startTime', desc=True):
+    database_path = get_connections_db_path(ovpninstance)
+    
+    # map frontend field names to database column names
+    sort_field_mapping = {
+        'account': 'common_name',
+        'startTime': 'start_time',
+        'endTime': 'start_time + duration',
+        'duration': 'duration',
+        'virtualIpAddress': 'virtual_ip_addr',
+        'remoteIpAddress': 'remote_ip_addr'
+    }
+    
+    # default to startTime if sort_by is invalid
+    if sort_by not in sort_field_mapping:
+        sort_by = 'startTime'
+    
+    # determine if we need to sort in Python (for IPs) or SQL (for other fields)
+    sort_manually = sort_by in ['virtualIpAddress', 'remoteIpAddress']
+    
+    if not sort_manually:
+        sort_column = sort_field_mapping[sort_by]
+        sort_order = 'DESC' if desc else 'ASC'
+    else:
+        sort_column = None
+        sort_order = None
+
+    try:
+        conn = sqlite3.connect(database_path)
+    except:
+        return utils.generic_error("database_not_found")
+
+    connections = []
+
+    try:
+        c = conn.cursor()
+        conditions = []
+        params = []
+
+        # time_range filter
+        if start_time > 0:
+            conditions.append('start_time >= ?')
+            params.append(start_time)
+
+        # accounts filter
+        if accounts:
+            placeholders = ','.join('?' * len(accounts))
+            conditions.append(f'common_name IN ({placeholders})')
+            params.extend(accounts)
+
+        # free text search filter
+        if q:
+            conditions.append('(common_name LIKE ? OR virtual_ip_addr LIKE ? OR remote_ip_addr LIKE ?)')
+            like = f'%{q}%'
+            params.extend([like, like, like])
+
+        where = ('WHERE ' + ' AND '.join(conditions)) if conditions else ''
+
+        total = c.execute(f'SELECT COUNT(*) FROM connections {where}', params).fetchone()[0]
+        total_unfiltered = c.execute('SELECT COUNT(*) FROM connections').fetchone()[0]
+
+        if sort_manually:
+            # fetch all matching records for manual sorting
+            all_rows = c.execute(
+                f'''SELECT common_name, virtual_ip_addr, remote_ip_addr, start_time, duration, bytes_received, bytes_sent
+                    FROM connections {where}''',
+                params
+            ).fetchall()
+            if sort_by == 'virtualIpAddress':
+                all_rows = sorted(all_rows, key=lambda r: ipaddress.ip_address(r[1] or '0.0.0.0'), reverse=desc)
+            elif sort_by == 'remoteIpAddress':
+                all_rows = sorted(all_rows, key=lambda r: ipaddress.ip_address(r[2] or '0.0.0.0'), reverse=desc)
+            
+            # apply pagination
+            offset = (page - 1) * per_page
+            rows = all_rows[offset:offset + per_page]
+        else:
+            # use SQL ORDER BY for non-IP fields
+            offset = (page - 1) * per_page
+            rows = c.execute(
+                f'''SELECT common_name, virtual_ip_addr, remote_ip_addr, start_time, duration, bytes_received, bytes_sent
+                    FROM connections {where}
+                    ORDER BY {sort_column} {sort_order}
+                    LIMIT ? OFFSET ?''',
+                params + [per_page, offset]
+            )
+
+        for row in rows:
+            common_name, virtual_ip_addr, remote_ip_addr, start_time, duration, bytes_received, bytes_sent = row
+            end_time = start_time + duration if duration else None
+            connections.append({
+                'account': common_name,
+                'virtualIpAddress': virtual_ip_addr,
+                'remoteIpAddress': remote_ip_addr,
+                'startTime': start_time,
+                'endTime': end_time,
+                'duration': duration,
+                'bytesReceived': bytes_received,
+                'bytesSent': bytes_sent
+            })
+
+        # collect unique accounts from the full unfiltered result for the filters field
+        all_accounts = [r[0] for r in c.execute('SELECT DISTINCT common_name FROM connections ORDER BY common_name').fetchall()]
+
+    except:
+        conn.close()
+        return utils.generic_error("database_error")
+
+    conn.close()
+
+    last_page = max(1, (total + per_page - 1) // per_page)
+
+    return {
+        'connections': connections,
+        'current_page': page,
+        'last_page': last_page,
+        'per_page': per_page,
+        'total': total_unfiltered,
+        'results': total,
+        'filters': {
+            'accounts': all_accounts
+        }
+    }
+
+def renew_server_certificate(ovpninstance):
+    try:
+        subprocess.run(["/usr/sbin/ns-openvpn-renew-server", ovpninstance], check=True, capture_output=True)
+        subprocess.run(["/etc/init.d/openvpn", "restart", ovpninstance], check=False, capture_output=True)
+    except Exception as e:
+        return utils.validation_error("instance", "server_certificate_renewal_failed", ovpninstance)
+    return {"result": "success"}
+
+def regenerate_all_certificates(ovpninstance):
+    try:
+        subprocess.run(["/usr/sbin/ns-openvpn-renew-ca", ovpninstance], check=True, capture_output=True)
+        subprocess.run(["/etc/init.d/openvpn", "restart", ovpninstance], check=False, capture_output=True)
+    except Exception as e:
+        return utils.validation_error("instance", "certificates_regeneration_failed", ovpninstance)
+    return {"result": "success"}
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        "get-configuration": {"instance": "roadwarrior1"},
+        "list-users": {"instance": "roadwarrior1"},
+        "list-auth-modes": {},
+        "list-cipher": {},
+        "list-digest": {},
+        "list-dhcp-options": {},
+        "list-bridges": {},
+        "list-instances": {},
+        "add-instance":  {},
+        "set-configuration": {
+            "instance": "roadwarrior1",
+            "proto": "udp", 
+            "port": "1194", 
+            "dev_type": "tun",
+            "topology": "subnet",
+            "enabled": "1",
+            "server": "10.166.54.0/24",
+            "client_to_client": "0",
+            "auth": "SHA256",
+            "cipher": "AES-256-GCM",
+            "tls_version_min": "1.2",
+            "ns_auth_mode": "certificate",
+            "ns_redirect_gateway": False,
+            "ns_local": [],
+            "ns_dhcp_options": [],
+            "ns_public_ip": ["1.2.3.4"],
+            "ns_user_db": "main",
+            "ifconfig_pool": ["10.166.54.4", "10.166.54.20"],
+            "tun_mtu": "1500",
+            "mssfix": "1450",
+            },
+        "remove-instance": {"instance": "roadwarrior1"},
+        "import-users": {"instance": "roadwarrior1"},
+        "add-user": {"instance": "roadwarrior1", "enabled": "1", "username": "myuser", "expiration": "3650", "ipaddr": "1.2.3.4"},
+        "edit-user": {"instance": "roadwarrior1", "enabled": "1", "username": "myuser", "expiration": "3650", "ipaddr": "1.2.3.4"},
+        "disable-user": {"instance": "roadwarrior1", "username": "myuser"},
+        "disconnect-user": {"instance": "roadwarrior1", "username": "myuser"},
+        "enable-user": {"instance": "roadwarrior1", "username": "myuser"},
+        "delete-user": {"instance": "roadwarrior1", "username": "myuser"},
+        "regenerate-user-certificate": {"instance": "roadwarrior1", "username": "myuser", "expiration": "3650"},
+        "download-user-certificate": {"instance": "roadwarrior1", "username": "myuser"},
+        "download-user-configuration": {"instance": "roadwarrior1", "username": "myuser"},
+        "download-user-2fa": {"instance": "roadwarrior1", "username": "myuser"},
+        "download_all_user_configurations": {"instance": "roadwarrior1"},
+        "connection-history-csv": {"instance": "roadwarrior1", "timezone": "Europe/Rome"},
+        "connection-history": {"instance": "roadwarrior1", "q": "", "start_time": 123456123, "accounts": [], "page": 1, "per_page": 10, "sort_by": "startTime", "desc": True},
+        "renew-server-certificate": {"instance": "roadwarrior1"},
+        "regenerate-all-certificates": {"instance": "roadwarrior1"}
+        }))
+else:
+    action = sys.argv[2]
+    if action == "list-auth-modes":
+        ret = list_auth_modes()
+    elif action == "list-dhcp-options":
+        ret = list_dhcp_options()
+    elif action == "list-bridges":
+        ret = list_bridges()
+    elif action == "list-cipher":
+        ret = ovpn.list_cipher()
+    elif action == "list-digest":
+        ret = ovpn.list_digest()
+    elif action == "list-instances":
+        ret = list_instances()
+    elif action == "add-instance":
+        ret = add_instance()
+    else:
+        args = json.loads(sys.stdin.read())
+
+    if action == "set-configuration":
+        ret = set_configuration(args)
+    elif action == "disconnect-user":
+        ret = disconnect_user(args["instance"], args["username"])
+    elif action == "disable-user":
+        ret = disable_user(args["instance"], args["username"])
+    elif action == "enable-user":
+        ret = enable_user(args["instance"], args["username"])
+    elif action == "import-users":
+        ret = import_users(args["instance"])
+    elif action == "add-user":
+        ret = add_user(args)
+    elif action == "edit-user":
+        ret = edit_user(args)
+    elif action == "delete-user":
+        ret = delete_user(args["instance"], args["username"])
+    elif action == "regenerate-user-certificate":
+        ret = regenerate_user_certificate(args["instance"], args["username"], args["expiration"])
+    elif action == "download-user-certificate":
+        ret = download_user_certificate(args["instance"], args["username"])
+    elif action == "download_all_user_configurations":
+        ret = download_all_user_configurations(args["instance"])
+    elif action == "download-user-configuration":
+        ret = download_user_configuration(args["instance"], args["username"])
+    elif action == "download-user-2fa":
+        ret = download_user_2fa(args["instance"], args["username"])
+    elif action == "remove-instance":
+        ret = remove_instance(args["instance"])
+    elif action == "get-configuration":
+        ret = get_configuration(args["instance"])
+    elif action == "list-users":
+        ret = list_users(args["instance"])
+    elif action == "connection-history-csv":
+        ret = connection_history_csv(args['instance'], args['timezone'])
+    elif action == "connection-history":
+        ret = connection_history(
+            args['instance'],
+            q=args.get('q', ''),
+            start_time=args.get('start_time', 0),
+            accounts=args.get('accounts', []),
+            page=int(args.get('page', 1)),
+            per_page=int(args.get('per_page', 10)),
+            sort_by=args.get('sort_by', 'startTime'),
+            desc=args.get('desc', True)
+        )
+    elif action == "renew-server-certificate":
+        ret = renew_server_certificate(args["instance"])
+    elif action == "regenerate-all-certificates":
+        ret = regenerate_all_certificates(args["instance"])
+
+    print(json.dumps(ret))

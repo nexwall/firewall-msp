@@ -1,0 +1,49 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import nsmigration
+from nethsec import utils
+
+def add_ipset(u, rname, restrict):
+    sname = f"{rname}_ipset"
+    # delete existing, if any
+    try:
+       u.delete('firewall', sname)
+    except:
+        pass
+    # create new ipset
+    u.set('firewall', sname, 'ipset')
+    u.set('firewall', sname, 'name', sname)
+    u.set('firewall', sname, 'match', 'src_net')
+    u.set('firewall', sname, 'enabled', '1')
+    u.set('firewall', sname, 'entry', restrict)
+    return sname
+
+(u, data, nmap) = nsmigration.init("redirects.json")
+
+for pf in data['redirects']:
+    sname = ''
+    name = pf.pop("key")
+    pfname = utils.get_id(name)
+    desc = pf.pop("ns_description")
+    # create port forward 
+    nsmigration.vprint(f'Creating port forward {pfname}')
+    u.set("firewall", pfname, "redirect")
+    u.set("firewall", pfname, "name", desc)
+    u.set("firewall", pfname, "src", 'wan')
+    # this should be irrelevant for DNAT, but it prevents a warning
+    u.set("firewall", pfname, "dest", "lan")
+    if pf.get('restrict'):
+        restrict = pf.pop('restrict')
+        if restrict:
+            sname = add_ipset(u, pfname, restrict)
+            u.set('firewall', pfname, 'ipset', sname)
+    for o in pf:
+        u.set("firewall", pfname, o, pf[o])
+
+# Save configuration
+u.commit("firewall")

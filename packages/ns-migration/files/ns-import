@@ -1,0 +1,108 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+usage() {
+    echo "$0 [-q] [-m oldmac=newmac] <exported_archive> "
+    exit 1
+}
+
+try_restart() {
+    service=$1
+    if service "$service" running; then
+        service $service restart
+    else
+        service $service start
+    fi
+}
+
+maps=''
+quiet=""
+log='/root/migration.log'
+
+while getopts "qm:" opt
+do
+    case $opt in
+        m) maps="$maps --map ${OPTARG}"  ;;
+        q) quiet="--quiet"  ;;
+        *) exit 1;;   # DEFAULT
+    esac
+done
+
+shift $(($OPTIND - 1))
+archive=$1
+
+if [ -z "$archive" ]; then
+    usage    
+fi
+
+if [ ! -f "$archive" ]; then
+    echo "No such file or directory: '$1'"
+    exit 1
+fi
+
+
+# Prepare target directories and explode archive
+tmp_dir=$(mktemp -d)
+work_dir=$(pwd)
+
+# Find absolute path of the archive
+archive=$(cd "$(dirname -- "$1")" >/dev/null; pwd -P)/$(basename -- "$1")
+
+# Explode the archive
+cd $tmp_dir
+tar xzf "$archive"
+cd $work_dir
+
+# Execute all scripts
+for f in $(find /usr/share/ns-migration/ -type f)
+do
+    if [ -x "$f" ]; then
+        echo "$f" $quiet $maps "$tmp_dir/export" | tee -a "$log"
+        "$f" $quiet $maps "$tmp_dir/export" 2>&1 | tee -a "$log"
+    fi
+done
+
+echo >> "$log"
+# Save versions to log for troubleshooting
+if [ -f "$tmp_dir/export/version.json" ]; then
+    version=$(cat $tmp_dir/export/version.json | jq -r .version)
+    echo "nethserver-firewall-migration version: $version" >> "$log"
+fi
+source /etc/os-release
+echo "NethSecurity version: $OPENWRT_RELEASE" >> "$log"
+
+rm -rf $tmp_dir
+
+# Commit everything
+uci commit
+
+# generate netifyd configuration
+cat <<EOF | python
+changes = ['network']
+exec(open('/usr/libexec/ns-api/post-commit/configure-netifyd.py').read())
+EOF
+
+# Restart services
+service network restart
+# this will restart the firewall too
+firewall-apply-default-logging
+service system restart
+service banip stop
+service banip start # a restart is not enough
+try_restart dnsmasq
+try_restart dropbear
+try_restart cron
+try_restart sysntpd
+try_restart ns-plug
+ts-dns
+try_restart openvpn
+try_restart mwan3
+try_restart swanctl
+try_restart dedalo
+try_restart qosify
+service acme start
+try_restart nginx

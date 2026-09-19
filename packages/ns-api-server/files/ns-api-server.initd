@@ -1,0 +1,85 @@
+#!/bin/sh /etc/rc.common
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+START=99
+USE_PROCD=1
+PROG=/usr/bin/nethsecurity-api
+
+WORK_DIR=/var/run/ns-api-server
+TOKENS_DIR=${WORK_DIR}/tokens
+SECRETS_DIR=/etc/ns-api-server
+UPLOAD_FILE_PATH=${WORK_DIR}/uploads
+UPLOAD_FILE_MAX_SIZE=128 # 128MB
+GLOBAL_RATE_LIMIT_AVERAGE=25 # max sustained requests per second per client IP, 0 disables
+GLOBAL_RATE_LIMIT_BURST=100 # burst allowance above the average
+
+boot() {
+    local boot_delay="$(uci_get ns-ui.config.api_server_delay)"
+    if [ ! -z "$boot_delay" ]; then
+        sleep $boot_delay
+    fi
+    start "$@"
+}
+
+start_service() {
+    procd_open_instance
+
+    local issuer_2fa="$(uci_get system.@system[0].hostname)"
+    mkdir -m 0700 -p ${TOKENS_DIR}
+    mkdir -m 0700 -p ${SECRETS_DIR}
+
+    if [ -f "${WORK_DIR}/secret_jwt" ]; then
+        SECRET_JWT=$(cat ${WORK_DIR}/secret_jwt)
+    else
+        SECRET_JWT=$(uuidgen | sha256sum | awk '{print $1}')
+        echo "$SECRET_JWT" > ${WORK_DIR}/secret_jwt
+    fi
+
+    # read the config address for proxy fallback
+    config_load victoria-metrics
+    local vm_http_listen_addr
+    config_get vm_http_listen_addr main http_listen_addr "127.0.0.1:8428"
+    # a host-less "addr" (e.g. ":8428") binds all interfaces; reach it via loopback
+    case "$vm_http_listen_addr" in
+        :*) vm_http_listen_addr="127.0.0.1${vm_http_listen_addr}" ;;
+    esac
+
+    config_load vmalert
+    local vmalert_http_listen_addr
+    config_get vmalert_http_listen_addr main http_listen_addr "127.0.0.1:8082"
+    case "$vmalert_http_listen_addr" in
+        :*) vmalert_http_listen_addr="127.0.0.1${vmalert_http_listen_addr}" ;;
+    esac
+
+    procd_set_param env GIN_MODE=release \
+        LISTEN_ADDRESS=127.0.0.1:8090 \
+        SECRET_JWT="${SECRET_JWT}" \
+        ISSUER_2FA=${issuer_2fa} \
+        SECRETS_DIR=${SECRETS_DIR} \
+        TOKENS_DIR=${TOKENS_DIR} \
+        UPLOAD_FILE_PATH=${UPLOAD_FILE_PATH} \
+        UPLOAD_FILE_MAX_SIZE=${UPLOAD_FILE_MAX_SIZE} \
+        VICTORIA_METRICS_URL="http://${vm_http_listen_addr}" \
+        VMALERT_URL="http://${vmalert_http_listen_addr}" \
+        GLOBAL_RATE_LIMIT_AVERAGE=${GLOBAL_RATE_LIMIT_AVERAGE} \
+        GLOBAL_RATE_LIMIT_BURST=${GLOBAL_RATE_LIMIT_BURST}
+
+    procd_set_param stdout 1
+    procd_set_param stderr 1
+    procd_set_param respawn 3600 60 0
+    procd_set_param command "$PROG"
+    procd_close_instance
+}
+
+service_triggers() {
+    procd_add_reload_trigger victoria-metrics vmalert
+}
+
+reload_service() {
+    stop
+    start
+}

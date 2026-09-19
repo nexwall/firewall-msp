@@ -1,0 +1,44 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+DEST_DIR=/etc/adblock
+NETHESIS_SOURCES=/usr/share/threat_shield/nethesis-dns.sources.gz
+COMMUNITY_SOURCES=/usr/share/threat_shield/community-dns.sources.gz
+CUSTOM_FEEDS="$DEST_DIR/adblock.custom.feeds"
+TMP_FILE=/tmp/ts-dns.sources
+
+SYSTEM_ID=$(uci -q get ns-plug.config.system_id)
+SYSTEM_SECRET=$(uci -q get ns-plug.config.secret)
+TYPE=$(uci -q get ns-plug.config.type)
+TS_ENABLED=$(uci -q get adblock.global.ts_enabled)
+
+if [ "$TS_ENABLED" = 1 ]; then
+    # Setup dnsmasq as backend
+    uci set adblock.global.adb_dns='dnsmasq'
+    uci set adblock.global.adb_dnsinstance='0'
+
+    # Build custom feeds from community sources
+    gunzip -c "$COMMUNITY_SOURCES" > "$TMP_FILE"
+
+    # Merge Nethesis sources if the machine has a subscription
+    if [ -n "$SYSTEM_SECRET" ] && [ -n "$SYSTEM_ID" ]; then
+        gunzip -c "$NETHESIS_SOURCES" | sed -e "s/__USER__/$SYSTEM_ID/" -e "s/__PASSWORD__/$SYSTEM_SECRET/" -e "s/__TYPE__/$TYPE/" >> "$TMP_FILE"
+    fi
+
+    # Merge all sources into a single JSON object and write to adblock.custom.feeds
+    jq -s 'reduce .[] as $item ({}; . * $item)' "$TMP_FILE" > "$CUSTOM_FEEDS"
+
+    # Cleanup
+    rm -f "$TMP_FILE"
+else
+    # Clear custom feeds when threat shield is disabled
+    : > "$CUSTOM_FEEDS"
+fi
+
+# Save changes
+uci commit adblock
+

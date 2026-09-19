@@ -1,0 +1,387 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# APIs used only by the controller
+
+import os
+import sys
+import json
+import subprocess
+from nethsec import utils, mwan
+from euci import EUci
+import re
+from datetime import datetime
+import subprocess
+import time
+import sqlite3
+import glob
+import socket
+import urllib.parse
+import urllib.request
+
+AUTHORIZED_KEYS = "/etc/dropbear/authorized_keys"
+
+dns_cache = {}
+
+try:
+    _vm_addr = EUci().get("victoria-metrics", "main", "http_listen_addr", default="127.0.0.1:8428")
+except Exception:
+    _vm_addr = "127.0.0.1:8428"
+VM_URL = f"http://{_vm_addr}"
+
+def vm_export(metric, start, end):
+    params = urllib.parse.urlencode({"match[]": metric, "start": start, "end": end})
+    series = []
+    try:
+        with urllib.request.urlopen(f"{VM_URL}/api/v1/export?{params}", timeout=10) as resp:
+            for line in resp.read().decode().splitlines():
+                line = line.strip()
+                if line:
+                    series.append(json.loads(line))
+    except Exception:
+        pass
+    return series
+
+# Utility functions
+
+def reverse_dns(ip):
+    if ip in dns_cache:
+        return dns_cache[ip]
+    try:
+        name = socket.gethostbyaddr(ip)[0]
+        dns_cache[ip] = name
+        return name
+    except:
+        return ip
+
+def get_hostname():
+    with open('/proc/sys/kernel/hostname', 'r') as fp:
+        return fp.read().strip()
+
+def get_version():
+    version = ""
+    with open('/etc/os-release', 'r') as f:
+        for line in f.readlines():
+            if line.startswith("PRETTY_NAME"):
+                version = line[line.index('=')+2:-2]
+                return version.replace("-", " ", 1)
+    return version
+
+def parse_key(line):
+    # parse key: <type> <data> <comment>
+    tmp = line.strip().split(" ")
+    key = f"{tmp[0]} {tmp[1]}"
+    comment = ""
+    if len(tmp) > 2:
+        comment = " ".join(tmp[2:])
+
+    return key, comment
+
+def parse_authorized_keys():
+    keys = {}
+    with open(AUTHORIZED_KEYS, "r") as f:
+        for line in f.readlines():
+            # parse key: <type> <dat> <comment>, comment is optional
+            key, comment = parse_key(line)
+            keys[key] = comment
+    return keys
+
+def read_log(filter=None):
+    read_all = False
+    try:
+        # search for the last 20 minutes, if no result the firewall has been rebooted so read all the logs
+        subprocess.run("grep -q \"$(date -d '-20 minute' +'%b %e %H:%M')\" /var/log/messages", shell=True, check=True)
+    except subprocess.CalledProcessError:
+        read_all = True
+
+    if read_all:
+        cmd = "cat /var/log/messages"
+    else:
+        cmd = "sed -n \"/$(date -d '-20 minute' +'%b %e %H:%M')/,$ p\" /var/log/messages"
+
+    # try to narrow the search with a filter to avoid memory issues
+    if filter:
+        cmd += f" | grep -E '{filter}'"
+
+    # this will all the command output in memory, not efficient but the log file should not be too big
+    try:
+        proc = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+        return proc.stdout.rstrip().lstrip().split('\n')
+    except subprocess.CalledProcessError:
+        return []
+
+def find_recent_files(directory, minutes=15):
+    current_time = time.time()
+    cutoff_time = current_time - (minutes * 60)
+    recent_files = []
+    for root, _, files in os.walk(directory):
+        for file_name in files:
+            file_path = os.path.join(root, file_name)
+            # Get the file's last modification time
+            file_mtime = os.path.getmtime(file_path)
+            # If the file was modified in the last `minutes` minutes, add it to the list
+            if file_mtime > cutoff_time:
+                # mtime is already in utc
+                recent_files.append((file_path, file_mtime))
+    return recent_files
+
+# API functions
+
+def info():
+    ret = {"unit_name": "", "version": "", "subscription_type": "", "system_id": "", "ssh_port": -1, "fqdn": ""}
+    u = EUci()
+    for section in u.get_all("dropbear"):
+        if u.get("dropbear", section, "Port", default=None):
+            ret["ssh_port"] = int(u.get("dropbear", section, "Port"))
+            break
+    ret["version"] = get_version()
+    ret["unit_name"] = u.get("ns-plug", "config", "unit_name", default=get_hostname())
+    ret["description"] = u.get("ns-plug", "config", "description", default="")
+    ret["fqdn"] = get_hostname()
+    ret["system_id"] = u.get("ns-plug", "config", "system_id", default="")
+    ret["subscription_type"] = u.get("ns-plug", "config", "type", default="")
+    ret["api_version"] = subprocess.run(["apk", "list", "-I", "ns-api"], capture_output=True, text=True).stdout.strip().split()[0].removeprefix("ns-api-")
+    return ret
+
+def add_ssh_key(ssh_key):
+    try:
+        # verify if the key is valid
+        subprocess.run(["ssh-keygen", "-l", "-f", "-"], input=ssh_key.encode(), check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        return utils.generic_error("invalid_ssh_key")
+
+    # create the file if it doesn't exist with correct permissions 0600
+    if not os.path.exists(AUTHORIZED_KEYS):
+        with open(AUTHORIZED_KEYS, "w") as f:
+            pass
+    os.chown(AUTHORIZED_KEYS, 0, 0)
+    os.chmod(AUTHORIZED_KEYS, 0o600)
+
+    # check if the key is already in the file, ignore comment
+    keys = parse_authorized_keys()
+    parsed_key, _ = parse_key(ssh_key)
+    if parsed_key in keys.keys():
+        return {"result": "success"}
+
+    # add the key to the file, including comment
+    with open(AUTHORIZED_KEYS, "a") as f:
+        f.write(ssh_key + "\n")
+
+    return {"result": "success"}
+
+def remove_ssh_key(ssh_key):
+    try:
+        # verify if the key is valid
+        subprocess.run(["ssh-keygen", "-l", "-f", "-"], input=ssh_key.encode(), check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        return utils.generic_error("invalid_ssh_key")
+
+    # read the whole AUTHORIZED_KEYS file
+    # then write it back without the key
+    keys = parse_authorized_keys()
+    with open(AUTHORIZED_KEYS, "w") as f:
+        for key in keys.keys():
+            parsed_key, comment = parse_key(ssh_key)
+            if key != parsed_key:
+                f.write(f"{key} {keys[key]}\n")
+
+    return {"result": "success"}
+
+def dump_ts_malware():
+    ret = []
+    end = int(time.time())
+    start = end - 1200  # last 20 minutes
+    for serie in vm_export("banip_blocked_bytes", start, end):
+        labels = serie.get("metric", {})
+        src = labels.get("src", "")
+        dst = labels.get("dst", "")
+        category = labels.get("feed", "")
+        chain = labels.get("chain", "")
+        for ts in serie.get("timestamps", []):
+            # VM timestamps are in milliseconds
+            ret.append({"timestamp": int(ts) // 1000, "src": src, "dst": dst, "category": category, "chain": chain})
+
+    return {"data": ret}
+ 
+def dump_ts_attacks():
+    ret = []
+    end = int(time.time())
+    start = end - 1200  # last 20 minutes
+    for serie in vm_export("banip_banned", start, end):
+        ip = serie.get("metric", {}).get("ip", "")
+        if not ip:
+            continue
+        for ts in serie.get("timestamps", []):
+            # VM timestamps are in milliseconds
+            ret.append({"timestamp": int(ts) // 1000, "ip": ip})
+    return {"data": ret}
+
+def dump_mwan_events():
+    # Parse /var/log/messages for mwan3 events, only last hour
+    # Line example:
+    # Aug 20 12:14:46 NethSec mwan3track[11191]: Interface wan2 (eth2) is offline
+    ret = []
+
+    event_pattern = re.compile(r"mwan3track.*Interface (\w+) \((.*)\) is (online|offline)")
+    for line in read_log("mwan3track.*is online|is offline"):
+        if line:
+            event = event_pattern.search(line)
+            time = datetime.strptime(f"{datetime.now().year} {line[:15]}", '%Y %b %d %H:%M:%S').timestamp()
+            time = datetime.utcfromtimestamp(time).timestamp()
+            if event:
+                ret.append({"timestamp": int(time), "wan": event.group(1), "interface": event.group(2), "event": event.group(3)})
+
+    return {"data": ret}
+
+def dump_dpi_stats():
+    # Parse /var/run/dpireport for the last 20 minutes
+    # filename example /var/run/dpireport/2024/08/20/172.25.5.17/15.json
+    ret = []
+    for file, timestamp in find_recent_files("/var/run/dpireport", 20):
+        # Skip non-JSON files (e.g., SQLite WAL files like stats.db-wal)
+        if not file.endswith('.json'):
+            continue
+        # parse the filename to get the date client
+        file_split = file.removeprefix('/var/run/dpireport/').split('/')
+        year = int(file_split[0])
+        month = int(file_split[1])
+        day = int(file_split[2])
+        client_address = file_split[3]
+        hour = int(file_split[4].replace('.json', ''))
+
+        with open(file, "r") as f:
+            data = json.load(f)
+        for key in ("protocol", "host", "application"):
+            for el in data.get(key, {}):
+                ret.append({
+                    "timestamp": int(datetime(year, month, day, hour, 0, 0).timestamp()),
+                    "client_address": client_address, "client_name": reverse_dns(client_address), key: el,
+                    "bytes": data[key][el]
+                })
+    return {"data": ret}
+
+def dump_openvpn_connections():
+    # Parse openvpn connections.db for the last 20 minutes.
+    # If storage is configured and mounted, read from there, otherwise use /var/openvpn.
+    ret = []    
+    u = EUci()
+    base_path = u.get('fstab', 'ns_data', 'target', default='')
+    if not os.path.isdir(base_path):
+        base_path = '/var'
+    pattern = os.path.join(base_path, 'openvpn', '*', 'connections.db')
+    for db_file in glob.glob(pattern):
+        instance = db_file.split('/')[-2]
+        conn = sqlite3.connect(db_file)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM connections WHERE start_time >= strftime('%s', 'now') - 1200;")
+            rows = cursor.fetchall()
+            for row in rows:
+                common_name, virtual_ip_addr, remote_ip_addr, start_time, duration, bytes_received, bytes_sent = row
+                time = datetime.utcfromtimestamp(start_time).timestamp()
+                ret.append({
+                    "timestamp": int(time),
+                    "instance": instance,
+                    "common_name": common_name,
+                    "virtual_ip_addr": virtual_ip_addr,
+                    "remote_ip_addr": remote_ip_addr,
+                    "start_time": start_time,
+                    "duration": duration,
+                    "bytes_received": bytes_received,
+                    "bytes_sent": bytes_sent
+                })
+        except:
+            continue
+
+    return {"data": ret}
+
+
+def dump_openvpnrw_config():
+    ret = []
+    u = EUci()
+    for section in u.get_all('openvpn'):
+        vpn = u.get_all("openvpn", section)
+        # skip custom config
+        if not section.startswith("ns_"):
+            continue
+        # add road warrior servers
+        record = {"instance": section, "device": u.get('openvpn', section, 'dev', default='tun1')}
+        if 'ns_auth_mode' in vpn:
+            record['type'] = "rw"
+            record['name'] = vpn.get("ns_description", "")
+        # add tunnel client and servers
+        else:
+            record['name'] = vpn.get("ns_name", "")
+            if vpn.get("client", "0") == "1" or vpn.get("ns_client", "0") == "1":
+                record['type'] = "client"
+            else:
+                record['type'] = "server"
+        ret.append(record)
+    return {"data": ret}
+
+def dump_wan_config():
+    ret = []
+    u = EUci()
+    try:
+        proc = subprocess.run(["/usr/libexec/rpcd/ns.firewall", "call", "list_zones_no_aliases"], capture_output=True, text=True)
+        data = json.loads(proc.stdout)
+        for interface in data.get("ns_wan", {}).get("network", []):
+            ret.append({"interface": interface, "device": u.get("network", interface, "device", default=""), "status": mwan.__fetch_interface_status(interface)})
+    except:
+        pass
+    return {"data": ret}
+
+def dump_nsplug_config():
+    ret = {"name": ""}
+    u = EUci()
+    ret["name"] = u.get("ns-plug", "config", "unit_name", default=get_hostname())
+    return ret
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        "info": {},
+        "add-ssh-key": {"ssh_key": "ssh-rsa AAAAB3xxxxxb6O6m5"},
+        "remove-ssh-key": {"ssh_key": "ssh-rsa AAAAB3xxxxxb6O6m5"},
+        "dump-ts-malware": {},
+        "dump-ts-attacks": {},
+        'dump-mwan-events': {},
+        'dump-dpi-stats': {},
+        'dump-ovpn-connections': {},
+        'dump-ovpn-config': {},
+        'dump-wan-config': {},
+        'dump-nsplug-config': {}
+         }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    if action == "info":
+        ret = info()
+    elif action == "add-ssh-key":
+        args = json.loads(sys.stdin.read())
+        ret = add_ssh_key(args["ssh_key"])
+    elif action == "remove-ssh-key":
+        args = json.loads(sys.stdin.read())
+        ret = remove_ssh_key(args["ssh_key"])
+    elif action == "dump-ts-malware":
+        ret = dump_ts_malware()
+    elif action == "dump-ts-attacks":
+        ret = dump_ts_attacks()
+    elif action == "dump-mwan-events":
+        ret = dump_mwan_events()
+    elif action == "dump-dpi-stats":
+        ret = dump_dpi_stats()
+    elif action == "dump-ovpn-connections":
+        ret = dump_openvpn_connections()
+    elif action == "dump-ovpn-config":
+        ret = dump_openvpnrw_config()
+    elif action == "dump-wan-config":
+        ret = dump_wan_config()
+    elif action == "dump-nsplug-config":
+        ret = dump_nsplug_config()
+
+    print(json.dumps(ret))

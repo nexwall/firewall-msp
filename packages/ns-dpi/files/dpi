@@ -1,0 +1,13 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2025 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Generate netify flow actions config file
+/usr/sbin/dpi-config
+# Apply nftables rules
+/usr/sbin/dpi-nft
+# reload netifyd daemon
+/etc/init.d/netifyd reload

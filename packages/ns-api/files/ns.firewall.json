@@ -1,0 +1,13 @@
+{
+  "firewall-manager": {
+    "description": "Firewall manager",
+    "write": {},
+    "read": {
+      "ubus": {
+        "ns.firewall": [
+          "*"
+        ]
+      }
+    }
+  }
+}

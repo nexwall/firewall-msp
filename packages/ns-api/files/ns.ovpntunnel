@@ -1,0 +1,823 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Manage OpenVPN tunnels
+
+import os
+import sys
+import pwd
+import grp
+import json
+import os.path
+import shutil
+import ipaddress
+import subprocess
+from euci import EUci
+from nethsec import utils, firewall, ovpn
+from datetime import datetime
+import time
+
+# Utils
+
+def read_file(file_name):
+    try:
+        with open(file_name, 'r') as file:
+            content = file.read()
+        return content.strip()
+    except:
+        return ''
+
+def save_cert(path, data):
+    # setup rw permissions only for nobody user
+    os.umask(0o077)
+    with open(path, 'w') as f:
+        f.write(data)
+
+    uid = pwd.getpwnam("nobody").pw_uid
+    gid = grp.getgrnam("nogroup").gr_gid
+    os.chown(path, uid, gid)
+
+def generate_key():
+    try:
+        result = subprocess.run(['/usr/sbin/openvpn', '--genkey', 'secret', '/dev/stdout'], stdout=subprocess.PIPE, check=True, text=True)
+        return result.stdout.strip()
+    except:
+        return ''
+        return None
+
+def setup_firewall(u, name, device, link):
+    ovpn_interface = firewall.add_vpn_interface(u, name, device, link=link)
+    if not firewall.zone_exists(u, 'openvpn'):
+        firewall.add_trusted_zone(u, "openvpn", [ovpn_interface])
+    else:
+        firewall.add_device_to_zone(u, device, 'openvpn')
+
+def remove_files(file_list):
+    for file_path in file_list:
+        try:
+            os.remove(file_path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+
+def get_certificates_from_pem(pem_path, role_label=None):
+    """Extract certificate CN and expiration date from PEM file containing one or more certificates"""
+    try:
+        with open(pem_path, 'r') as f:
+            pem_content = f.read()
+
+        certificates = {}
+
+        # Split by certificate boundaries
+        cert_blocks = pem_content.split('-----BEGIN CERTIFICATE-----')
+
+        for block in cert_blocks[1:]:  # Skip the first empty split
+            if '-----END CERTIFICATE-----' not in block:
+                continue
+
+            # Extract the certificate portion
+            cert_data = '-----BEGIN CERTIFICATE-----' + block.split('-----END CERTIFICATE-----')[0] + '-----END CERTIFICATE-----'
+
+            # Get both CN and enddate in single openssl call
+            try:
+                result = subprocess.run(
+                    ["openssl", "x509", "-noout", "-subject", "-nameopt", "RFC2253", "-enddate"],
+                    input=cert_data,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+
+                lines = result.stdout.strip().split('\n')
+                cn = "Unknown"
+                expiry_ts = None
+                for line in lines:
+                    if line.startswith("subject="):
+                        subject_line = line
+                        if "CN=" in subject_line:
+                            cn = subject_line.split("CN=")[1].split(",")[0]
+                    elif line.startswith("notAfter="):
+                        # Parse output like: notAfter=Feb  2 14:12:21 2036 GMT
+                        date_str = line.split("=")[1].strip()
+                        try:
+                            expiry_ts = int(time.mktime(datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z").timetuple()))
+                        except:
+                            pass
+
+                # server peer: use role_label for server
+                if role_label:
+                    label = role_label
+                else:
+                    # client peer: use 'client' if CN=client, 'CA' otherwise to client
+                    if cn == 'client':
+                        label = 'client'
+                    else:
+                        label = 'CA'
+                
+                certificates[label] = expiry_ts
+            except:
+                pass
+
+        return certificates
+    except Exception as e:
+        return {}
+
+# APIs
+
+def import_client(tunnel):
+    u = EUci()
+    name = utils.sanitize(tunnel.pop('name'))
+    iname = utils.get_id(name)
+    tun = f'tun{name}'
+    # max network interface len is 15 chars
+    tun = tun[0:14]
+    cert_dir=f"/etc/openvpn/{iname}/pki/"
+    os.makedirs(cert_dir, exist_ok=True)
+
+    u.set("openvpn", iname, "openvpn")
+    u.set("openvpn", iname, "ns_name", name)
+    u.set("openvpn", iname, "enabled", 1)
+    u.set("openvpn", iname, "nobind", "1")
+    u.set("openvpn", iname, "dev", tun)
+    u.set("openvpn", iname, "dev_type", "tun")
+    u.set("openvpn", iname, "ns_client", "1")
+    
+    if tunnel['Topology'] == 'p2p':
+        psk = f"{cert_dir}psk.key"
+        save_cert(psk, tunnel['Psk'])
+        u.set("openvpn", iname, "ifconfig", f"{tunnel['LocalPeer']} {tunnel['RemotePeer']}")
+        u.set("openvpn", iname, "secret", psk)
+        # OpenVPN >= 2.7 refuses static-key-only configs without this flag
+        u.set("openvpn", iname, "allow_deprecated_insecure_static_crypto", "1")
+    else:
+        cert = f"{cert_dir}cert.pem"
+        save_cert(cert, tunnel['Crt'])
+        u.set("openvpn", iname, "client", "1")
+        u.set("openvpn", iname, "cert", cert)
+        u.set("openvpn", iname, "key", cert)
+        u.set("openvpn", iname, "ca", cert)
+        # Enable cert verification only for NethSecurity 8 tunnels
+        ext = subprocess.run(["openssl", "x509", "-noout", "-ext", "keyUsage", "-in", cert], capture_output=True, text=True, check=True)
+        if ext and "Key Agreement" in ext.stdout:
+            u.set("openvpn", iname, "remote_cert_tls", "server")
+    
+    u.set("openvpn", iname, "proto", tunnel['Protocol'])
+    u.set("openvpn", iname, "port", tunnel['RemotePort'])
+    routes = []
+    for route in tunnel['RemoteNetworks'].split(","):
+        if "/" in route:
+            (ip, prefix) = route.split("/")
+            routes.append(f"{ip} {ovpn.to_netmask(prefix)}")
+    u.set("openvpn", iname, "route", routes)
+    remote_hosts = []
+    for host in tunnel['RemoteHost'].split(","):
+        remote_hosts.append(host)
+    u.set("openvpn", iname, "remote", remote_hosts)
+
+    if tunnel.get('Compression','disabled') != 'disabled':
+        u.set("openvpn", iname, "compress", tunnel['Compression'])
+
+    if tunnel.get('Digest',''):
+        u.set("openvpn", iname, "auth", tunnel['Digest'])
+
+    if tunnel.get('Cipher',''):
+        u.set("openvpn", iname, "cipher", tunnel['Cipher'])
+
+    if tunnel.get('TlsVersionMin', ''):
+        u.set("openvpn", iname, "tls_version_min", tunnel['TlsVersionMin'])
+
+    # Add management socket
+    u.set("openvpn", iname, 'management', f'/var/run/openvpn_{iname}.socket unix')
+    
+    # set tun_mtu and mss_fix to default values if not provided by client config
+    u.set("openvpn", iname, 'tun_mtu', tunnel.get('TunMtu', '') or '1500')
+    u.set("openvpn", iname, 'mssfix', tunnel.get('Mssfix', '') or '1450')
+
+    u.save('openvpn')
+    
+    setup_firewall(u, name, tun, f"openvpn/{iname}")
+
+    return {"id": iname}
+
+def edit_server(args):
+    u = EUci()
+    try:
+         tunnel = u.get_all("openvpn", args['id'])
+    except:
+        return utils.generic_error("tunnel_not_found")
+    for opt in tunnel:
+        u.delete("openvpn", args['id'], opt)
+    setup_server(u, args['id'], args)
+    return {"id": args['id']}
+
+def add_server(args):
+    u = EUci()
+    if u.get("network", args["ns_name"], default=None) is not None:
+        return utils.validation_error("ns_name", "network_conflict")
+    iname = utils.get_id(args['ns_name'])
+    setup_server(u, iname, args)
+    return {"id": iname}
+
+def setup_server(u, iname, tunnel):
+    name = tunnel.pop('ns_name')
+    cert_dir=f"/etc/openvpn/{iname}/pki/"
+    os.makedirs(cert_dir, exist_ok=True)
+    tun = f'tun{name}'
+
+    u.set("openvpn", iname, "openvpn")
+    u.set("openvpn", iname, "dev", tun)
+    u.set("openvpn", iname, "dev_type", "tun")
+    u.set('openvpn', iname, 'enabled', tunnel.get('enabled', '1'))
+    u.set("openvpn", iname, "persist_tun", "1")
+    u.set("openvpn", iname, "float", "1")
+    u.set("openvpn", iname, "multihome", "1")
+    u.set("openvpn", iname, "passtos", "1")
+    u.set("openvpn", iname, "ping_timer_rem", "1")
+    u.set("openvpn", iname, "persist_key", "1")
+    u.set("openvpn", iname, "keepalive", "10 60")
+    u.set("openvpn", iname, "lport", tunnel['port'])
+    u.set('openvpn', iname, 'tun_mtu', tunnel.get('tun_mtu', '1500'))
+    u.set('openvpn', iname, 'mssfix', tunnel.get('mssfix', '1450'))
+    if tunnel['proto'] == "tcp":
+        u.set("openvpn", iname, "proto", "tcp-server")
+    else:
+        u.set("openvpn", iname, "proto", "udp")
+    u.set("openvpn", iname, "topology", tunnel['topology'])
+
+    if tunnel['topology'] == "subnet":
+        # generate only on create
+        if not os.path.exists(f"{cert_dir}issued/server.crt"):
+            try:
+                subprocess.run(["/usr/sbin/ns-openvpnrw-init-pki", iname], check=True)
+                subprocess.run(["/usr/sbin/ns-openvpntunnel-add-client", iname], check=True)
+            except:
+                utils.generic_error("pki_not_initialized")
+        u.set("openvpn", iname, "dh", f"{cert_dir}dh.pem")
+        u.set("openvpn", iname, "ca", f"{cert_dir}ca.crt")
+        u.set("openvpn", iname, "cert", f"{cert_dir}issued/server.crt")
+        u.set("openvpn", iname, "key", f"{cert_dir}private/server.key")
+        (ip, prefix) = tunnel['server'].split("/")
+        u.set("openvpn", iname, "server", f"{ip} {ovpn.to_netmask(prefix)}")
+    else:
+        with open(f"{cert_dir}client.psk", "w") as fp:
+            fp.write(tunnel['secret'])
+        if tunnel.get('ifconfig_local', None) and  tunnel.get('ifconfig_remote', None):
+            u.set('openvpn', iname, 'ifconfig', f"{tunnel.get('ifconfig_local')} {tunnel.get('ifconfig_remote')}")
+        u.set("openvpn", iname, "secret", f"{cert_dir}client.psk")
+        # OpenVPN >= 2.7 refuses static-key-only configs without this flag
+        u.set("openvpn", iname, "allow_deprecated_insecure_static_crypto", "1")
+
+        # disable default BF-CBC cipher not supported by OpenSSL
+        if tunnel.get('cipher', None):
+            u.set('openvpn', iname, 'cipher', 'AES-128-CBC')
+
+    push = [f"topology {tunnel['topology']}"]
+    for r in tunnel['local']:
+        (ip, prefix) = r.split("/")
+        push.append(f"route {ip} {ovpn.to_netmask(prefix)}")
+    u.set("openvpn", iname, "push", push)
+
+    routes = []
+    for r in tunnel['remote']:
+        (ip, prefix) = r.split("/")
+        routes.append(f"{ip} {ovpn.to_netmask(prefix)}")
+    u.set("openvpn", iname, "route", routes)
+
+    for opt in ['cipher', 'compress', 'auth', 'tls_version_min']:
+        if tunnel.get(opt, None):
+            u.set('openvpn', iname, opt, tunnel.get(opt))
+
+    # custom properties not honored by openvpn config
+    u.set("openvpn", iname, "ns_public_ip", tunnel['ns_public_ip'])
+    u.set("openvpn", iname, "ns_name", name)
+
+    # Setup dynamic config for iroute:
+    # OpenVPN on NethSec requires an iroute directive for the remote network
+    if tunnel['topology'] == "subnet":
+        u.set("openvpn", iname, 'client_connect', f'"/usr/libexec/ns-openvpn/openvpn-connect {iname}"')
+        u.set("openvpn", iname, 'client_disconnect', f'"/usr/libexec/ns-openvpn/openvpn-disconnect {iname}"')
+
+    # Add management socket
+    u.set("openvpn", iname, 'management', f'/var/run/openvpn_{iname}.socket unix')
+ 
+    u.save('openvpn')
+
+    # Open OpenVPN port
+    proto = tunnel['proto'].removesuffix('-server')
+    olink = f"openvpn/{iname}"
+    firewall.add_service(u, f'ovpn{name}', tunnel['port'], proto, link=olink)
+
+    setup_firewall(u, name, tun, olink)
+
+    return {"id": iname}
+
+def export_client(name):
+    u = EUci()
+    cert_dir=f"/etc/openvpn/{name}/pki/"
+    proto = "udp"
+    if u.get("openvpn", name, "proto", default="") == "tcp-server":
+        proto = "tcp-client"
+    client = {
+        "name": f"c{name.removeprefix('ns_')}"[0:10],
+        "type": "tunnel",
+        "Mode": "routed",
+        "status": "enabled",
+        "Compression": u.get("openvpn", name, "compress", default=""),
+        "RemotePort": u.get("openvpn", name, "lport", default=""),
+        "RemoteHost": ",".join(u.get("openvpn", name, "ns_public_ip", list=True, dtype=str, default=[])),
+        "Digest": u.get("openvpn", name, "auth", default=""),
+        "Cipher": u.get("openvpn", name, "cipher", default=""),
+        "Topology": u.get("openvpn", name, "topology", default=""),
+        "Protocol": proto,
+        "TunMtu": u.get("openvpn", name, "tun_mtu", default="1500"),
+        "Mssfix": u.get("openvpn", name, "mssfix", default="1450"),
+    }
+    remotes = []
+    for r in u.get("openvpn", name, "push", default=[], list=True):
+        if r.startswith("route"):
+            remotes.append(ovpn.opt2cidr(r.removeprefix("route ")))
+
+    client["RemoteNetworks"] = ",".join(remotes)
+    if u.get("openvpn", name, "topology", default="") == "p2p":
+        client['AuthMode'] = 'psk'
+        with open(f"{cert_dir}client.psk", 'r') as fp:
+            client['Psk'] = fp.read()
+        (left, right) = u.get("openvpn", name, "ifconfig").split(" ")
+        client['LocalPeer'] = right # remote peer
+        client['RemotePeer'] = left #local peer
+    else:
+        client['AuthMode'] = 'certificate'
+        pem = ""
+        # certificate order matters!
+        for c in [f"{cert_dir}private/client.key",  f"{cert_dir}issued/client.crt", f"{cert_dir}ca.crt"]:
+            if not os.path.exists(c):
+                continue
+            with open(c, 'r') as fp:
+                pem = pem + fp.read()
+        client['Crt'] = pem
+
+    return client
+
+def list_tunnels():
+    u = EUci()
+    clients = []
+    servers = []
+    for section in u.get_all('openvpn'):
+        vpn = u.get_all("openvpn", section)
+        # skip custom config
+        if not section.startswith("ns_"):
+            continue
+        # skip road warrior servers
+        if 'ns_auth_mode' in vpn:
+            continue
+        topology = vpn.get("topology", "subnet")
+
+        record = {
+            "id": section,
+            "ns_name": vpn.get("ns_name", ""),
+            "topology": topology,
+            "enabled": vpn.get("enabled", "0") == "1",
+            "connected": False
+        }
+
+        if vpn.get("client", "0") == "1" or vpn.get("ns_client", "0") == "1":
+            connected = ovpn.list_connected_clients(section, 'p2p')
+            if 'stats' in connected and connected['stats'].get('bytes_received') > 0 and connected['stats'].get('bytes_sent') > 0 :
+                record["connected"] = True
+                record = record | connected['stats']
+            remote = []
+            if vpn.get("ifconfig", "") != "":
+                record["topology"] = "p2p"
+            try:
+                for r in u.get_all("openvpn", section, "route"):
+                    remote.append(ovpn.opt2cidr(r))
+            except:
+                pass
+            client = record | {
+                "port": vpn.get("port", ""),
+                "remote_host": vpn.get("remote", ""),
+                "remote_network": remote
+            }
+            client["tun_mtu"] = vpn.get("tun_mtu", '1500')
+            client["mssfix"] = vpn.get("mssfix", '1450')
+            if vpn.get('cert'):
+                client["certificates"] = get_certificates_from_pem(vpn.get('cert'))
+            clients.append(client)
+        else:
+            connected = ovpn.list_connected_clients(section, topology)
+            if len(connected) > 0:
+                record["connected"] = True
+                record = record | list(connected.values())[0]
+
+            local = []
+            remote = []
+            if vpn.get('route'):
+                for r in vpn.get('route'):
+                    remote.append(ovpn.opt2cidr(r.removeprefix("route ")))
+
+            if vpn.get('push'):
+                for r in vpn.get('push'):
+                    if r.startswith("route"):
+                        local.append(ovpn.opt2cidr(r.removeprefix("route ")))
+
+            if topology == "subnet":
+                net = ovpn.opt2cidr(vpn.get("server"," "))
+            else:
+                net = vpn.get("ifconfig", "").replace(" ", " - ")
+
+            server = record | {
+                "port": vpn.get("lport", ""),
+                "local_network": local,
+                "remote_network": remote,
+                "vpn_network": net,
+            }
+            server["tun_mtu"] = vpn.get("tun_mtu", '1500')
+            server["mssfix"] = vpn.get("mssfix", '1450')
+
+            certificates = {}
+            if vpn.get('cert'):
+                certificates.update(get_certificates_from_pem(vpn.get('cert'), 'server'))
+                client_crt = vpn.get('cert').replace('/issued/server.crt', '/issued/client.crt')
+                certificates.update(get_certificates_from_pem(client_crt, 'client'))
+            if vpn.get('ca'):
+                certificates.update(get_certificates_from_pem(vpn.get('ca'), 'CA'))
+            server["certificates"] = certificates
+
+            servers.append(server)
+
+    return {"servers": servers, "clients": clients}
+
+def delete_tunnel(name):
+    u = EUci()
+    try:
+        u.get("openvpn", name)
+    except:
+        return utils.validation_error("tunnel_not_found")
+    try:
+        dev = u.get("openvpn", name, 'dev')
+        u.delete('openvpn', name)
+        u.save('openvpn')
+        firewall.delete_linked_sections(u, f'openvpn/{name}')
+        firewall.remove_device_from_zone(u, dev, 'openvpn')
+        base_dir = f"/etc/openvpn/{name}/"
+        # cleanup certs and secretes
+        if os.path.exists(base_dir):
+            shutil.rmtree(base_dir, ignore_errors=True)
+        return {"result": "success"}
+    except:
+        return utils.generic_error("tunnel_not_deleted")
+
+def disable_tunnel(name):
+    u = EUci()
+    try:
+        u.get("openvpn", name)
+    except:
+        return utils.validation_error("tunnel_not_found")
+    try:
+        u.set('openvpn', name, 'enabled', '0')
+        u.save('openvpn')
+        # disable rule
+        if u.get("openvpn", name, "server", default=None) or u.get("openvpn", name, "ifconfig", default=None):
+            for r in utils.get_all_by_type(u, 'firewall', 'rule'):
+                if u.get('firewall', r, 'ns_link', default='') == f'openvpn/{name}':
+                    u.set('firewall', r, 'enabled', '0')
+                    u.save('firewall')
+        return {"result": "success"}
+    except:
+        return utils.generic_error("tunnel_not_disabled")
+
+def enable_tunnel(name):
+    u = EUci()
+    try:
+        u.get("openvpn", name)
+    except:
+        return utils.validation_error("tunnel_not_found")
+    try:
+        u.set('openvpn', name, 'enabled', '1')
+        u.save('openvpn')
+        # enable rule
+        if u.get("openvpn", name, "server", default=None) or u.get("openvpn", name, "ifconfig", default=None):
+            for r in utils.get_all_by_type(u, 'firewall', 'rule'):
+                if u.get('firewall', r, 'ns_link', default='') == f'openvpn/{name}':
+                    u.set('firewall', r, 'enabled', '1')
+                    u.save('firewall')
+        return {"result": "success"}
+    except:
+        return utils.generic_error("tunnel_not_enabled")
+
+def get_defaults():
+    u = EUci()
+    count = 0
+    for o in u.get_all('openvpn'):
+        count = count + 1
+
+    limit_min = 1200
+    limit_max = limit_min + count + 1
+    net = ovpn.generate_random_network(u)
+
+    defaults = {
+        "secret": generate_key(),
+        "port": ovpn.generate_random_port(u, limit_min, limit_max),
+        "server": net,
+        "ifconfig_local": str(ipaddress.ip_interface(net).network.network_address + 1),
+        "ifconfig_remote": str(ipaddress.ip_interface(net).network.network_address + 2),
+        'route': ovpn.get_local_networks(u),
+        'remote': ovpn.get_public_addresses(u),
+        'tun_mtu': '1500',
+        'mssfix': '1450'
+    }
+
+    return defaults
+
+def get_tunnel_client(id):
+    u = EUci()
+    try:
+        tunnel = u.get_all("openvpn", id)
+    except:
+        return utils.generic_error("tunnel_not_found")
+
+    tunnel['id'] = id
+    for opt in ['dev', 'float', 'nobind', 'passtos', 'verb', 'keepalive', 'ns_client']:
+        tunnel.pop(opt, None)
+ 
+    if tunnel.get('proto', '') == 'tcp-client':
+        tunnel['proto'] = 'tcp'
+
+    if tunnel.get('auth_user_pass'):
+        auth_f = tunnel.pop('auth_user_pass')
+        with open(auth_f, 'r') as fp:
+            tunnel['username'] = fp.readline().strip()
+            tunnel['password'] = fp.readline().strip()
+
+    if tunnel.get('secret'):
+        secret_f = tunnel.pop('secret')
+        tunnel['secret'] = read_file(secret_f)
+
+    if tunnel.get('cert'):
+        cert_f = tunnel.pop('cert')
+        tunnel['certificate'] = read_file(cert_f)
+
+    if tunnel.get('route'):
+        routes = []
+        for r in tunnel.get('route'):
+            routes.append(ovpn.opt2cidr(r.removeprefix("route ")))
+        tunnel['route'] = routes
+
+    if tunnel.get('ifconfig'):
+        tunnel['ifconfig_local'], tunnel['ifconfig_remote'] = tunnel.pop('ifconfig').split(" ")
+
+    if not tunnel.get('tun_mtu'):
+        tunnel['tun_mtu'] = '1500'
+    if not tunnel.get('mssfix'):
+        tunnel['mssfix'] = '1450'
+
+    return tunnel
+
+def get_tunnel_server(id):
+    u = EUci()
+    try:
+        tunnel = u.get_all("openvpn", id)
+    except:
+        return utils.generic_error("tunnel_not_found")
+
+    tunnel['id'] = id
+    for opt in ['dev', 'float', 'nobind', 'passtos', 'verb', 'keepalive', 'dh', 'ca', 'cert', 'key', 'client_connect', 'client_disconnect', 'persist_tun', 'multihome', 'ping_timer_rem', 'persist_key', 'dev_type']:
+        tunnel.pop(opt, None)
+
+    if tunnel.get('proto', '') == 'tcp-server':
+        tunnel['proto'] = 'tcp'
+
+    port = tunnel.pop('lport')
+    tunnel['port'] = port
+
+    if tunnel.get('server'):
+        tunnel['server'] = ovpn.opt2cidr(tunnel.get('server'))
+
+    if tunnel.get('secret'):
+        secret_f = tunnel.pop('secret')
+        tunnel['secret'] = read_file(secret_f)
+
+    if tunnel.get('route'):
+        routes = []
+        for r in tunnel.pop('route'):
+            routes.append(ovpn.opt2cidr(r.removeprefix("route ")))
+        tunnel['remote'] = routes
+
+    if tunnel.get('push'):
+        local = []
+        for r in tunnel.pop('push'):
+            if r.startswith("route"):
+                 local.append(ovpn.opt2cidr(r.removeprefix("route ")))
+        tunnel['local'] = local
+
+    if tunnel.get('ifconfig'):
+        tunnel['ifconfig_local'], tunnel['ifconfig_remote'] = tunnel.pop('ifconfig').split(" ")
+
+    if not tunnel.get('tun_mtu'):
+        tunnel['tun_mtu'] = '1500'
+    if not tunnel.get('mssfix'):
+        tunnel['mssfix'] = '1450'
+
+    return tunnel
+
+def setup_client(u, iname, args):
+    base_dir = f"/etc/openvpn/{iname}/"
+    os.makedirs(base_dir, exist_ok=True)
+    u.set('openvpn', iname, 'openvpn')
+    u.set('openvpn', iname, 'ns_name', args["ns_name"])
+    u.set('openvpn', iname, 'ns_client', '1')
+    u.set('openvpn', iname, 'float', '1')
+    u.set('openvpn', iname, 'nobind', '1')
+    u.set('openvpn', iname, 'passtos', '1')
+    u.set('openvpn', iname, 'verb', '3')
+    u.set('openvpn', iname, 'keepalive', '10 60')
+    u.set('openvpn', iname, 'tun_mtu', args.get('tun_mtu', '1500'))
+    u.set('openvpn', iname, 'mssfix', args.get('mssfix', '1450'))
+
+    for opt in ['cipher', 'compress', 'auth', 'port']:
+        if args.get(opt, None):
+            u.set('openvpn', iname, opt, args.get(opt))
+    u.set('openvpn', iname, 'remote', args.get('remote', []))
+    proto = args.get('proto', 'udp')
+    if proto == 'tcp':
+        u.set('openvpn', iname, 'proto', 'tcp-client')
+    else:
+        u.set('openvpn', iname, 'proto', proto)
+    dev_type = args.get('dev_type', 'tun')
+    u.set('openvpn', iname, 'dev_type', dev_type)
+    dev_name = iname.removeprefix('ns_')
+    if dev_type == "tun":
+        dev_name = f"tun{iname.removeprefix('ns_')}"
+        u.set('openvpn', iname, 'dev', dev_name)
+    else:
+        dev_name = f"tap{iname.removeprefix('ns_')}"
+        u.set('openvpn', iname, 'dev', dev_name)
+
+    u.set('openvpn', iname, 'enabled', args.get('enabled', '0'))
+
+    if args.get('certificate', None):
+        cert_dir = f"{base_dir}pki/"
+        cert = f"{cert_dir}cert.pem"
+        os.makedirs(cert_dir, exist_ok=True)
+        with open(cert, 'w') as fp:
+            fp.write(args.get('certificate'))
+        for opt in ["cert", "key", "ca"]:
+            u.set('openvpn', iname, opt, cert)
+
+    if args.get('username', None) and args.get('password', None):
+        auth_f =  f"{base_dir}auth"
+        with open(auth_f, 'w') as fp:
+            fp.write(f'{args.get("username")}\n')
+            fp.write(f'{args.get("password")}\n')
+        u.set('openvpn', iname, 'auth_user_pass', auth_f)
+
+    if args.get('ifconfig_local', None) and  args.get('ifconfig_remote', None):
+        u.set('openvpn', iname, 'ifconfig', f"{args.get('ifconfig_local')} {args.get('ifconfig_remote')}")
+        # disable default BF-CBC cipher not supported by OpenSSL
+        if args.get('cipher', None) is None:
+            u.set('openvpn', iname, 'cipher', 'AES-128-CBC')
+    else:
+        # subnet topology
+        u.set('openvpn', iname, 'client', '1')
+
+    if args.get('secret', None):
+        secret_f =  f"{base_dir}secret"
+        with open(secret_f, 'w') as fp:
+            fp.write(args.get('secret'))
+        u.set('openvpn', iname, 'secret', secret_f)
+        # OpenVPN >= 2.7 refuses static-key-only configs without this flag
+        u.set('openvpn', iname, 'allow_deprecated_insecure_static_crypto', '1')
+
+    if args.get('route', []):
+        routes = []
+        for r in args.get('route'):
+            (ip, prefix) = r.split("/")
+            routes.append(f"{ip} {ovpn.to_netmask(prefix)}")
+        u.set('openvpn', iname, 'route', routes) 
+
+    # Add management socket
+    u.set("openvpn", iname, 'management', f'/var/run/openvpn_{iname}.socket unix')
+
+    u.save('openvpn')
+
+    olink = f"openvpn/{iname}"
+    setup_firewall(u, args['ns_name'], dev_name, olink)
+
+def edit_client(args):
+    u = EUci()
+    try:
+         tunnel = u.get_all("openvpn", args['id'])
+    except:
+        return utils.generic_error("tunnel_not_found")
+    for opt in tunnel:
+        u.delete("openvpn", args['id'], opt)
+    setup_client(u, args['id'], args)
+    return {"id": args['id']}
+
+def add_client(args):
+    u = EUci()
+    if u.get("network", args["ns_name"], default=None) is not None:
+        return utils.validation_error("ns_name", "network_conflict")
+    iname = utils.get_id(args["ns_name"])
+    setup_client(u, iname, args)
+    return {"id": iname}
+
+def regenerate_tunnel_certs(name):
+    u = EUci()
+    try:
+        vpn = u.get_all("openvpn", name)
+    except:
+        return utils.generic_error("tunnel_not_found")
+    
+    cert_dir = f"/etc/openvpn/{name}/pki/"
+    
+    # only for subnet topology (certificate-based)
+    if vpn.get("topology", "subnet") != "subnet":
+        return utils.generic_error("certs_not_supported_p2p")
+    
+    try:
+        # remove old certificates and request files
+        files_to_remove = [
+            f"{cert_dir}issued/server.crt",
+            f"{cert_dir}private/server.key",
+            f"{cert_dir}reqs/server.req",
+            f"{cert_dir}issued/client.crt",
+            f"{cert_dir}private/client.key",
+            f"{cert_dir}reqs/client.req"
+        ]
+        remove_files(files_to_remove)
+        
+        # regenerate certificates
+        subprocess.run(["/usr/sbin/ns-openvpntunnel-regenerate-certs", name], check=True)
+        
+        # restart openvpn service for this tunnel to load new certificates
+        subprocess.run(["/etc/init.d/openvpn", "restart", name], check=False)
+        
+        return {"result": "success"}
+    except:
+        utils.generic_error("certs_regeneration_failed")
+
+cmd = sys.argv[1]
+if cmd == 'list':
+    print(json.dumps({
+        "import-client": {},
+        "add-server": {"ns_name": "server1", "port": "2001", "server": "192.168.4.0/24", "topology": "subnet", "proto": "tcp", "local": ["192.168.100.0/24"], "remote": ["192.168.5.0/24"], "compress": "", "auth": "", "cipher": "", "secret": "", "ifconfig_local": "", "ifconfig_remote": "", "ns_public_ip": ["1.2.3.4"], "tls_version_min": "1.2","tun_mtu": "1500", "mssfix": "1450"},
+        "edit-server": {"id": "ns_server1", "ns_name": "server1", "port": "2001", "server": "192.168.4.0/24", "topology": "subnet", "proto": "tcp", "local": ["192.168.100.0/24"], "remote": ["192.168.5.0/24"], "compress": "", "auth": "", "cipher": "", "secret": "", "ifconfig_local": "", "ifconfig_remote": "", "ns_public_ip": ["1.2.3.4"], "tls_version_min": "1.2", "tun_mtu": "1500", "mssfix": "1450"},
+        "add-client": {"ns_name": "client1", "port": "2001", "proto": "tcp", "certificate": "XXX", "dev_type": "tun", "remote": ["192.168.5.0/24"], "compress": "", "auth": "", "cipher": "", "secret": "", "route": [], "username": "", "password": "", "ifconfig_local": "", "ifconfig_remote": "", "tun_mtu": "1500", "mssfix": "1450"},
+        "edit-client": {"id": "ns_client1", "ns_name": "client2", "port": "2001", "proto": "tcp", "certificate": "XXX", "dev_type": "tun", "remote": ["192.168.5.0/24"], "compres": "", "auth": "", "cipher": "", "secret": "", "route": [], "username": "", "password": "", "ifconfig_local": "", "ifconfig_remote": "", "tun_mtu": "1500", "mssfix": "1450"},
+        "export-client": {"name": "ns_client1"},
+        "list-tunnels": {},
+        "list-cipher": {},
+        "list-digest": {},
+        "get-defaults": {},
+        "enable-tunnel": {"id": "ns_tun1"},
+        "disable-tunnel": {"id": "ns_tun1"},
+        "delete-tunnel": {"id": "ns_tun1"},
+        "get-tunnel-server": {"id": "ns_tun1"},
+        "get-tunnel-client": {"id": "ns_tun1"},
+        "regenerate-server-certs": {"id": "ns_tun1"},
+    }))
+elif cmd == 'call':
+    action =  sys.argv[2]
+
+    if action == "list-tunnels":
+        ret = list_tunnels()
+    elif action == "list-cipher":
+        ret = ovpn.list_cipher()
+    elif action == "list-digest":
+        ret = ovpn.list_digest()
+    elif action == "get-defaults":
+        ret = get_defaults()
+    else:
+        args = json.loads(sys.stdin.read())
+
+    if action == 'import-client':
+        ret = import_client(args)
+    elif action == 'add-server':
+        ret = add_server(args)
+    elif action == 'edit-server':
+        ret = edit_server(args)
+    elif action == 'add-client':
+        ret = add_client(args)
+    elif action == 'edit-client':
+        ret = edit_client(args)
+    elif action == 'export-client':
+        ret = export_client(args['id'])
+    elif action == 'disable-tunnel':
+        ret = disable_tunnel(args['id'])
+    elif action == 'enable-tunnel':
+        ret = enable_tunnel(args['id'])
+    elif action == 'delete-tunnel':
+        ret = delete_tunnel(args['id'])
+    elif action == 'get-tunnel-server':
+        ret = get_tunnel_server(args['id'])
+    elif action == 'get-tunnel-client':
+        ret = get_tunnel_client(args['id'])
+    elif action == 'regenerate-server-certs':
+        ret = regenerate_tunnel_certs(args['id'])
+    print(json.dumps(ret))
