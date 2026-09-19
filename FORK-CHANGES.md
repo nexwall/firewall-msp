@@ -3,6 +3,11 @@
 Record of modifications to files inherited from NethSecurity (upstream commit `9a60b9c`), kept to satisfy the
 "prominent notice of changes" requirement of GPL-2.0 section 2(a). Newest first.
 
+## 2026-09-19 - Configurable build parallelism (branch `msp/branding-licenses`)
+
+- `builder/entrypoint.sh`, `build-nethsec.sh`: `make -j` now uses `MAKE_JOBS` when set, otherwise one job per CPU
+  (previous behaviour). Needed to build on hosts with little RAM, where one job per CPU runs out of memory.
+
 ## 2026-09-19 - Branding (branch `msp/branding-licenses`)
 
 Modified inherited files:

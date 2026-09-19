@@ -20,9 +20,9 @@ fi
 # Otherwise, assume it's a make command and run it
 case "$BUILD_VERBOSE" in
     1|true|yes|y|on)
-        exec make -j"$(nproc)" V=sc "$@"
+        exec make -j"${MAKE_JOBS:-$(nproc)}" V=sc "$@"
         ;;
     *)
-        exec make -j"$(nproc)" "$@"
+        exec make -j"${MAKE_JOBS:-$(nproc)}" "$@"
         ;;
 esac

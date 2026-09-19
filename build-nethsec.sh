@@ -34,6 +34,8 @@ REPO_CHANNEL=${REPO_CHANNEL:-dev}
 TARGET=${TARGET:-x86_64}
 BUILD_SEMVER_SUFFIX=${BUILD_SEMVER_SUFFIX:-}
 BUILD_VERBOSE=${BUILD_VERBOSE:-}
+# Parallel make jobs inside the builder; empty means one per CPU. Lower it on small-RAM hosts.
+MAKE_JOBS=${MAKE_JOBS:-}
 
 if [ -f "./private-key.pem" ] && [ -f "./public-key.pem" ]; then
     APK_PRIV_KEY="$(cat ./private-key.pem)"
@@ -61,6 +63,7 @@ podman run \
     --env APK_PRIV_KEY="$APK_PRIV_KEY" \
     --env APK_PUB_KEY="$APK_PUB_KEY" \
     --env BUILD_VERBOSE="$BUILD_VERBOSE" \
+    --env MAKE_JOBS="$MAKE_JOBS" \
     --name nethsecurity-builder \
     --interactive \
     --tty \
