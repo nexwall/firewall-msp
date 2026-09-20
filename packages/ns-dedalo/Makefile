@@ -16,8 +16,11 @@ PKG_MAINTAINER:=Giacomo Sanchietti <giacomo.sanchietti@nethesis.it>
 PKG_LICENSE:=GPL-3.0-only
 
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/nethesis/icaro.git
-PKG_SOURCE_VERSION:=v85
+# Nexwall fork of nethesis/icaro. Branch pin/v85 has a tree identical to upstream v85.
+PKG_SOURCE_URL:=https://github.com/nexwall/captive-portal.git
+PKG_SOURCE_VERSION:=9b78ac0eae415094ec9449646aedeb5d4d10d963
+# tarball name tied to the commit, so a cached upstream tarball is never reused
+PKG_SOURCE:=ns-dedalo-$(PKG_SOURCE_VERSION).tar.zst
 
 include $(INCLUDE_DIR)/package.mk
  
@@ -25,7 +28,7 @@ define Package/ns-dedalo
 	SECTION:=base
 	CATEGORY:=NethSecurity
 	TITLE:=Dedalo Network Access Controller, runs on the firewall and intercepts all guest connections
-	URL:=https://github.com/nethesis/icaro
+	URL:=https://github.com/nexwall/captive-portal
 	DEPENDS:=+curl +grep +ca-bundle +haserl +uuidgen +coova-chilli +ethtool
 	PKGARCH:=all
 endef

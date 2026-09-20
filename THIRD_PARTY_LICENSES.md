@@ -7,10 +7,10 @@ package versions change. Components fetched from OpenWrt feeds keep the license 
 
 | Package | Version | Source | License |
 |---|---|---|---|
-| ns-ui | 2.24.1 | github.com/NethServer/nethsecurity-ui (git tag) | GPL-3.0-only |
-| ns-monitoring | 1.2.1 | github.com/nethserver/nethsecurity-monitoring (tag v1.2.1) | GPL-3.0-only |
-| ns-dedalo | 0.0.4 | github.com/nethesis/icaro (tag v85) | GPL-3.0-only |
-| ns-checkmk-utils | 1.7.7 | raw files from github.com/nethesis/checkmk-tools (tag v1.7.7) | GPL-3.0-only (declared) |
+| ns-ui | 2.24.1 | github.com/nexwall/nexwall-ui (fork of NethServer/nethsecurity-ui 2.24.1, pinned commit) | GPL-3.0-only |
+| ns-monitoring | 1.2.1 | github.com/nexwall/nexwall-monitoring (fork of nethserver/nethsecurity-monitoring v1.2.1, pinned commit) | GPL-3.0-only |
+| ns-dedalo | 0.0.4 | github.com/nexwall/captive-portal (fork of nethesis/icaro v85, pinned commit) | GPL-3.0-only |
+| ns-checkmk-utils | 1.7.7 | raw files from github.com/nexwall/checkmk-tools (fork of nethesis/checkmk-tools, pinned commit, files identical to v1.7.7) | GPL-3.0-only (declared) |
 | snort3 | 3.10.0.0 | github.com/snort3/snort3 | GPL-2.0-only |
 | telegraf | 1.39.1 | github.com/influxdata/telegraf | MIT |
 | victoria-metrics | 1.146.0 | github.com/VictoriaMetrics/VictoriaMetrics | Apache-2.0 |

@@ -20,7 +20,7 @@ define Package/ns-plug
 	SECTION:=base
 	CATEGORY:=NethSecurity
 	TITLE:=NethSecurity controller client
-	URL:=https://github.com/NethServer/nethsecurity-controller/
+	URL:=https://github.com/nexwall/nexwall-controller/
 	DEPENDS:=+openvpn +lscpu +python3-nethsec +python3-yaml +telegraf +victoria-metrics
 	PKGARCH:=all
 endef

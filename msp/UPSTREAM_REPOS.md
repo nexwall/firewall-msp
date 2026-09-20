@@ -61,3 +61,20 @@ git clone https://github.com/NethServer/nethsecurity-docs.git
 
 Forking the repositories in group A means changing each package Makefile `PKG_SOURCE_URL` to the fork and pinning a
 tag. Until then the build fetches the Nethesis originals, which is fine for the baseline image.
+
+## How the image build consumes the forks (2026-09-20)
+
+| Package | Fork | Pinned commit | Upstream content it equals |
+|---|---|---|---|
+| `ns-ui` | `nexwall/nexwall-ui` | `bb05a424d8124cb478c60973ec3b21095538c408` (branch `feature/menu-restructure`) | 2.24.1 plus Nexwall changes |
+| `ns-monitoring` | `nexwall/nexwall-monitoring` | `403140ed9be858d69f062dd14f0fef3ff3a1c06d` (`main`) | v1.2.1 (only CI workflows differ) |
+| `ns-dedalo` | `nexwall/captive-portal` | `9b78ac0eae415094ec9449646aedeb5d4d10d963` (branch `pin/v85`) | v85 exactly (the mirrored `main` is newer and lacks `walled_gardens/instagram.conf`) |
+| `ns-checkmk-utils` | `nexwall/checkmk-tools` | `06b5a811bec0922bf6f029f91700758678e7bf40` (`main`) | the 10 checks used are identical to v1.7.7 |
+
+Not consumed by the image build: `nexwall-controller` (server side), `nexwall-docs`.
+
+To ship a change: commit in the fork, push, put the new full commit hash in the package Makefile
+(`PKG_SOURCE_VERSION`, or `NS_CHECKMK_UTILS_BASE_URL` for checkmk), and bump `PKG_RELEASE`.
+Each package sets `PKG_SOURCE` from the commit hash on purpose: OpenWrt names the cached tarball after the package
+version, and the builder keeps a persistent `dl` volume, so without it a stale upstream tarball would be reused.
+`GO_PKG` in `ns-monitoring` stays `github.com/nethserver/nethsecurity-monitoring`: it is the Go module path.

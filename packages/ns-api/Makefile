@@ -20,7 +20,7 @@ define Package/ns-api
 	SECTION:=base
 	CATEGORY:=NethSecurity
 	TITLE:=NethSecurity REST API
-	URL:=https://github.com/NethServer/nethsecurity-controller/
+	URL:=https://github.com/nexwall/nexwall-controller/
 	DEPENDS:= \
 		+adblock \
 		+coreutils-date \

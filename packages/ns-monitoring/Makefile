@@ -6,14 +6,16 @@
 include $(TOPDIR)/rules.mk
  
 PKG_NAME:=ns-monitoring
-# renovate: datasource=github-tags depName=nethserver/nethsecurity-monitoring
+# Nexwall fork of nethserver/nethsecurity-monitoring (code identical to upstream v1.2.1), pinned to a commit.
 PKG_VERSION:=1.2.1
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/nethserver/nethsecurity-monitoring.git
-PKG_SOURCE_VERSION:=v$(PKG_VERSION)
-PKG_SOURCE_SUBDIR:=nethsecurity-monitoring-$(PKG_SOURCE_VERSION)
+PKG_SOURCE_URL:=https://github.com/nexwall/nexwall-monitoring.git
+PKG_SOURCE_VERSION:=403140ed9be858d69f062dd14f0fef3ff3a1c06d
+PKG_SOURCE_SUBDIR:=nexwall-monitoring-$(PKG_VERSION)
+# tarball name tied to the commit, so a cached upstream tarball is never reused
+PKG_SOURCE:=nexwall-monitoring-$(PKG_SOURCE_VERSION).tar.zst
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_SOURCE_SUBDIR)
 PKG_MIRROR_HASH:=skip
 
@@ -24,6 +26,7 @@ PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
+# GO_PKG is the Go module path declared in go.mod, not a download location: keep it as upstream
 GO_PKG:=github.com/nethserver/nethsecurity-monitoring
 GO_PKG_BUILD_PKG:= \
 	$(GO_PKG)/cmd/ns-flows \
@@ -37,7 +40,7 @@ define Package/ns-monitoring
 	SECTION:=base
 	CATEGORY:=NethServer
 	TITLE:=Nethsecurity Monitoring
-	URL:=https://github.com/nethserver/nethsecurity-monitoring
+	URL:=https://github.com/nexwall/nexwall-monitoring
 	DEPENDS:=$(GO_ARCH_DEPENDS) netifyd
 endef
 

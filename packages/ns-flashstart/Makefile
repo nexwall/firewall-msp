@@ -20,7 +20,7 @@ define Package/ns-flashstart
 	SECTION:=base
 	CATEGORY:=NethSecurity
 	TITLE:=Flashstart integration
-	URL:=https://github.com/NethServer/nethsecurity-controller/
+	URL:=https://github.com/nexwall/nexwall-controller/
 	DEPENDS:=+python3-nethsec
 	PKGARCH:=all
 endef

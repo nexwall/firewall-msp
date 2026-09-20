@@ -3,6 +3,14 @@
 Record of modifications to files inherited from NethSecurity (upstream commit `9a60b9c`), kept to satisfy the
 "prominent notice of changes" requirement of GPL-2.0 section 2(a). Newest first.
 
+## 2026-09-20 - Build consumes the Nexwall forks (branch `msp/branding-licenses`)
+
+- `packages/ns-ui`, `ns-monitoring`, `ns-dedalo`, `ns-checkmk-utils`: sources now come from `github.com/nexwall/*`
+  pinned to a commit (see `msp/UPSTREAM_REPOS.md`). `PKG_SOURCE` is set from the commit so a cached upstream tarball
+  is never reused. `ns-ui` `PKG_RELEASE` 1 -> 2.
+- `ns-objects`, `ns-api`, `ns-plug`, `ns-flashstart`: package `URL:` field now points to `nexwall-controller`.
+- `renovate.json`: automatic updates disabled for the four forked packages.
+
 ## 2026-09-20 - Service endpoints (branch `msp/branding-licenses`)
 
 - All runtime endpoints that pointed to Nethesis / NethServer hosts (`my.nethesis.it`, `my.nethserver.com`,

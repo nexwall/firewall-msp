@@ -6,14 +6,17 @@
 include $(TOPDIR)/rules.mk
  
 PKG_NAME:=ns-ui
-# renovate: datasource=github-releases depName=NethServer/nethsecurity-ui
+# Nexwall fork of NethServer/nethsecurity-ui (upstream 2.24.1), pinned to a commit.
+# Bump PKG_SOURCE_VERSION (and PKG_RELEASE) to ship a new UI build.
 PKG_VERSION:=2.24.1
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/NethServer/nethsecurity-ui.git
-PKG_SOURCE_VERSION:=$(PKG_VERSION)
-PKG_SOURCE_SUBDIR:=nethsecurity-ui-$(PKG_SOURCE_VERSION)
+PKG_SOURCE_URL:=https://github.com/nexwall/nexwall-ui.git
+PKG_SOURCE_VERSION:=bb05a424d8124cb478c60973ec3b21095538c408
+PKG_SOURCE_SUBDIR:=nexwall-ui-$(PKG_VERSION)
+# tarball name tied to the commit, so a cached upstream tarball is never reused
+PKG_SOURCE:=nexwall-ui-$(PKG_SOURCE_VERSION).tar.zst
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_SOURCE_SUBDIR)
 PKG_MIRROR_HASH:=skip
 
@@ -29,7 +32,7 @@ define Package/ns-ui
 	SECTION:=base
 	CATEGORY:=NethSecurity
 	TITLE:=NethSecurity UI
-	URL:=https://github.com/NethServer/nethsecurity-ui/
+	URL:=https://github.com/nexwall/nexwall-ui/
 	DEPENDS:=+nginx-ssl
 	PKGARCH:=all
 endef

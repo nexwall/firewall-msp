@@ -20,7 +20,7 @@ define Package/ns-objects
 	SECTION:=base
 	CATEGORY:=NethSecurity
 	TITLE:=NethSecurity controller client
-	URL:=https://github.com/NethServer/nethsecurity-controller/
+	URL:=https://github.com/nexwall/nexwall-controller/
 	DEPENDS:=+python3-nethsec
 	PKGARCH:=all
 endef

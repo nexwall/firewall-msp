@@ -14,8 +14,9 @@ PKG_BUILD_DIR:=$(BUILD_DIR)/ns-checkmk-utils-$(PKG_VERSION)
 PKG_MAINTAINER:=Tommaso Bailetti <tommaso.bailetti@nethesis.it>
 PKG_LICENSE:=GPL-3.0-only
 
-# Base URL for downloads
-NS_CHECKMK_UTILS_BASE_URL:=https://raw.githubusercontent.com/nethesis/checkmk-tools/v$(PKG_VERSION)/script-check-nsec8/full
+# Base URL for downloads: Nexwall fork of nethesis/checkmk-tools, pinned to a commit.
+# The files below are byte-identical to upstream v$(PKG_VERSION); the HASH lines verify that.
+NS_CHECKMK_UTILS_BASE_URL:=https://raw.githubusercontent.com/nexwall/checkmk-tools/06b5a811bec0922bf6f029f91700758678e7bf40/script-check-nsec8/full
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -103,7 +104,7 @@ define Package/ns-checkmk-utils
 	SECTION:=base
 	CATEGORY:=NethSecurity
 	TITLE:=Check_MK NethSecurity utilities and plugins
-	URL:=https://github.com/nethesis/checkmk-tools
+	URL:=https://github.com/nexwall/checkmk-tools
 	DEPENDS:=+checkmk-agent
 	PKGARCH:=all
 endef
