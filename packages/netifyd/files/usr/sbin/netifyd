@@ -1,0 +1,91 @@
+#!/bin/sh
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Placeholder for the netifyd command line and service.
+#
+# The Nexwall Firewall image does not include a traffic classification engine
+# yet. This program keeps the interface that the rest of the system relies on
+# (agent UUID, informatics flag, protocol list, service lifecycle) and does not
+# inspect any traffic.
+#
+# Not provided: application detection, DPI blocking, flow export.
+
+VERSION="5.2.9-nexwall.0"
+CONF="/etc/netifyd.conf"
+UUID_FILE="/etc/netifyd/agent.uuid"
+STATE_DIR="/var/run/netifyd"
+PID_FILE="$STATE_DIR/netifyd.pid"
+
+ensure_uuid() {
+	[ -s "$UUID_FILE" ] && return 0
+	mkdir -p "$(dirname "$UUID_FILE")" || return 1
+	cat /proc/sys/kernel/random/uuid > "$UUID_FILE"
+}
+
+set_informatics() {
+	[ -f "$CONF" ] || return 1
+	if grep -q '^auto_informatics' "$CONF"; then
+		sed -i "s/^auto_informatics.*/auto_informatics = $1/" "$CONF"
+	else
+		printf '\nauto_informatics = %s\n' "$1" >> "$CONF"
+	fi
+}
+
+is_running() {
+	[ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
+}
+
+for arg in "$@"; do
+	case "$arg" in
+	-V|--version)
+		echo "netifyd v$VERSION"
+		exit 0
+		;;
+	-h|--help)
+		echo "Usage: netifyd [-p | -V | --status | --dump-protos | --enable-informatics | --disable-informatics]"
+		echo "Placeholder service, no traffic classification engine installed."
+		exit 0
+		;;
+	-p|--provision)
+		ensure_uuid
+		exit $?
+		;;
+	--enable-informatics)
+		set_informatics yes
+		exit $?
+		;;
+	--disable-informatics)
+		set_informatics no
+		exit $?
+		;;
+	--dump-protos)
+		# no protocol table without an engine
+		exit 0
+		;;
+	--status)
+		if is_running; then
+			echo "netifyd is running (placeholder, no traffic classification)"
+			exit 0
+		fi
+		echo "netifyd is not running"
+		exit 1
+		;;
+	esac
+done
+
+# Any other invocation starts the service. Options passed by the init script
+# (interfaces, filters, -R) are accepted and ignored.
+ensure_uuid
+mkdir -p "$STATE_DIR"
+echo $$ > "$PID_FILE"
+logger -t netifyd "no traffic classification engine installed, running as a placeholder"
+
+trap 'rm -f "$PID_FILE"; exit 0' TERM INT
+trap '' HUP
+
+while :; do
+	sleep 3600 &
+	wait $!
+done
