@@ -3,8 +3,10 @@
 Manage network traffic using DPI on network flows.
 
 How it works:
-- Netify flow actions plugin adds a label to matching connections
-- nft rules can block or change priority (`dscp`) to connections with labels
+- `ns-dpi-bridge` reads the flow events of the traffic classification engine (netifyd) and adds the connections that
+  match a rule to nftables sets (`dpi_block4`, `dpi_bulk4`, ... and the `6` variants)
+- nft rules (`dpi-nft`) reject, or change the priority (`dscp`) of, the connections in those sets
+- the same daemon forwards the flows to `ns-flows` and the traffic counters to `ns-stats`
 
 To enable traffic processing:
 - configure `dpi` UCI database (see below for an example)
@@ -23,7 +25,6 @@ Global options:
 - `firewall_exemption`: can be `0` or `1`, if set to `1` all firewall IP addresses will be
   added to global exemption list and will not match DPI rules
 - `popular_filters`: list of filters that will be returned to from `api-cli ns.dpi list-popular` call.
-- `ns_exclude`: list of network interface exclusions in Netifyd that will be returned by `uci show netifyd.@netifyd[0].ns_exclude`
 
 Rule options:
 
@@ -147,37 +148,4 @@ The placeholders will be replaced with systemd id and secret from `ns-plug`.
 Example:
 ```
 HOST=http://__USER__:__PASSWORD__@sp.gs.nethserver.net dpi-update
-```
-
-## Managing Interface Exclusions in Netifyd
-
-By default, Netifyd monitors all interfaces. To exclude specific interfaces, you can define an exclusion list. Below are commands to add, modify, or remove excluded interfaces.
-
-- Add interfaces to exclusion list
-```
-uci add_list netifyd.@netifyd[0].ns_exclude='eth1'
-uci add_list netifyd.@netifyd[0].ns_exclude='tun*'
-uci add_list netifyd.@netifyd[0].ns_exclude='wg*'
-uci commit netifyd
-echo '{"changes": {"network": {}}}' | /usr/libexec/rpcd/ns.commit call commit
-```
-
-- Modify exclusion list
-```
-uci delete netifyd.@netifyd[0].ns_exclude='eth1'
-uci add_list netifyd.@netifyd[0].ns_exclude='eth2'
-uci commit netifyd
-echo '{"changes": {"network": {}}}' | /usr/libexec/rpcd/ns.commit call commit
-```
-
-- Clear exclusion list
-```
-uci delete netifyd.@netifyd[0].ns_exclude
-uci commit netifyd
-echo '{"changes": {"network": {}}}' | /usr/libexec/rpcd/ns.commit call commit
-```
-
-- Return the exclusion list
-```
-uci show netifyd.@netifyd[0].ns_exclude
 ```

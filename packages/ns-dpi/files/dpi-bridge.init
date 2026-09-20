@@ -1,0 +1,19 @@
+#!/bin/sh /etc/rc.common
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+START=95
+STOP=10
+
+USE_PROCD=1
+
+start_service() {
+	procd_open_instance
+	procd_set_param command /usr/sbin/ns-dpi-bridge
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_set_param respawn 3600 5 0
+	procd_close_instance
+}

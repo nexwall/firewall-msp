@@ -1,0 +1,584 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+"""
+ns-dpi-bridge: connects the traffic classification engine to the rest of the system.
+
+The engine (netifyd) writes flow events as newline delimited JSON on a unix socket.
+This daemon reads them and
+
+1. forwards them to ns-flows (live flows table),
+2. aggregates the traffic counters and sends them to ns-stats (analytics),
+3. applies the DPI rules of /etc/config/dpi: connections that match a rule are added
+   to nftables sets, and ns-dpi (dpi-nft) rejects or re-prioritizes those sets.
+
+Safety: a rule that cannot be fully understood is skipped and logged, never guessed.
+"""
+
+import ipaddress
+import json
+import os
+import queue
+import re
+import signal
+import socket
+import subprocess
+import sys
+import threading
+import time
+
+SOCKET_PATH = os.environ.get('DPI_SOCKET', '/var/run/netifyd/netifyd.sock')
+RULES_FILE = os.environ.get('DPI_RULES', '/etc/netifyd/netify-proc-flow-actions.json')
+CATEGORIES_FILE = os.environ.get('DPI_CATEGORIES', '/etc/netifyd/netify-categories.json')
+ACTIONS_LOG = os.environ.get('DPI_ACTIONS_LOG', '/var/run/netifyd/dpi-actions-log.json')
+FLOWS_ENDPOINT = ('127.0.0.1', int(os.environ.get('DPI_FLOWS_PORT', '8080')), '/flows')
+STATS_ENDPOINT = ('127.0.0.1', int(os.environ.get('DPI_STATS_PORT', '8081')), '/stats')
+NFT_TABLE = ('inet', 'fw4')
+SET_TIMEOUT = '1h'
+STATS_INTERVAL = int(os.environ.get('DPI_STATS_INTERVAL', '30'))
+RULES_CHECK_INTERVAL = 10
+ACTIONS = ('block', 'bulk', 'best_effort', 'video', 'voice')
+FLOW_EVENT_TYPES = {'flow': 'flow_dpi_complete', 'flow_purge': 'flow_purge', 'flow_stats': 'flow_stats'}
+
+
+def log(message):
+    print(f'ns-dpi-bridge: {message}', flush=True)
+
+
+class Unsupported(Exception):
+    """The criteria uses something this daemon does not implement."""
+
+
+# ---------------------------------------------------------------- criteria
+
+_TOKEN = re.compile(
+    r"\s*(?:(?P<op>==|!=|>=|<=|&&|\|\||[()!<>;])|'(?P<sq>[^']*)'|(?P<word>[A-Za-z0-9_.:/\-*]+))")
+_INT_FIELDS = ('app_id', 'proto_id', 'vlan_id', 'ip_proto', 'local_port', 'other_port')
+_IP_FIELDS = ('local_ip', 'other_ip')
+_FLAGS = ('detection_guessed', 'detection_complete')
+
+
+def _tokenize(text):
+    tokens = []
+    pos = 0
+    text = text.strip()
+    while pos < len(text):
+        match = _TOKEN.match(text, pos)
+        if not match or match.end() == pos:
+            raise Unsupported(f'cannot parse near {text[pos:pos + 20]!r}')
+        pos = match.end()
+        if match.group('op') is not None:
+            tokens.append(('op', match.group('op')))
+        elif match.group('sq') is not None:
+            tokens.append(('str', match.group('sq')))
+        else:
+            word = match.group('word')
+            if word.lower() in ('or', 'and', 'not'):
+                tokens.append(('op', {'or': '||', 'and': '&&', 'not': '!'}[word.lower()]))
+            else:
+                tokens.append(('word', word))
+    return tokens
+
+
+class Criteria:
+    """Boolean expression over the fields of a detected flow (subset of the engine grammar)."""
+
+    def __init__(self, text):
+        self.tokens = _tokenize(text)
+        self.pos = 0
+        self.ast = self._expr()
+        while self._peek() == ('op', ';'):
+            self.pos += 1
+        if self.pos != len(self.tokens):
+            raise Unsupported('unexpected trailing tokens')
+
+    def _peek(self):
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
+
+    def _next(self):
+        token = self._peek()
+        self.pos += 1
+        return token
+
+    def _expr(self):
+        node = self._term()
+        while self._peek() == ('op', '||'):
+            self.pos += 1
+            node = ('or', node, self._term())
+        return node
+
+    def _term(self):
+        node = self._factor()
+        while self._peek() == ('op', '&&'):
+            self.pos += 1
+            node = ('and', node, self._factor())
+        return node
+
+    def _factor(self):
+        token = self._peek()
+        if token == ('op', '!'):
+            self.pos += 1
+            return ('not', self._factor())
+        if token == ('op', '('):
+            self.pos += 1
+            node = self._expr()
+            if self._next() != ('op', ')'):
+                raise Unsupported('missing )')
+            return node
+        return self._comparison()
+
+    def _comparison(self):
+        kind, field = self._next() or (None, None)
+        if kind != 'word':
+            raise Unsupported('expected a field name')
+        field = field.lower()
+        following = self._peek()
+        if following and following[0] == 'op' and following[1] in ('==', '!=', '>=', '<=', '>', '<'):
+            op = self._next()[1]
+            vkind, value = self._next() or (None, None)
+            if vkind not in ('word', 'str'):
+                raise Unsupported('expected a value')
+            self._check(field, op, value)
+            return ('cmp', field, op, value)
+        if field in _FLAGS:
+            return ('flag', field)
+        raise Unsupported(f'unknown flag {field}')
+
+    @staticmethod
+    def _check(field, op, value):
+        known = _INT_FIELDS + _IP_FIELDS + ('app', 'proto', 'category', 'iface_nfq_src', 'iface_nfq_dst')
+        if field not in known:
+            raise Unsupported(f'unknown field {field}')
+        if field in _IP_FIELDS:
+            if op not in ('==', '!='):
+                raise Unsupported('ip comparison')
+            try:
+                ipaddress.ip_network(value, strict=False)
+            except ValueError:
+                raise Unsupported(f'unsupported address {value}')
+        elif field in _INT_FIELDS:
+            try:
+                int(value)
+            except ValueError:
+                raise Unsupported(f'not a number {value}')
+        elif op not in ('==', '!='):
+            raise Unsupported(f'operator {op} on {field}')
+
+    def matches(self, ctx):
+        return self._eval(self.ast, ctx)
+
+    def _eval(self, node, ctx):
+        kind = node[0]
+        if kind == 'or':
+            return self._eval(node[1], ctx) or self._eval(node[2], ctx)
+        if kind == 'and':
+            return self._eval(node[1], ctx) and self._eval(node[2], ctx)
+        if kind == 'not':
+            return not self._eval(node[1], ctx)
+        if kind == 'flag':
+            return bool(ctx.get(node[1]))
+        _, field, op, value = node
+        if field in ('iface_nfq_src', 'iface_nfq_dst'):
+            result = value == '*' or ctx.get('interface') == value
+            return result if op == '==' else not result
+        if field in _IP_FIELDS:
+            ip = ctx.get(field)
+            try:
+                result = ip is not None and ipaddress.ip_address(ip) in ipaddress.ip_network(value, strict=False)
+            except ValueError:
+                result = False
+            return result if op == '==' else not result
+        if field == 'category':
+            result = value.lower() in ctx.get('category', ())
+            return result if op == '==' else not result
+        if field in ('app', 'proto'):
+            result = ctx.get(field, '') == value.lower()
+            return result if op == '==' else not result
+        actual = ctx.get(field)
+        if actual is None:
+            return False
+        wanted = int(value)
+        return {'==': actual == wanted, '!=': actual != wanted, '>=': actual >= wanted,
+                '<=': actual <= wanted, '>': actual > wanted, '<': actual < wanted}[op]
+
+
+# ------------------------------------------------------------- categories
+
+def load_categories(path):
+    """Return (application categories, protocol categories): dict of id -> set of lowercase names."""
+    result = ({}, {})
+    try:
+        with open(path) as handle:
+            data = json.load(handle)
+    except (OSError, ValueError) as error:
+        log(f'categories not loaded: {error}')
+        return result
+    for target, prefix in zip(result, ('application', 'protocol')):
+        try:
+            tags = data.get(f'{prefix}_tag_index')
+            index = data.get(f'{prefix}_index', {})
+            if tags is None and isinstance(index, dict):
+                pairs = list(index.items())
+            else:
+                names = {cat_id: name for name, cat_id in (tags or {}).items()}
+                items = index if isinstance(index, list) else list(index.items())
+                pairs = [(names.get(cat_id), ids) for cat_id, ids in items]
+            for name, ids in pairs:
+                for item in ids or []:
+                    if name:
+                        target.setdefault(int(item), set()).add(str(name).lower())
+        except (TypeError, ValueError, AttributeError) as error:
+            log(f'{prefix} categories ignored: {error}')
+    return result
+
+
+# ------------------------------------------------------------------ rules
+
+class Rule:
+    def __init__(self, name, spec):
+        self.name = name
+        targets = spec.get('targets', [])
+        actions = [t for t in targets if t in ACTIONS]
+        self.action = actions[0] if actions else None
+        self.log = 'log' in targets
+        self.criteria = None
+        self.error = None
+        if not spec.get('enabled') or not self.action:
+            self.error = 'disabled'
+            return
+        try:
+            self.criteria = Criteria(spec.get('criteria', ''))
+        except Unsupported as error:
+            self.error = str(error)
+
+
+def dpi_enabled():
+    if os.environ.get('DPI_FORCE_ENABLED') == '1':  # used by the tests
+        return True
+    try:
+        out = subprocess.run(['uci', '-q', 'get', 'dpi.config.enabled'], capture_output=True, text=True, timeout=5)
+        return out.stdout.strip() == '1'
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+class RuleSet:
+    def __init__(self, path=None, enabled_fn=None):
+        self.path = path or RULES_FILE
+        self.enabled_fn = enabled_fn or dpi_enabled
+        self.rules = []
+        self.exemptions = []
+        self.enabled = False
+        self._mtime = None
+        self._checked = None
+
+    def refresh(self, now=None):
+        now = time.monotonic() if now is None else now
+        if self._checked is not None and now - self._checked < RULES_CHECK_INTERVAL:
+            return
+        self._checked = now
+        self.enabled = bool(self.enabled_fn())
+        try:
+            mtime = os.stat(self.path).st_mtime
+        except OSError:
+            self.rules, self.exemptions, self._mtime = [], [], None
+            return
+        if mtime == self._mtime:
+            return
+        self._mtime = mtime
+        try:
+            with open(self.path) as handle:
+                data = json.load(handle)
+        except (OSError, ValueError) as error:
+            log(f'rules not loaded: {error}')
+            self.rules, self.exemptions = [], []
+            return
+        self.rules = [Rule(name, spec) for name, spec in data.get('actions', {}).items()]
+        self.exemptions = []
+        for item in data.get('exemptions', []):
+            try:
+                self.exemptions.append(ipaddress.ip_network(str(item), strict=False))
+            except ValueError:
+                log(f'exemption ignored: {item}')
+        for rule in self.rules:
+            if rule.error and rule.error != 'disabled' and rule.action:
+                log(f'rule {rule.name} skipped: {rule.error}')
+        log(f'{sum(1 for r in self.rules if r.criteria)} rules loaded')
+
+    def exempt(self, ctx):
+        for key in ('local_ip', 'other_ip'):
+            try:
+                ip = ipaddress.ip_address(ctx.get(key))
+            except ValueError:
+                continue
+            if any(ip in net for net in self.exemptions):
+                return True
+        return False
+
+    def decide(self, ctx):
+        """Return (action, rules that matched) or (None, [])."""
+        if not self.enabled or self.exempt(ctx):
+            return None, []
+        matched = [r for r in self.rules if r.criteria and r.criteria.matches(ctx)]
+        if not matched:
+            return None, []
+        blocking = [r for r in matched if r.action == 'block']
+        return (blocking or matched)[0].action, matched
+
+
+# ----------------------------------------------------------- flow helpers
+
+def strip_app_id(name):
+    return re.sub(r'^\d+\.', '', name or '')
+
+
+def flow_context(event, categories):
+    flow = event.get('flow') or {}
+    app_id = flow.get('detected_application')
+    proto_id = flow.get('detected_protocol')
+    cats = set(categories[0].get(app_id, ())) | set(categories[1].get(proto_id, ()))
+    return {
+        'app': strip_app_id(flow.get('detected_application_name')).lower(),
+        'app_id': app_id,
+        'proto': (flow.get('detected_protocol_name') or '').lower(),
+        'proto_id': proto_id,
+        'category': cats,
+        'local_ip': flow.get('local_ip'), 'other_ip': flow.get('other_ip'),
+        'local_port': flow.get('local_port'), 'other_port': flow.get('other_port'),
+        'ip_proto': flow.get('ip_protocol'),
+        'vlan_id': flow.get('vlan_id', 0),
+        'interface': event.get('interface'),
+        'detection_guessed': bool(flow.get('detection_guessed')),
+        'detection_complete': event.get('type') != 'flow_purge',
+    }
+
+
+def to_flows_event(event):
+    """Translate an engine event to the form ns-flows accepts, or None."""
+    new_type = FLOW_EVENT_TYPES.get(event.get('type'))
+    if not new_type or not isinstance(event.get('flow'), dict):
+        return None
+    out = {'type': new_type, 'flow': event['flow']}
+    for key in ('interface', 'internal', 'reason'):
+        if key in event:
+            out[key] = event[key]
+    return out
+
+
+# ------------------------------------------------------------ enforcement
+
+class Enforcer:
+    """Adds matching connections to the nftables sets rendered by dpi-nft."""
+
+    def __init__(self, runner=None, actions_log=None):
+        self.runner = runner or self._nft
+        self.actions_log = actions_log or ACTIONS_LOG
+        self.seen = {}
+        self.last_error = 0
+
+    @staticmethod
+    def _nft(script):
+        subprocess.run(['nft', '-f', '-'], input=script, text=True, check=True, capture_output=True, timeout=10)
+
+    def apply(self, action, ctx, rules):
+        proto = {6: 'tcp', 17: 'udp'}.get(ctx.get('ip_proto'))
+        a, b, pa, pb = ctx.get('local_ip'), ctx.get('other_ip'), ctx.get('local_port'), ctx.get('other_port')
+        if not proto or None in (a, b, pa, pb):
+            return False
+        now = time.monotonic()
+        key = (action, a, pa, b, pb, proto)
+        if self.seen.get(key, 0) > now:
+            return False
+        family = '6' if ':' in a else '4'
+        both_ways = (f'{a} . {b} . {proto} . {pa} . {pb} timeout {SET_TIMEOUT}, '
+                     f'{b} . {a} . {proto} . {pb} . {pa} timeout {SET_TIMEOUT}')
+        script = f'add element {NFT_TABLE[0]} {NFT_TABLE[1]} dpi_{action}{family} {{ {both_ways} }}\n'
+        try:
+            self.runner(script)
+        except (OSError, subprocess.SubprocessError) as error:
+            if now - self.last_error > 60:
+                self.last_error = now
+                log(f'nft failed: {getattr(error, "stderr", error)}')
+            return False
+        self.seen[key] = now + 3000
+        if len(self.seen) > 20000:
+            self.seen = {k: v for k, v in self.seen.items() if v > now}
+        if any(r.log for r in rules):
+            self._write_log(action, ctx)
+        return True
+
+    def _write_log(self, action, ctx):
+        try:
+            if os.path.exists(self.actions_log) and os.path.getsize(self.actions_log) > 1000000:
+                os.truncate(self.actions_log, 0)
+            with open(self.actions_log, 'a') as handle:
+                handle.write(json.dumps({'time': int(time.time()), 'action': action,
+                                         'app': ctx['app'], 'protocol': ctx['proto'],
+                                         'local_ip': ctx['local_ip'], 'other_ip': ctx['other_ip']}) + '\n')
+        except OSError:
+            pass
+
+
+# -------------------------------------------------------------- analytics
+
+class StatsAggregator:
+    def __init__(self):
+        self.entries = {}
+
+    def add(self, event):
+        flow = event.get('flow') or {}
+        local_bytes = int(flow.get('local_bytes') or 0)
+        other_bytes = int(flow.get('other_bytes') or 0)
+        if not local_bytes and not other_bytes:
+            return
+        key = (event.get('interface', ''), flow.get('ip_version', 4), flow.get('ip_protocol', 0),
+               flow.get('local_ip', ''), flow.get('local_mac', ''), bool(flow.get('local_origin')),
+               flow.get('other_ip', ''), flow.get('other_port', 0), flow.get('other_type', 'unknown'),
+               flow.get('detected_application', 0), flow.get('detected_application_name', ''),
+               flow.get('detected_protocol', 0), flow.get('detected_protocol_name', ''))
+        entry = self.entries.setdefault(key, {'lb': 0, 'ob': 0, 'pk': 0, 'dg': set()})
+        entry['lb'] += local_bytes
+        entry['ob'] += other_bytes
+        entry['pk'] += int(flow.get('local_packets') or 0) + int(flow.get('other_packets') or 0)
+        if flow.get('digest'):
+            entry['dg'].add(flow['digest'])
+
+    def flush(self, now=None):
+        stats = []
+        for key, entry in self.entries.items():
+            (iface, ipv, ipp, lip, lmac, lorigin, oip, oport, otype, app, appn, proto, protn) = key
+            stats.append({
+                'detected_application': app, 'detected_application_name': appn,
+                'detected_protocol': proto, 'detected_protocol_name': protn,
+                'digests': sorted(entry['dg']), 'interface': iface,
+                'ip_protocol': ipp, 'ip_version': ipv,
+                'local_bytes': entry['lb'], 'local_ip': lip, 'local_mac': lmac, 'local_origin': lorigin,
+                'other_bytes': entry['ob'], 'other_ip': oip, 'other_port': oport, 'other_type': otype,
+                'packets': entry['pk'],
+            })
+        self.entries = {}
+        return {'log_time_end': int(now if now is not None else time.time()), 'stats': stats}
+
+
+# ------------------------------------------------------------------ output
+
+def http_post(endpoint, payload, timeout=3):
+    host, port, path = endpoint
+    body = json.dumps(payload).encode()
+    head = (f'POST {path} HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Type: application/json\r\n'
+            f'Content-Length: {len(body)}\r\nConnection: close\r\n\r\n').encode()
+    with socket.create_connection((host, port), timeout) as conn:
+        conn.sendall(head + body)
+        reply = conn.recv(64)
+    return int(reply.split(b' ', 2)[1]) if reply.startswith(b'HTTP/') else 0
+
+
+class Forwarder(threading.Thread):
+    """Sends events to a local HTTP endpoint without blocking the reader."""
+
+    def __init__(self, endpoint, poster=http_post):
+        super().__init__(daemon=True)
+        self.endpoint, self.poster = endpoint, poster
+        self.queue = queue.Queue(maxsize=5000)
+        self.dropped = 0
+        self.failures = 0
+
+    def submit(self, payload):
+        try:
+            self.queue.put_nowait(payload)
+        except queue.Full:
+            self.dropped += 1
+
+    def run(self):
+        while True:
+            payload = self.queue.get()
+            try:
+                status = self.poster(self.endpoint, payload)
+                if status >= 400 and self.failures % 200 == 0:
+                    log(f'{self.endpoint[2]} answered {status}')
+                self.failures = self.failures + 1 if status >= 400 else 0
+            except OSError:
+                self.failures += 1
+
+
+# --------------------------------------------------------------------- main
+
+def events(path, stop):
+    """Yield decoded events (None on idle); reconnect until stopped."""
+    backoff = 1
+    while not stop.is_set():
+        try:
+            conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            conn.settimeout(2)
+            conn.connect(path)
+        except OSError:
+            stop.wait(backoff)
+            backoff = min(backoff * 2, 30)
+            continue
+        log('connected to the engine')
+        backoff = 1
+        buffer = b''
+        while not stop.is_set():
+            try:
+                chunk = conn.recv(65536)
+            except socket.timeout:
+                yield None
+                continue
+            except OSError:
+                break
+            if not chunk:
+                break
+            buffer += chunk
+            *lines, buffer = buffer.split(b'\n')
+            for line in lines:
+                if not line or line.startswith((b'{"type":"definitions"', b'{"type":"agent_')):
+                    continue
+                try:
+                    yield json.loads(line)
+                except ValueError:
+                    continue
+        conn.close()
+        log('connection to the engine lost')
+
+
+def main():
+    stop = threading.Event()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: stop.set())
+    categories = load_categories(CATEGORIES_FILE)
+    rules, enforcer, stats = RuleSet(), Enforcer(), StatsAggregator()
+    flows_out, stats_out = Forwarder(FLOWS_ENDPOINT), Forwarder(STATS_ENDPOINT)
+    flows_out.start()
+    stats_out.start()
+    next_flush = time.monotonic() + STATS_INTERVAL
+    for event in events(SOCKET_PATH, stop):
+        now = time.monotonic()
+        rules.refresh()
+        if now >= next_flush:
+            next_flush = now + STATS_INTERVAL
+            payload = stats.flush()
+            if payload['stats']:
+                stats_out.submit(payload)
+        if not event:
+            continue
+        try:
+            translated = to_flows_event(event)
+            if translated:
+                flows_out.submit(translated)
+            if event.get('type') in ('flow_stats', 'flow_purge'):
+                stats.add(event)
+            if event.get('type') in ('flow', 'flow_stats') and rules.enabled:
+                ctx = flow_context(event, categories)
+                action, matched = rules.decide(ctx)
+                if action:
+                    enforcer.apply(action, ctx, matched)
+        except Exception as error:  # never stop on one bad event
+            log(f'event ignored: {error!r}')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

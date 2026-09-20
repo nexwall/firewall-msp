@@ -41,7 +41,7 @@ define Package/ns-monitoring
 	CATEGORY:=NethServer
 	TITLE:=Nethsecurity Monitoring
 	URL:=https://github.com/nexwall/nexwall-monitoring
-	DEPENDS:=$(GO_ARCH_DEPENDS) netifyd
+	DEPENDS:=$(GO_ARCH_DEPENDS) netifyd ns-dpi
 endef
 
 define Package/ns-monitoring/conffiles
@@ -62,17 +62,6 @@ define Package/ns-monitoring/install
 	# startup and crons
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/99-ns-stats $(1)/etc/uci-defaults/99-ns-stats
-	# netifyd configuration
-	$(INSTALL_DIR) $(1)/etc/netifyd
-	$(INSTALL_DIR) $(1)/etc/netifyd/plugins.d
-	## ns-flows
-	$(INSTALL_CONF) ./files/netifyd/plugins.d/10-ns-flows.conf $(1)/etc/netifyd/plugins.d/10-ns-flows.conf
-	$(INSTALL_CONF) ./files/netifyd/netify-ns-flows-sink.json $(1)/etc/netifyd/netify-ns-flows-sink.json
-	$(INSTALL_CONF) ./files/netifyd/netify-ns-flows-proc.json $(1)/etc/netifyd/netify-ns-flows-proc.json
-	## ns-stats
-	$(INSTALL_CONF) ./files/netifyd/plugins.d/10-ns-stats.conf $(1)/etc/netifyd/plugins.d/10-ns-stats.conf
-	$(INSTALL_CONF) ./files/netifyd/netify-ns-stats-proc.json $(1)/etc/netifyd/netify-ns-stats-proc.json
-	$(INSTALL_CONF) ./files/netifyd/netify-ns-stats-sink.json $(1)/etc/netifyd/netify-ns-stats-sink.json
 	# additional binaries
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./files/ns-stats-cleanup $(1)/usr/bin/ns-stats-cleanup

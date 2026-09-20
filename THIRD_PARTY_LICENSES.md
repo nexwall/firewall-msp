@@ -30,11 +30,12 @@ package versions change. Components fetched from OpenWrt feeds keep the license 
 | acme-common 1.1.2 (fork of openwrt/packages) | GPL-3.0-only |
 | python-semver 3.0.4 (fork of openwrt/packages) | BSD-3-Clause |
 
-## Traffic classification service (`netifyd`)
+## Traffic classification engine (`netifyd`)
 
-The package ships a placeholder service written for this project (GPL-2.0-only). It does not download or include any
-proprietary binary. It installs the open application signature list `netify-apps.conf` (Apache-2.0, eGloo Inc.) and the
-init script (GPL-2.0, eGloo Inc.). No traffic classification engine is included yet.
+Netify Agent 4.4.7 (eGloo Inc.), GPL-3.0-or-later, built from source
+(`gitlab.com/netify.ai/public/netify-agent`, commit `4d8d92104e694db3115a1615106022fc28aaed0f`). The source tree pulls
+its libraries as git submodules (nDPI, LGPL-3.0, and others); each keeps its own license in its source tree. The open
+application signature list `netify-apps.conf` is Apache-2.0. The daemon `ns-dpi-bridge` is GPL-2.0-only (Nexwall).
 
 ## Data files with their own terms
 

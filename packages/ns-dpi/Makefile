@@ -25,6 +25,8 @@ define Package/ns-dpi
 	DEPENDS:= \
 		+kmod-ipt-conntrack-label \
 		+netifyd \
+		+nftables \
+		+python3 \
 		+python3-jinja2
 	PKGARCH:=all
 endef
@@ -75,6 +77,8 @@ define Package/ns-dpi/install
 	$(INSTALL_BIN) ./files/dpi $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/dpi-nft $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/dpi-config $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/ns-dpi-bridge $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/dpi-bridge.init $(1)/etc/init.d/dpi-bridge
 	$(INSTALL_BIN) ./files/dpi-license-update.py $(1)/usr/sbin/dpi-license-update
 	$(INSTALL_BIN) ./files/dpi-data-update.py $(1)/usr/sbin/dpi-data-update
 	$(INSTALL_BIN) ./files/dpi-update.py $(1)/usr/sbin/dpi-update

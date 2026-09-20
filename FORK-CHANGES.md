@@ -9,9 +9,21 @@ Record of modifications to files inherited from NethSecurity (upstream commit `9
   pinned to a commit. `PKG_SOURCE` is derived from the commit so a cached upstream tarball is never reused. `ns-ui`
   `PKG_RELEASE` 1 -> 2. The `URL:` field of `ns-objects`, `ns-api`, `ns-plug` and `ns-flashstart` points to
   `nexwall-controller`.
-- **`netifyd`**: the package no longer downloads proprietary binaries. It installs a placeholder service
-  (`files/usr/sbin/netifyd`) that keeps the interface used by `ns-api` and `python3-nethsec`, plus the open
-  configuration and signature data. Removed `netify-dist.mk`.
+- **Traffic classification engine** (`packages/netifyd`): the package builds the open source Netify Agent v4.4.7
+  from source (vendor repository, pinned commit `4d8d9210`, same version as the package in the OpenWrt packages feed)
+  and no longer downloads any binary. It uses the init script and UCI config of the OpenWrt package, a new
+  `netifyd.conf` (local event socket, upload service URL) and installs its data under `/etc/netifyd` with
+  `/etc/netify.d` as a symlink. Removed: the v5 plugin configuration, the NFQUEUE setup script, the v4-to-v5
+  migration script and `netify-dist.mk`.
+- **DPI enforcement and analytics** (`packages/ns-dpi`): new daemon `ns-dpi-bridge` reads the flow events of the
+  engine, forwards them to `ns-flows`, sends aggregated counters to `ns-stats` and adds the connections that match a
+  rule of `/etc/config/dpi` to nftables sets. `dpi-nft` renders the sets and the rules that reject or re-prioritize them
+  and validates them with `nft -c` before they replace the running rules. Unit tests in `packages/ns-dpi/tests`.
+  `ns-monitoring` depends on `ns-dpi` and no longer installs plugin configuration.
+- **API and library adjustments**: `ns.netifyd` uses the engine option names (`--enable-sink`, `--disable-sink`,
+  `enable_sink`) and generates the agent UUID itself; `python3-nethsec` `dpi.load_protocols` skips lines that are not
+  protocol entries.
+- **Version**: image version `26.0.0-rc1` (`build.conf.defaults`).
 - **Service endpoints**: hosts of the previous vendor services replaced by `services.nexwall.com.br` (registration,
   inventory, heartbeat, alerts, backup, telemetry, DPI data, log management), `updates.nexwall.com.br` (package feed,
   repository path `nethsecurity` -> `nexwall`) and `lists.nexwall.com.br` (blocklists). Paths are otherwise unchanged.

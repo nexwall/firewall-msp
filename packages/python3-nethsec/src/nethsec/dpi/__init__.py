@@ -82,8 +82,12 @@ def load_protocols() -> dict[int, str]:
         # lines can be empty
         if len(line) < 1:
             continue
-        line_split = line.split(":")
-        protocols[int(line_split[0].strip())] = line_split[1].strip()
+        line_split = line.split(":", 1)
+        try:
+            protocols[int(line_split[0].strip())] = line_split[1].strip()
+        except (ValueError, IndexError):
+            # not a protocol line (header or unexpected format)
+            continue
 
     return protocols
 
