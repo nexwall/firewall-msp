@@ -64,7 +64,7 @@ case "$cmd" in
            curl $curl_args -X POST \
                -H "Content-Type: application/octet-stream" \
 	       -H "X-Filename: ${filename}" \
-               --data-binary "@$file" https://my.nethesis.it/proxy/backup >/dev/null || :
+               --data-binary "@$file" https://services.nexwall.com.br/proxy/backup >/dev/null || :
        fi
        exit $rc
        ;;

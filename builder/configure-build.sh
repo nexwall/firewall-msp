@@ -41,7 +41,7 @@ CONFIG_VERSION_MANUFACTURER_URL="https://nexwall.io"
 CONFIG_VERSION_NUMBER="${image_version}"
 CONFIG_VERSION_CODE="${owrt_version}"
 CONFIG_VERSION_PRODUCT="Nexwall Firewall"
-CONFIG_VERSION_REPO="https://updates.nexwall.io/${repo_channel}/${nethsecurity_version}"
+CONFIG_VERSION_REPO="https://services.nexwall.com.br/${repo_channel}/${nethsecurity_version}"
 CONFIG_VERSION_SUPPORT_URL="https://nexwall.io/support"
 EOF
 cat "config/targets/${target}.conf" >> .config

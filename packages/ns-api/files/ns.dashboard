@@ -194,7 +194,7 @@ def check_banip():
 def check_ts_ip():
     u = EUci()
     bip_status = check_banip()
-    ts_enabled = "bl.nethesis.it" in u.get("banip", "global", "ban_allowurl", default="")
+    ts_enabled = "services.nexwall.com.br" in u.get("banip", "global", "ban_allowurl", default="")
     if not ts_enabled or bip_status == "disabled":
         return "disabled"
     if ts_enabled and bip_status == "ok":

@@ -40,7 +40,7 @@ for func in dir(inventory):
         info[func.removeprefix('info_')] = method(EUci())
 
 data = {
-    "$schema": "https://schema.nethserver.org/facts/2022-12.json",
+    "$schema": "https://services.nexwall.com.br/facts/2022-12.json",
     "uuid": sid,
     "installation": "nethsecurity",
     "facts": {

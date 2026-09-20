@@ -25,6 +25,6 @@ fi
 # To be removed when the migration to new my.nethesis.it will be completed
 if [ "$TYPE" = "enterprise" ]; then
     /usr/bin/curl -m 180 --retry 3 -L -s -X POST \
-       --user "$SYSTEM_ID:$SYSTEM_SECRET" https://my.nethesis.it/proxy/heartbeat >/dev/null
+       --user "$SYSTEM_ID:$SYSTEM_SECRET" https://services.nexwall.com.br/proxy/heartbeat >/dev/null
     exit 0
 fi

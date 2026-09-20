@@ -17,7 +17,7 @@ import time
 from os import environ
 
 
-LICENSE_SERVER_ENDPOINT = "https://distfeed.nethesis.it"
+LICENSE_SERVER_ENDPOINT = "https://services.nexwall.com.br"
 LICENSE_FREE_ENDPOINT = "/api/netifyd/license"
 LICENSE_COMMUNITY_ENDPOINT = "/api/netifyd/community/license"
 LICENSE_ENTERPRISE_ENDPOINT = "/api/netifyd/enterprise/license"

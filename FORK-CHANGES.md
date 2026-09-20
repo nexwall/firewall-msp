@@ -3,6 +3,17 @@
 Record of modifications to files inherited from NethSecurity (upstream commit `9a60b9c`), kept to satisfy the
 "prominent notice of changes" requirement of GPL-2.0 section 2(a). Newest first.
 
+## 2026-09-20 - Service endpoints (branch `msp/branding-licenses`)
+
+- All runtime endpoints that pointed to Nethesis / NethServer hosts (`my.nethesis.it`, `my.nethserver.com`,
+  `backupd.nethesis.it`, `phonehome.nethserver.org`, `schema.nethserver.org`, `nar.nethesis.it`, `distfeed.nethesis.it`,
+  `sp.nethesis.it`, `bl.nethesis.it`, `updates.nethsecurity.nethserver.org`) now use `services.nexwall.com.br`.
+  Paths are unchanged. Files: `ns-plug`, `ns-clm`, `ns-dpi`, `ns-phonehome`, `ns-threat_shield`, `ns-api`
+  (`ns.dashboard`, `ns.subscription`), `python3-nethsec`, `victoria-metrics` (`vmalert.initd`),
+  `files/etc/uci-defaults/99-nethsec-backupurl`, `builder/configure-build.sh` (`CONFIG_VERSION_REPO`).
+- `netifyd` sink URL (`netify-sink-http.json`, `netify-sink-http-auto.json`): `sink.netify.ai` -> `services.nexwall.com.br`.
+- Not changed: the `netifyd` binary download in its Makefile. See `msp/OUTBOUND_ENDPOINTS.md`.
+
 ## 2026-09-20 - Default hostname (branch `msp/branding-licenses`)
 
 - `files/etc/uci-defaults/99-nethsec-hostname`: first-boot hostname `NethSec` -> `Nexwall`.

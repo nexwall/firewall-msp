@@ -28,7 +28,7 @@ AGENT_VERSION = "1"
 try:
     UUID = os.environ["CLM_UUID"]
     HOSTNAME = os.environ.get("CLM_HOSTNAME", "nethsecurity")
-    ADDRESS = os.environ.get("CLM_ADDRESS", "https://nar.nethesis.it")
+    ADDRESS = os.environ.get("CLM_ADDRESS", "https://services.nexwall.com.br")
     TENANT = os.environ.get("CLM_TENANT", "")
     MACADDR = os.environ.get("CLM_MACADDR", "00:00:00:00:00:00")
     DEBUG = os.environ.get("CLM_DEBUG", "0") == "1"

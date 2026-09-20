@@ -1,6 +1,6 @@
 config main 'config'
     option enabled '0'
     option uuid ''
-    option address 'https://nar.nethesis.it'
+    option address 'https://services.nexwall.com.br'
     option tenant ''
     option debug '0'

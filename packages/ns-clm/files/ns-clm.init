@@ -14,7 +14,7 @@ start_service() {
     local enabled uuid address tenant debug macaddr
     config_get enabled config enabled '0'
     config_get uuid config uuid ''
-    config_get address config address 'https://nar.nethesis.it'
+    config_get address config address 'https://services.nexwall.com.br'
     config_get tenant config tenant ''
     config_get debug config debug '0'
 

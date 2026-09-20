@@ -16,7 +16,7 @@ from os import environ
 import json
 
 
-SUBSCRIPTION_SERVER = "https://sp.nethesis.it"
+SUBSCRIPTION_SERVER = "https://services.nexwall.com.br"
 OUT_DIR = "/etc/netifyd"
 APPS_FILENAME = "netify-apps.conf"
 CATEGORIES_FILENAME = "netify-categories.json"

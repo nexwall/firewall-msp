@@ -14,7 +14,7 @@ import logging
 from os import environ
 
 
-DATA_SERVER_ENDPOINT = "https://distfeed.nethesis.it"
+DATA_SERVER_ENDPOINT = "https://services.nexwall.com.br"
 APPLICATIONS_CATEGORIES_ENDPOINT = "/api/netifyd/applications/categories"
 APPLICATIONS_CATALOG_ENDPOINT = "/api/netifyd/applications/catalog"
 PROTOCOLS_CATEGORIES_ENDPOINT = "/api/netifyd/protocols/categories"

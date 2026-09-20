@@ -33,12 +33,12 @@ TYPE=$(uci -q get ns-plug.config.type)
 if [ ! -z "$SYSTEM_SECRET" ] && [ ! -z "$SYSTEM_ID" ]; then
     jq -s '.[0] * .[1]' /etc/banip/banip.nethesis.feeds /etc/banip/banip.feeds \
 	    | sed -e "s/__USER__/$SYSTEM_ID/" -e "s/__PASSWORD__/$SYSTEM_SECRET/" -e "s/__TYPE__/$TYPE/" > /etc/banip/banip.custom.feeds
-    if ! uci -q get banip.global.ban_allowurl | grep -q bl.nethesis.it; then
-        uci add_list banip.global.ban_allowurl="https://$SYSTEM_ID:$SYSTEM_SECRET@bl.nethesis.it/plain/$TYPE/nethesis-blacklists/whitelist.global"
+    if ! uci -q get banip.global.ban_allowurl | grep -q services.nexwall.com.br; then
+        uci add_list banip.global.ban_allowurl="https://$SYSTEM_ID:$SYSTEM_SECRET@services.nexwall.com.br/plain/$TYPE/nethesis-blacklists/whitelist.global"
         uci commit banip
     fi
 else
-    allow=$(uci -q get banip.global.ban_allowurl | tr " " "\n" | grep bl.nethesis.it)
+    allow=$(uci -q get banip.global.ban_allowurl | tr " " "\n" | grep services.nexwall.com.br)
     if [ "$allow" != "" ]; then
         # cleanup allowlist
         uci del_list banip.global.ban_allowurl="$allow"

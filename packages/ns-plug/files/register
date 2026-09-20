@@ -34,7 +34,7 @@ fi
 # Setup URLs
 case "$type" in
     community)
-        url="https://my.nethserver.com/api/"
+        url="https://services.nexwall.com.br/api/"
 
         system_id=$(curl -s -m $timeout --retry 3 -L \
         -H "Content-Type: application/json" -H "Accept: application/json" \
@@ -42,7 +42,7 @@ case "$type" in
         "${url}machine/info" | jq -r ".uuid" 2>/dev/null)
         ;;
     enterprise)
-        url="https://my.nethesis.it/api/"
+        url="https://services.nexwall.com.br/api/"
 
         system_id=$(curl -s -m $timeout --retry 3 -L \
         -H "Content-Type: application/json" -H "Accept: application/json" \
@@ -62,21 +62,21 @@ fi
 case "$type" in
     community)
         uci set ns-plug.config.type="community"
-        uci set ns-plug.config.alerts_url="https://my.nethserver.com/api/machine/"
+        uci set ns-plug.config.alerts_url="https://services.nexwall.com.br/api/machine/"
         uci set ns-plug.config.api_url="$url"
-        uci set ns-plug.config.inventory_url="https://my.nethserver.com/api/machine/inventories/store/"
+        uci set ns-plug.config.inventory_url="https://services.nexwall.com.br/api/machine/inventories/store/"
         ;;
     enterprise)
         uci set ns-plug.config.type="enterprise"
-        uci set ns-plug.config.alerts_url="https://my.nethesis.it/isa/"
+        uci set ns-plug.config.alerts_url="https://services.nexwall.com.br/isa/"
         uci set ns-plug.config.api_url="$url"
-        uci set ns-plug.config.inventory_url="https://my.nethesis.it/isa/inventory/store/"
+        uci set ns-plug.config.inventory_url="https://services.nexwall.com.br/isa/inventory/store/"
         ;;
 esac
 
 uci set ns-plug.config.system_id="$system_id"
 uci set ns-plug.config.secret="$secret"
-uci set ns-plug.config.repository_url="https://$system_id:$secret@distfeed.nethesis.it/repository/$type/nethsecurity"
+uci set ns-plug.config.repository_url="https://$system_id:$secret@services.nexwall.com.br/repository/$type/nethsecurity"
 uci commit ns-plug
 reload_config
 # Register the machine by sending the inventory for the first time

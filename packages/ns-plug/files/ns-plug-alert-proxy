@@ -7,7 +7,7 @@
 
 """
 Alert proxy: receives Alertmanager-like notifications from vmalert and
-forwards selected alerts to the legacy my.nethesis.it / my.nethserver.com
+forwards selected alerts to the legacy services.nexwall.com.br / services.nexwall.com.br
 monitoring portals.
 
 Only the following alerts are forwarded:

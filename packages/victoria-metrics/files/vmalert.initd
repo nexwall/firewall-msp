@@ -33,7 +33,7 @@ start_service() {
     }
 
     if [ "$system_type" = "enterprise" ] && [ -n "$system_id" ] && [ -n "$system_secret" ]; then
-        notifier_url="https://my.nethesis.it/proxy/alerts"
+        notifier_url="https://services.nexwall.com.br/proxy/alerts"
         notifier_user="$system_id"
         notifier_pass="$system_secret"
     else
