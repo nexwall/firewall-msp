@@ -106,7 +106,7 @@ def get_storage():
 
 def check_internet():
     success = 0
-    hosts = ("8.8.8.8", "one.one.one.one", "www.nethserver.org", "gstatic.com")
+    hosts = ("8.8.8.8", "one.one.one.one", "www.cloudflare.com", "gstatic.com")
     for host in hosts:
         try:
             subprocess.run(["ping", "-c", "1", host], check=True, capture_output=True)

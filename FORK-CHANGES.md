@@ -22,6 +22,7 @@ Record of modifications to files inherited from NethSecurity (upstream commit `9
   (`ns-threat_shield`).
 - **Defaults**: hostname `Nexwall`; default password `Nexwall,1234` (hash in
   `files/etc/uci-defaults/90-nethsec-root-password` regenerated; same value in the HA, API CLI and inventory defaults).
+- **Runtime references**: the dashboard connectivity check no longer contacts the previous vendor site, the certificate account email and a DHCP example domain were changed (`ns.dashboard`, `ns.reverseproxy`, `ns.dhcp`).
 - **Wording**: product name in package descriptions, READMEs and messages; package category `Nexwall`.
 - **Removed from the repository**: upstream documentation site, release and CI tooling, deployment examples, agent
   guides and repository automation.

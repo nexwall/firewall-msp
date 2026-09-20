@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 
-# Manage the subscription to my.nethesis.it or my.nethserver.com
+# Manage the subscription to the Nexwall services portal
 
 import sys
 import json
