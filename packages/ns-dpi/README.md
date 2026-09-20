@@ -133,7 +133,7 @@ supplementary signatures, netifyd can extend its recognition capabilities to enc
 
 Extra signatures are accessible only from a machine with a valid subscription.
 A cron job will update DPI signatures during the night and upon machine registration.
-The download will be authenticated using a Nethesis proxy.
+The download will be authenticated using a Nexwall proxy.
 
 To force the update execute:
 ```

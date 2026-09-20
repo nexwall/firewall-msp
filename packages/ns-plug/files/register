@@ -76,7 +76,7 @@ esac
 
 uci set ns-plug.config.system_id="$system_id"
 uci set ns-plug.config.secret="$secret"
-uci set ns-plug.config.repository_url="https://$system_id:$secret@services.nexwall.com.br/repository/$type/nethsecurity"
+uci set ns-plug.config.repository_url="https://$system_id:$secret@updates.nexwall.com.br/repository/$type/nexwall"
 uci commit ns-plug
 reload_config
 # Register the machine by sending the inventory for the first time

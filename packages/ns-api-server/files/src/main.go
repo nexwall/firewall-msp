@@ -29,9 +29,9 @@ import (
 	"github.com/NethServer/nethsecurity-api/response"
 )
 
-// @title NethSecurity StandAlone API Server
+// @title Nexwall Firewall StandAlone API Server
 // @version 1.0
-// @description NethSecurity StandAlone API Server is used to create manage stand-alone NethSecurity instance
+// @description Nexwall Firewall StandAlone API Server is used to create manage stand-alone Nexwall Firewall instance
 // @termsOfService https://nethserver.org/terms/
 
 // @contact.name NethServer Developer Team

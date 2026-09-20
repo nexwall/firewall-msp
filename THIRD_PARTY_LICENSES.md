@@ -30,17 +30,17 @@ package versions change. Components fetched from OpenWrt feeds keep the license 
 | acme-common 1.1.2 (fork of openwrt/packages) | GPL-3.0-only |
 | python-semver 3.0.4 (fork of openwrt/packages) | BSD-3-Clause |
 
-## Not under a free license - action required
+## Traffic classification service (`netifyd`)
 
-| Package | Version | Problem |
-|---|---|---|
-| netifyd | 5.2.9 | Makefile declares `PKG_LICENSE:=Unlicensed`. Prebuilt binaries and plugin libraries are downloaded from `updates.nethsecurity.nethserver.org`. Some plugins are documented by the vendor as proprietary and license-gated. See `msp/NETIFYD.md`. |
+The package ships a placeholder service written for this project (GPL-2.0-only). It does not download or include any
+proprietary binary. It installs the open application signature list `netify-apps.conf` (Apache-2.0, eGloo Inc.) and the
+init script (GPL-2.0, eGloo Inc.). No traffic classification engine is included yet.
 
 ## Data files with their own terms
 
-- `packages/netifyd/files/etc/netifyd/netify-apps.conf`: header states Apache-2.0 (eGloo open-source signature list).
-- DNS blocklists in `packages/ns-threat_shield/files/*.sources` point at `bl.nethesis.it`; the lists are a Nethesis
-  service, not part of the GPL source. See `msp/OUTBOUND_ENDPOINTS.md`.
+- `packages/netifyd/files/etc/netifyd/netify-apps.conf`: Apache-2.0, eGloo Inc.
+- Blocklist definitions in `packages/ns-threat_shield/files/` point to `lists.nexwall.com.br`; the list content is
+  published by Nexwall and is not part of the source.
 
 ## Base system
 

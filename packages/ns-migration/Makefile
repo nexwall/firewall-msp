@@ -18,8 +18,8 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-migration
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NS7 2 NethSecurity migration
+	CATEGORY:=Nexwall
+	TITLE:=NS7 2 Nexwall Firewall migration
 	URL:=https://github.com/NethServer/nethsecurity/tree/master/packages/ns-migration
 	DEPENDS:=+python3-nethsec
 	PKGARCH:=all

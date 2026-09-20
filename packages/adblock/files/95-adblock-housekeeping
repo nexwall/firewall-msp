@@ -84,7 +84,7 @@ for option in ${old_options}; do
 	fi
 done
 
-# NethSecurity: migrate adb_bypass to ns_tsdns_bypass
+# Nexwall Firewall: migrate adb_bypass to ns_tsdns_bypass
 #
 if uci -q get ${config}.global.adb_bypass >/dev/null 2>&1; then
 	old_bypass="$(uci -q get ${config}.global.adb_bypass)"

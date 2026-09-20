@@ -18,7 +18,7 @@ include $(INCLUDE_DIR)/package.mk
 
 define Package/ns-clm
 	SECTION:=base
-	CATEGORY:=NethSecurity
+	CATEGORY:=Nexwall
 	TITLE:=Cloud Log Manager forwarder
 	URL:=https://github.com/NethServer/nethsecurity/
 	DEPENDS:=+python3-urllib
@@ -26,7 +26,7 @@ define Package/ns-clm
 endef
 
 define Package/ns-clm/description
-	Forward syslog messages to the Nethesis Cloud Log Manager service
+	Forward syslog messages to the Nexwall Cloud Log Manager service
 endef
 
 define Package/ns-clm/conffiles

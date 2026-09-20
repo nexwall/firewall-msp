@@ -4,9 +4,9 @@ Official Check_MK monitoring agent for OpenWrt-based systems.
 
 ## Description
 
-This package provides the official Check_MK agent binary along with service management for NethSecurity. The agent is exposed via TCP port 6556 using socat, enabling remote monitoring server connections.
+This package provides the official Check_MK agent binary along with service management for Nexwall Firewall. The agent is exposed via TCP port 6556 using socat, enabling remote monitoring server connections.
 
-For NethSecurity-specific plugins and utilities, install the complementary `ns-checkmk-utils` package.
+For Nexwall Firewall-specific plugins and utilities, install the complementary `ns-checkmk-utils` package.
 
 ## Features
 
@@ -84,7 +84,7 @@ uci commit firewall
 
 ## Extending with Plugins
 
-To add NethSecurity-specific plugins and utilities, install the `ns-checkmk-utils` package:
+To add Nexwall Firewall-specific plugins and utilities, install the `ns-checkmk-utils` package:
 
 ```bash
 apk add ns-checkmk-utils
@@ -101,6 +101,6 @@ Plugins are stored in `/usr/lib/check_mk_agent/local` and are automatically exec
 
 ## See Also
 
-- [ns-checkmk-utils](../ns-checkmk-utils/): NethSecurity-specific plugins and utilities
+- [ns-checkmk-utils](../ns-checkmk-utils/): Nexwall Firewall-specific plugins and utilities
 - [Checkmk Documentation](https://docs.checkmk.com/): Official Checkmk documentation
 - [Checkmk GitHub](https://github.com/Checkmk/checkmk): Checkmk project repository

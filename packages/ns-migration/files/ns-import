@@ -73,7 +73,7 @@ if [ -f "$tmp_dir/export/version.json" ]; then
     echo "nethserver-firewall-migration version: $version" >> "$log"
 fi
 source /etc/os-release
-echo "NethSecurity version: $OPENWRT_RELEASE" >> "$log"
+echo "Nexwall Firewall version: $OPENWRT_RELEASE" >> "$log"
 
 rm -rf $tmp_dir
 

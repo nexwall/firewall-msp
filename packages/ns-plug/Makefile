@@ -18,15 +18,15 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-plug
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity controller client
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall controller client
 	URL:=https://github.com/nexwall/nexwall-controller/
 	DEPENDS:=+openvpn +lscpu +python3-nethsec +python3-yaml +telegraf +victoria-metrics
 	PKGARCH:=all
 endef
  
 define Package/ns-plug/description
-	Register and connect the firewall to a NethSecurity controller instance
+	Register and connect the firewall to a Nexwall Firewall controller instance
 endef
 
 define Package/ns-plug/conffiles

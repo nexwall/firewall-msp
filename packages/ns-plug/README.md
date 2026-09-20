@@ -6,7 +6,7 @@ ns-plug handles:
   and [my.nethesis.it](https://my.nethesis.it) (enterprise subscription)
 - the remote backup for enterprise subscriptions
 
-## NethSecurity controller client
+## Nexwall Firewall controller client
 
 The client is composed by 3 main parts:
 

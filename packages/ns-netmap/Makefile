@@ -18,7 +18,7 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-netmap
 	SECTION:=base
-	CATEGORY:=NethSecurity
+	CATEGORY:=Nexwall
 	TITLE:=Netmap firewall rules
 	URL:=https://github.com/NethServer/nethsecurity/
 	DEPENDS:=+python3-nethsec

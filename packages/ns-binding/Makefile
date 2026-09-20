@@ -19,7 +19,7 @@ include $(INCLUDE_DIR)/package.mk
 
 define Package/ns-binding
 	SECTION:=base
-	CATEGORY:=NethSecurity
+	CATEGORY:=Nexwall
 	TITLE:=MAC/IP binding
 	URL:=https://github.com/NethServer/nethsecurity
 	DEPENDS:=+python3-nethsec +dnsmasq-full +python3-jinja2

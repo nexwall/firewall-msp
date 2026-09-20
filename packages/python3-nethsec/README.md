@@ -1,6 +1,6 @@
 # python3-nethsec
 
-Python3 library for NethSecurity.
+Python3 library for Nexwall Firewall.
 
 Requirements:
 
@@ -84,9 +84,9 @@ package directory (`packages/python3-nethsec`) execute:
 registry access is needed and a `Containerfile` change is always picked up.
 Podman's layer cache keeps the rebuild fast when nothing changed.
 
-## Packaging in NethSecurity
+## Packaging in Nexwall Firewall
 
-This library is built into the NethSecurity image as the `python3-nethsec`
+This library is built into the Nexwall Firewall image as the `python3-nethsec`
 OpenWrt package. The `nethsec` wheel is built from the local `./src` tree.
 
 When releasing a new version, bump `PKG_VERSION` (and `PKG_RELEASE`) in `Makefile`.

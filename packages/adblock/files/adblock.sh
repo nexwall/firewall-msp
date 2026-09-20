@@ -1017,7 +1017,7 @@ f_nftadd() {
 					printf '%s\n' "add rule inet adblock pre-routing iifname \"${device}\" ether saddr @mac_block return"
 				fi
 
-				# NethSecurity: IP-based bypass exceptions
+				# Nexwall Firewall: IP-based bypass exceptions
 				#
 				for bypass_ip in ${ns_tsdns_bypass}; do
 					printf '%s\n' "add rule inet adblock pre-routing iifname \"${device}\" ip saddr ${bypass_ip} return"
@@ -2508,13 +2508,13 @@ case "${adb_action}" in
 	f_env
 	f_main
 	;;
-# Start NethSecurity patch
+# Start Nexwall Firewall patch
 "nft-reload")
 	f_temp
 	f_nftremove
 	f_nftadd
 	;;
-# End NethSecurity patch
+# End Nexwall Firewall patch
 "restart")
 	f_temp
 	f_jsnup "processing"

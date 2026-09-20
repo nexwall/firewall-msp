@@ -33,16 +33,16 @@ done
 # Conclude configuration
 cat <<EOF >> .config
 CONFIG_GRUB_TITLE="Nexwall Firewall"
-CONFIG_VERSION_BUG_URL="https://nexwall.io/bugs"
+CONFIG_VERSION_BUG_URL="https://support.nexwall.com.br"
 CONFIG_VERSION_DIST="Nexwall"
-CONFIG_VERSION_HOME_URL="https://nexwall.io"
+CONFIG_VERSION_HOME_URL="https://nexwall.com.br"
 CONFIG_VERSION_MANUFACTURER="Nexwall"
-CONFIG_VERSION_MANUFACTURER_URL="https://nexwall.io"
+CONFIG_VERSION_MANUFACTURER_URL="https://nexwall.com.br"
 CONFIG_VERSION_NUMBER="${image_version}"
 CONFIG_VERSION_CODE="${owrt_version}"
 CONFIG_VERSION_PRODUCT="Nexwall Firewall"
-CONFIG_VERSION_REPO="https://services.nexwall.com.br/${repo_channel}/${nethsecurity_version}"
-CONFIG_VERSION_SUPPORT_URL="https://nexwall.io/support"
+CONFIG_VERSION_REPO="https://updates.nexwall.com.br/${repo_channel}/${nethsecurity_version}"
+CONFIG_VERSION_SUPPORT_URL="https://support.nexwall.com.br"
 EOF
 cat "config/targets/${target}.conf" >> .config
 

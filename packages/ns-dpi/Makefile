@@ -19,7 +19,7 @@ include $(INCLUDE_DIR)/package.mk
 
 define Package/ns-dpi
 	SECTION:=base
-	CATEGORY:=NethSecurity
+	CATEGORY:=Nexwall
 	TITLE:=DPI rules
 	URL:=https://github.com/NethServer/nethsecurity/
 	DEPENDS:= \

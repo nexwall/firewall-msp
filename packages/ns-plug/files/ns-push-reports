@@ -6,7 +6,7 @@
 #
 
 #
-# Push report data a remote NethSecurity controller
+# Push report data a remote Nexwall Firewall controller
 #
 
 UCI_CONF="ns-plug"

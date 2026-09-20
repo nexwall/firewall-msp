@@ -6,7 +6,7 @@
 #
 
 #
-# Threat shield: add Nethesis categories to banip
+# Threat shield: add Nexwall categories to banip
 #
 
 . /lib/functions.sh
@@ -15,7 +15,7 @@ keep=''
 
 handle_blocklist() {
     # preserve only non-enteprise lists
-    if ! echo $1 | grep -q -E '^yoroi|^nethesis' ; then
+    if ! echo $1 | grep -q -E '^nexwall' ; then
         keep="$keep $1"
     fi
 }
@@ -31,14 +31,14 @@ SYSTEM_ID=$(uci -q get ns-plug.config.system_id)
 TYPE=$(uci -q get ns-plug.config.type)
 
 if [ ! -z "$SYSTEM_SECRET" ] && [ ! -z "$SYSTEM_ID" ]; then
-    jq -s '.[0] * .[1]' /etc/banip/banip.nethesis.feeds /etc/banip/banip.feeds \
+    jq -s '.[0] * .[1]' /etc/banip/banip.nexwall.feeds /etc/banip/banip.feeds \
 	    | sed -e "s/__USER__/$SYSTEM_ID/" -e "s/__PASSWORD__/$SYSTEM_SECRET/" -e "s/__TYPE__/$TYPE/" > /etc/banip/banip.custom.feeds
-    if ! uci -q get banip.global.ban_allowurl | grep -q services.nexwall.com.br; then
-        uci add_list banip.global.ban_allowurl="https://$SYSTEM_ID:$SYSTEM_SECRET@services.nexwall.com.br/plain/$TYPE/nethesis-blacklists/whitelist.global"
+    if ! uci -q get banip.global.ban_allowurl | grep -q lists.nexwall.com.br; then
+        uci add_list banip.global.ban_allowurl="https://$SYSTEM_ID:$SYSTEM_SECRET@lists.nexwall.com.br/plain/$TYPE/nexwall-blacklists/whitelist.global"
         uci commit banip
     fi
 else
-    allow=$(uci -q get banip.global.ban_allowurl | tr " " "\n" | grep services.nexwall.com.br)
+    allow=$(uci -q get banip.global.ban_allowurl | tr " " "\n" | grep lists.nexwall.com.br)
     if [ "$allow" != "" ]; then
         # cleanup allowlist
         uci del_list banip.global.ban_allowurl="$allow"

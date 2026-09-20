@@ -1,58 +1,58 @@
 {
 	"malware_lvl2": {
-		"url": "https://services.nexwall.com.br/plain/community/free/malware_lvl2.dns",
+		"url": "https://lists.nexwall.com.br/plain/community/free/malware_lvl2.dns",
 		"rule": "feed 1",
 		"size": "XXL",
 		"focus": "Threat Intelligence Feed",
-		"descurl": "www.nethesis.it"
+		"descurl": "nexwall.com.br"
 	},
 	"malware_privacy_lvl2": {
-		"url": "https://services.nexwall.com.br/plain/community/free/malware_privacy_lvl2.dns",
+		"url": "https://lists.nexwall.com.br/plain/community/free/malware_privacy_lvl2.dns",
 		"rule": "feed 1",
 		"size": "XXL",
 		"focus": "Multi Light: malware & privacy",
-		"descurl": "www.nethesis.it"
+		"descurl": "nexwall.com.br"
 	},
 	"malware_privacy_lvl3": {
-		"url": "https://services.nexwall.com.br/plain/community/free/malware_privacy_lvl3.dns",
+		"url": "https://lists.nexwall.com.br/plain/community/free/malware_privacy_lvl3.dns",
 		"rule": "feed 1",
 		"size": "XXL",
 		"focus": "Multi Normal: malware and privacy",
-		"descurl": "www.nethesis.it"
+		"descurl": "nexwall.com.br"
 	},
 	"malware_privacy_lvl4": {
-		"url": "https://services.nexwall.com.br/plain/community/free/malware_privacy_lvl4.dns",
+		"url": "https://lists.nexwall.com.br/plain/community/free/malware_privacy_lvl4.dns",
 		"rule": "feed 1",
 		"size": "XXL",
 		"focus": "Multi Pro: malware and privacy",
-		"descurl": "www.nethesis.it"
+		"descurl": "nexwall.com.br"
 	},
 	"adult": {
-		"url": "https://services.nexwall.com.br/plain/community/free/adult.dns",
+		"url": "https://lists.nexwall.com.br/plain/community/free/adult.dns",
 		"rule": "feed 1",
 		"size": "XXL",
 		"focus": "Adult",
-		"descurl": "www.nethesis.it"
+		"descurl": "nexwall.com.br"
 	},
 	"doh_vpn_tor_proxy": {
-		"url": "https://services.nexwall.com.br/plain/community/free/doh_vpn_tor_proxy.dns",
+		"url": "https://lists.nexwall.com.br/plain/community/free/doh_vpn_tor_proxy.dns",
 		"rule": "feed 1",
 		"size": "XXL",
 		"focus": "Prevent DNS bypass",
-		"descurl": "www.nethesis.it"
+		"descurl": "nexwall.com.br"
 	},
 	"gambling": {
-		"url": "https://services.nexwall.com.br/plain/community/free/gambling.dns",
+		"url": "https://lists.nexwall.com.br/plain/community/free/gambling.dns",
 		"rule": "feed 1",
 		"size": "XXL",
 		"focus": "Gambling",
-		"descurl": "www.nethesis.it"
+		"descurl": "nexwall.com.br"
 	},
 	"piracy": {
-		"url": "https://services.nexwall.com.br/plain/community/free/piracy.dns",
+		"url": "https://lists.nexwall.com.br/plain/community/free/piracy.dns",
 		"rule": "feed 1",
 		"size": "XXL",
 		"focus": "Piracy",
-		"descurl": "www.nethesis.it"
+		"descurl": "nexwall.com.br"
 	}
 }

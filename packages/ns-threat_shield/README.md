@@ -16,11 +16,11 @@ Threat shield IP (`ts-ip`) blocks traffic from/to a given list of IPs.
 
 The following categories require a valid entitlement:
 
-- `yoroimallvl1` (was `yoroi_malware_level1` on NS7)
-- `yoroimallvl2` (was `yoroi_malware_level2` on NS7)
-- `yoroisusplvl1` (was `yoroi_souspicious_level1` on NS7)
-- `yoroisusplvl2` (was `yoroi_souspicious_level2` on NS7)
-- `nethesislvl3` (was `nethesis_level3` on NS7)
+- `nexwallmallvl1` (was `nexwall_malware_level1` on NS7)
+- `nexwallmallvl2` (was `nexwall_malware_level2` on NS7)
+- `nexwallsusplvl1` (was `nexwall_suspicious_level1` on NS7)
+- `nexwallsusplvl2` (was `nexwall_suspicious_level2` on NS7)
+- `nexwalllvl3` (was `nexwall_level3` on NS7)
 
 After machine registration, above categories will be automatically added to existing banip categories (`/etc/banip/banip.custom.feeds`).
 
@@ -32,7 +32,7 @@ A special global allowlist will also be added to banip (`ban_allowurl` option).
 
 Enable the service and select one or more categories to block:
 ```
-uci add_list banip.global.ban_feed=yoroimallvl1
+uci add_list banip.global.ban_feed=nexwallmallvl1
 uci set banip.global.ban_enabled=1
 uci commit banip
 ts-ip
@@ -70,8 +70,8 @@ If `ts_enabled` is set to 1:
 - adblock is configured to use the new category source file and will be started
 
 As default a machine has access to all community free categories, that are listed at `/usr/share/threat_shield/community-dns.sources.gz`.
-If the machine has a subscription and a valid entitlement for nethesis-blacklists, the machine will have access to the enterprise categories, 
-that are listed at `/usr/share/threat_shield/nethesis-dns.sources.gz`.
+If the machine has a subscription and a valid entitlement for nexwall-blacklists, the machine will have access to the enterprise categories, 
+that are listed at `/usr/share/threat_shield/nexwall-dns.sources.gz`.
 
 DNS block categories will be automatically reloaded every 12 hours.
 

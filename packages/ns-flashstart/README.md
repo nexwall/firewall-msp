@@ -1,6 +1,6 @@
 # ns-flashstart
 
-ns-flashstart is the client configuration for [FlashStart](https://flashstart.com) DNS filter.
+ns-flashstart is the client configuration for Nexwall DNS filter (`https://services.nexwall.com.br/dns`).
 
 The client is composed in three main parts:
 
@@ -11,12 +11,12 @@ The client is composed in three main parts:
 ## Configuration
 
 The `ns-flashstart` service needs the `username` and `password` options which can be obtained
-only after a signup to Flashstart service.
+only after a signup to Nexwall DNS service.
 
-Below example will register the client, start dsndist with Flashstart forwarders and setup DNS redirection on `lan`:
+Below example will register the client, start dsndist with Nexwall DNS forwarders and setup DNS redirection on `lan`:
 
 ```
-uci set flashstart.global.username="myuser@nethserver.org"
+uci set flashstart.global.username="user@example.com"
 uci set flashstart.global.password="mypassword"
 uci set flashstart.global.enabled="1"
 uci add_list flashstart.global.zones="lan"

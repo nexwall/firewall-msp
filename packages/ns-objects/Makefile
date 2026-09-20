@@ -18,8 +18,8 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-objects
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity controller client
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall controller client
 	URL:=https://github.com/nexwall/nexwall-controller/
 	DEPENDS:=+python3-nethsec
 	PKGARCH:=all

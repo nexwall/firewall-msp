@@ -6,7 +6,7 @@
 #
 
 DEST_DIR=/etc/adblock
-NETHESIS_SOURCES=/usr/share/threat_shield/nethesis-dns.sources.gz
+NEXWALL_SOURCES=/usr/share/threat_shield/nexwall-dns.sources.gz
 COMMUNITY_SOURCES=/usr/share/threat_shield/community-dns.sources.gz
 CUSTOM_FEEDS="$DEST_DIR/adblock.custom.feeds"
 TMP_FILE=/tmp/ts-dns.sources
@@ -24,9 +24,9 @@ if [ "$TS_ENABLED" = 1 ]; then
     # Build custom feeds from community sources
     gunzip -c "$COMMUNITY_SOURCES" > "$TMP_FILE"
 
-    # Merge Nethesis sources if the machine has a subscription
+    # Merge Nexwall sources if the machine has a subscription
     if [ -n "$SYSTEM_SECRET" ] && [ -n "$SYSTEM_ID" ]; then
-        gunzip -c "$NETHESIS_SOURCES" | sed -e "s/__USER__/$SYSTEM_ID/" -e "s/__PASSWORD__/$SYSTEM_SECRET/" -e "s/__TYPE__/$TYPE/" >> "$TMP_FILE"
+        gunzip -c "$NEXWALL_SOURCES" | sed -e "s/__USER__/$SYSTEM_ID/" -e "s/__PASSWORD__/$SYSTEM_SECRET/" -e "s/__TYPE__/$TYPE/" >> "$TMP_FILE"
     fi
 
     # Merge all sources into a single JSON object and write to adblock.custom.feeds

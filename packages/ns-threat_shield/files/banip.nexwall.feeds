@@ -1,0 +1,32 @@
+{
+	"nexwallmallvl1": {
+		"url_4": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_malware_level1.ipset",
+		"rule": "feed 1",
+		"chain": "in",
+		"descr": "Nexwall malware - Level 1"
+	},
+	"nexwallmallvl2": {
+		"url_4": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_malware_level2.ipset",
+		"rule": "feed 1",
+		"chain": "in",
+		"descr": "Nexwall malware - Level 2"
+	},
+	"nexwallsusplvl1": {
+		"url_4": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_suspicious_level1.ipset",
+		"rule": "feed 1",
+		"chain": "in",
+		"descr": "Nexwall suspicious - Level 1"
+	},
+	"nexwallsusplvl2": {
+		"url_4": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_suspicious_level2.ipset",
+		"rule": "feed 1",
+		"chain": "in",
+		"descr": "Nexwall suspicious - Level 2"
+	},
+	"nexwalllvl3": {
+		"url_4": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_level3.netset",
+		"rule": "feed 1",
+		"chain": "in",
+		"descr": "Nexwall suspicious - Level 3"
+	}
+}

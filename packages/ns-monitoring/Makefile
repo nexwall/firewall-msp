@@ -12,7 +12,7 @@ PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/nexwall/nexwall-monitoring.git
-PKG_SOURCE_VERSION:=403140ed9be858d69f062dd14f0fef3ff3a1c06d
+PKG_SOURCE_VERSION:=0810ffff622ce9a761a5a95fee573162cbd91e64
 PKG_SOURCE_SUBDIR:=nexwall-monitoring-$(PKG_VERSION)
 # tarball name tied to the commit, so a cached upstream tarball is never reused
 PKG_SOURCE:=nexwall-monitoring-$(PKG_SOURCE_VERSION).tar.zst

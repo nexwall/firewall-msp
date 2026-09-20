@@ -18,8 +18,8 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-phonehome
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity controller client
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall controller client
 	URL:=https://github.com/NethServer/nethsecurity-controller/
 	DEPENDS:=+lscpu +pciutils +python3-uuid +python3-nethsec
 	PKGARCH:=all

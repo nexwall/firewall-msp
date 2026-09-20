@@ -19,7 +19,7 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-threat_shield
 	SECTION:=base
-	CATEGORY:=NethSecurity
+	CATEGORY:=Nexwall
 	TITLE:=Threat shield block list
 	URL:=https://github.com/NethServer/nethsecurity/
 	DEPENDS:=+wget-ssl +adblock +jq +ns-api
@@ -52,9 +52,9 @@ define Package/ns-threat_shield/install
 	$(LN) /usr/sbin/ts-ip $(1)/usr/share/ns-plug/hooks/register/80ts-ip
 	$(LN) /usr/sbin/ts-ip $(1)/usr/share/ns-plug/hooks/unregister/80ts-ip
 	$(INSTALL_DIR) $(1)/usr/share/threat_shield
-	$(INSTALL_DATA) ./files/nethesis-dns.sources $(1)/usr/share/threat_shield
+	$(INSTALL_DATA) ./files/nexwall-dns.sources $(1)/usr/share/threat_shield
 	$(INSTALL_DATA) ./files/community-dns.sources $(1)/usr/share/threat_shield
-	$(INSTALL_DATA) ./files/banip.nethesis.feeds $(1)/etc/banip
+	$(INSTALL_DATA) ./files/banip.nexwall.feeds $(1)/etc/banip
 	$(INSTALL_BIN) ./files/adjust-banip.py $(1)/usr/libexec/ns-api/post-commit/
 	$(INSTALL_BIN) ./files/configure-banip-wans.py $(1)/usr/libexec/ns-api/pre-commit/
 	$(INSTALL_BIN) ./files/configure-adblock-devices.py $(1)/usr/libexec/ns-api/pre-commit/
@@ -64,7 +64,7 @@ define Package/ns-threat_shield/install
 	$(INSTALL_BIN) ./files/banip-extra-defaults $(1)/etc/uci-defaults/96-nethsec-banip-extra
 	$(INSTALL_BIN) ./files/35_ns-threat_shield $(1)/etc/uci-defaults/35_ns-threat_shield
 	$(INSTALL_BIN) ./files/96_ns-threat_shield $(1)/etc/uci-defaults/96_ns-threat_shield
-	gzip -9n $(1)/usr/share/threat_shield/nethesis-dns.sources
+	gzip -9n $(1)/usr/share/threat_shield/nexwall-dns.sources
 	gzip -9n $(1)/usr/share/threat_shield/community-dns.sources
 endef
 

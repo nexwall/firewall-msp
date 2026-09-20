@@ -111,9 +111,9 @@ def anonymize(value, uci: EUci):
     return f"anon-{h[:16]}"
 
 def parse_version(version_str):
-    # Remove "NethSecurity " prefix if present
-    if version_str.startswith('NethSecurity '):
-        version_str = version_str[13:]  # len('NethSecurity ') = 13
+    # Remove "Nexwall Firewall " prefix if present
+    if version_str.startswith('Nexwall Firewall '):
+        version_str = version_str[13:]  # len('Nexwall Firewall ') = 13
     # Take only the part before "-"
     version_str = version_str.split('-')[0]
     # Convert to tuple of integers for comparison
@@ -188,7 +188,7 @@ def get_dmi():
     return {
         "name": get_product(),
         "manufacturer": _read_dmi('sys_vendor'),
-        # hardware revision of the appliance, not the NethSecurity version
+        # hardware revision of the appliance, not the Nexwall Firewall version
         "version": _read_dmi('product_version'),
         "uuid": _read_dmi('product_uuid'),
         "board": _read_dmi('board_name'),
@@ -850,7 +850,7 @@ def fact_ha(uci: EUci):
 def fact_default_password(uci: EUci):
     data = {
         'username': 'root',
-        'password': 'Nethesis,1234',
+        'password': 'Nexwall,1234',
         'timeout': 1
     }
     result = subprocess.run(['/bin/ubus', 'call', 'session', 'login', json.dumps(data)], capture_output=True)

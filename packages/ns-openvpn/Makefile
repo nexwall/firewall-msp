@@ -18,15 +18,15 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-openvpn
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity OpenVPN extensions
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall OpenVPN extensions
 	URL:=https://github.com/NethServer/nethsecurity/
 	DEPENDS:=+openvpn +openvpn-easy-rsa +python3-sqlite3 +python3-nethsec +openldap-utils +qrencode +python3-pyotp
 	PKGARCH:=all
 endef
  
 define Package/ns-openvpn/description
-	NethSecurity OpenVPN extensions
+	Nexwall Firewall OpenVPN extensions
 endef
 
 # this is required, otherwise compile will fail

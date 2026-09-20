@@ -1,6 +1,6 @@
 # ns-clm
 
-Cloud Log Manager (CLM) forwarder for NethSecurity. Reads syslog messages from `/var/log/messages` and forwards them to the Nethesis CLM service.
+Cloud Log Manager (CLM) forwarder for Nexwall Firewall. Reads syslog messages from `/var/log/messages` and forwards them to the Nexwall CLM service.
 
 ## Requirements
 

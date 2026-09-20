@@ -409,24 +409,24 @@ Have fun!
 Dirk
 ---
 
-## NethSecurity Integration
+## Nexwall Firewall Integration
 
-NethSecurity ships adblock as the DNS-blocking engine for the Threat Shield DNS feature.
+Nexwall Firewall ships adblock as the DNS-blocking engine for the Threat Shield DNS feature.
 
 ### Threat Shield DNS
 
 The Threat Shield DNS integration is controlled by the `ts_enabled` option in `adblock.global`. When enabled, `ts-dns` populates `/etc/adblock/adblock.custom.feeds` with Nethesis enterprise feeds (if a subscription is active) and community free feeds, which adblock reads automatically.
 
-Relevant UCI options set by NethSecurity (in addition to standard adblock options):
+Relevant UCI options set by Nexwall Firewall (in addition to standard adblock options):
 
 | Option | Default | Description |
 | :--- | :--- | :--- |
-| `ts_enabled` | `0` | Set to `1` by NethSecurity to activate Threat Shield DNS mode |
+| `ts_enabled` | `0` | Set to `1` by Nexwall Firewall to activate Threat Shield DNS mode |
 | `ns_tsdns_bypass` | -, not set | List of IP addresses or subnets excluded from `adb_nftforce` DNS redirection |
 
 ### IP-based DNS bypass
 
-The standard adblock `adb_nftforce` feature forces DNS queries from specified LAN devices/VLANs through the local resolver. NethSecurity extends this with an **IP-based bypass** list (`ns_tsdns_bypass`): any source IP or subnet in that list is exempt from DNS redirection, even when DNS enforcement is active.
+The standard adblock `adb_nftforce` feature forces DNS queries from specified LAN devices/VLANs through the local resolver. Nexwall Firewall extends this with an **IP-based bypass** list (`ns_tsdns_bypass`): any source IP or subnet in that list is exempt from DNS redirection, even when DNS enforcement is active.
 
 To add a bypass address or subnet:
 ```sh
@@ -439,4 +439,4 @@ The bypass rules are injected into the `inet adblock pre-routing` chain (adblock
 
 ### Disabling the CGI remote allow page
 
-The upstream `adblock.cgi` CGI endpoint is **not installed** in NethSecurity. All adblock management is handled through the NethSecurity API (`ns.threatshield`).
+The upstream `adblock.cgi` CGI endpoint is **not installed** in Nexwall Firewall. All adblock management is handled through the Nexwall Firewall API (`ns.threatshield`).

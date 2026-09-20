@@ -25,7 +25,7 @@ Where:
 
      {
        "username": "root",
-       "password": "Nethesis,1234"
+       "password": "Nexwall,1234"
      }
     ```
 

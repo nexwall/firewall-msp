@@ -87,7 +87,7 @@ def install_package_updates():
 def check_system_update():
     e_uci = EUci()
     current_version = get_system_version()
-    data = {"currentVersion": f'NethSecurity {current_version}', "lastVersion": "", "scheduledAt": get_update_schedule()}
+    data = {"currentVersion": f'Nexwall Firewall {current_version}', "lastVersion": "", "scheduledAt": get_update_schedule()}
     url = e_uci.get('ns-plug', 'config', 'repository_url', default=None)
     if url is None:
         return utils.generic_error("repository_url_not_set")
@@ -96,7 +96,7 @@ def check_system_update():
         response.raise_for_status()
         version = response.text.strip()
         if semver.compare(version, current_version) > 0:
-            data["lastVersion"] = f'NethSecurity {version}'
+            data["lastVersion"] = f'Nexwall Firewall {version}'
     except requests.exceptions.ConnectionError:
         return utils.generic_error("connection_error")
     except requests.exceptions.RequestException as e:

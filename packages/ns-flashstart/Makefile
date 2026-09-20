@@ -18,7 +18,7 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-flashstart
 	SECTION:=base
-	CATEGORY:=NethSecurity
+	CATEGORY:=Nexwall
 	TITLE:=Flashstart integration
 	URL:=https://github.com/nexwall/nexwall-controller/
 	DEPENDS:=+python3-nethsec

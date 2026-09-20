@@ -1260,12 +1260,12 @@ if cmd == 'list':
             "lan_interface": "lan"
         },
         "init-remote": {
-            "ssh_password": "Nethesis,1234",
+            "ssh_password": "Nexwall,1234",
             "lan_interface": "lan"
         },
         "check-remote": {
             "backup_node_ip": "100.100.100.2",
-            "ssh_password": "Nethesis,1234",
+            "ssh_password": "Nexwall,1234",
             "lan_interface": "lan"
         },
         "validate-requirements": { "role": "primary", "lan_interface": "lan" },

@@ -18,8 +18,8 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-api
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity REST API
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall REST API
 	URL:=https://github.com/nexwall/nexwall-controller/
 	DEPENDS:= \
 		+adblock \
@@ -44,7 +44,7 @@ define Package/ns-api/conffiles
 endef
  
 define Package/ns-api/description
-	Configure NethSecurity using REST APIs
+	Configure Nexwall Firewall using REST APIs
 endef
 
 define Package/ns-api/postinst

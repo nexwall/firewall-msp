@@ -1,6 +1,6 @@
 # netifyd
 
-Netifyd is a network intelligence platform that provides DPI (Deep Packet Inspection) analysis and network flow monitoring. This package integrates netifyd into NethSecurity for real-time network traffic analysis.
+Netifyd is a network intelligence platform that provides DPI (Deep Packet Inspection) analysis and network flow monitoring. This package integrates netifyd into Nexwall Firewall for real-time network traffic analysis.
 
 For detailed information, visit [https://www.netify.ai/](https://www.netify.ai/).
 

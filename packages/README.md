@@ -1,11 +1,11 @@
 # Packages
 
-The NethSecurity build system is based on OpenWrt, which uses the concept of packages to manage software components.
-NethSecurity includes two different sets of packages: NethSecurity packages and OpenWrt packages.
+The Nexwall Firewall build system is based on OpenWrt, which uses the concept of packages to manage software components.
+Nexwall Firewall includes two different sets of packages: Nexwall Firewall packages and OpenWrt packages.
 
-## NethSecurity packages
+## Nexwall Firewall packages
 
-NethSecurity packages are added to a special `nspackages` feed, which is included in the image
+Nexwall Firewall packages are added to a special `nspackages` feed, which is included in the image
 at every build. This feed is used to include custom packages that are not part of the OpenWrt.
 
 To add a new package, just create a new directory inside the `packages` directory.
@@ -14,7 +14,7 @@ Make sure to enable it on build time adding the correct configuration file insid
 
 Conventions:
 - the name of the package should always start with `ns-` prefix. Example: `ns-myapp`
-- set the `CATEGORY` to `NethSecurity` and `SECTION` to `base`, the package will show up under `NethSecurity` section
+- set the `CATEGORY` to `Nexwall Firewall` and `SECTION` to `base`, the package will show up under `Nexwall Firewall` section
   when executing `make menuconfig`
 
 When creating a new package which includes all the code, do *not* set `PKG_SOURCE_URL` and `PKG_SOURCE` variables.
@@ -30,7 +30,7 @@ include $(INCLUDE_DIR)/package.mk
 
 define Package/ns-myapp
 	SECTION:=base
-	CATEGORY:=NethSecurity
+	CATEGORY:=Nexwall Firewall
 	TITLE:=My mighty myapp
 	URL:=<app_url>
 	DEPENDS:=+firstdepend
@@ -54,8 +54,8 @@ For more info, see [upstream guide](https://openwrt.org/docs/guide-developer/pac
 
 ## OpenWrt packages
 
-OpenWrt packages are included in the NethSecurity image only when creating the image builder.
-The image builder is container used to create the final NethSecurity image.
+OpenWrt packages are included in the Nexwall Firewall image only when creating the image builder.
+The image builder is container used to create the final Nexwall Firewall image.
 
 There is a [packages repository](https://github.com/openwrt/packages/) inside GitHub that contains all the packages.
 Please note that the branches inside this repository, like `openwrt-23.05` are not the ones used by the build system.

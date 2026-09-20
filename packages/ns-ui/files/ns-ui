@@ -51,7 +51,7 @@ nsui_enable=$(uci -q get ns-ui.config.nsui_enable)
 rm -f "$NSUI_FILE.disabled"
 if [ "$nsui_enable" == "1" ]; then
     cat <<EOF > "$NSUI_FILE"
-# NethSecurity UI and API
+# Nexwall Firewall UI and API
 
 location / {
 	root /www-ns;

@@ -1,6 +1,6 @@
 # ns-checkmk-utils
 
-NethSecurity-specific Checkmk local checks and utilities.
+Nexwall Firewall-specific Checkmk local checks and utilities.
 
 This package installs the scripts in `/usr/lib/check_mk_agent/local/` and is meant to be used together with [checkmk-agent](../checkmk-agent/).
 

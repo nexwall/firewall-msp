@@ -13,7 +13,7 @@ setup(
     version = os.environ.get('NETHSEC_PKG_VERSION', '0.0.0'),
     author = 'Giacomo Sanchietti',
     author_email = 'giacomo.sanchietti@nethesis.it',
-    description = 'Utilities for NethSecurity development',
+    description = 'Utilities for Nexwall Firewall development',
     long_description = long_description,
     long_description_content_type = "text/markdown",
     url = "https://github.com/NethServer/python3-nethsec",

@@ -18,15 +18,15 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-ha
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity HA configuration
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall HA configuration
 	URL:=https://github.com/NethServer/nethsecurity/
 	DEPENDS:=+keepalived +conntrackd
 	PKGARCH:=all
 endef
  
 define Package/ns-ha/description
-	Support High Availability configuration for NethSecurity
+	Support High Availability configuration for Nexwall Firewall
 endef
 
 define Package/ns-ha/postinst

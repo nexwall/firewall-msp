@@ -1250,9 +1250,9 @@ def test_info_package_updates_available_command_fails():
 		assert result is False
 
 def test_parse_version_with_prefix():
-	"""Test parse_version removes NethSecurity prefix"""
-	assert inventory.parse_version('NethSecurity 8.1.0-dev') == (8, 1, 0)
-	assert inventory.parse_version('NethSecurity 8.2.1') == (8, 2, 1)
+	"""Test parse_version removes Nexwall Firewall prefix"""
+	assert inventory.parse_version('Nexwall Firewall 8.1.0-dev') == (8, 1, 0)
+	assert inventory.parse_version('Nexwall Firewall 8.2.1') == (8, 2, 1)
 
 def test_parse_version_without_prefix():
 	"""Test parse_version handles versions without prefix"""
@@ -1283,7 +1283,7 @@ def test_info_image_updates_available_update_exists():
 	
 	mock_result = MagicMock()
 	mock_result.returncode = 0
-	mock_result.stdout = '{"currentVersion": "NethSecurity 8.1.0", "lastVersion": "NethSecurity 8.2.0"}'
+	mock_result.stdout = '{"currentVersion": "Nexwall Firewall 8.1.0", "lastVersion": "Nexwall Firewall 8.2.0"}'
 	
 	with patch('subprocess.run', return_value=mock_result):
 		result = inventory.info_image_updates_available(u)
@@ -1295,7 +1295,7 @@ def test_info_image_updates_available_no_update():
 	
 	mock_result = MagicMock()
 	mock_result.returncode = 0
-	mock_result.stdout = '{"currentVersion": "NethSecurity 8.2.0", "lastVersion": "NethSecurity 8.2.0"}'
+	mock_result.stdout = '{"currentVersion": "Nexwall Firewall 8.2.0", "lastVersion": "Nexwall Firewall 8.2.0"}'
 	
 	with patch('subprocess.run', return_value=mock_result):
 		result = inventory.info_image_updates_available(u)
@@ -1307,7 +1307,7 @@ def test_info_image_updates_available_patch_update():
 	
 	mock_result = MagicMock()
 	mock_result.returncode = 0
-	mock_result.stdout = '{"currentVersion": "NethSecurity 8.2.0", "lastVersion": "NethSecurity 8.2.1"}'
+	mock_result.stdout = '{"currentVersion": "Nexwall Firewall 8.2.0", "lastVersion": "Nexwall Firewall 8.2.1"}'
 	
 	with patch('subprocess.run', return_value=mock_result):
 		result = inventory.info_image_updates_available(u)
@@ -1319,7 +1319,7 @@ def test_info_image_updates_available_minor_update():
 	
 	mock_result = MagicMock()
 	mock_result.returncode = 0
-	mock_result.stdout = '{"currentVersion": "NethSecurity 8.2.0", "lastVersion": "NethSecurity 8.3.0"}'
+	mock_result.stdout = '{"currentVersion": "Nexwall Firewall 8.2.0", "lastVersion": "Nexwall Firewall 8.3.0"}'
 	
 	with patch('subprocess.run', return_value=mock_result):
 		result = inventory.info_image_updates_available(u)
@@ -1331,7 +1331,7 @@ def test_info_image_updates_available_current_newer():
 	
 	mock_result = MagicMock()
 	mock_result.returncode = 0
-	mock_result.stdout = '{"currentVersion": "NethSecurity 8.3.0", "lastVersion": "NethSecurity 8.2.0"}'
+	mock_result.stdout = '{"currentVersion": "Nexwall Firewall 8.3.0", "lastVersion": "Nexwall Firewall 8.2.0"}'
 	
 	with patch('subprocess.run', return_value=mock_result):
 		result = inventory.info_image_updates_available(u)

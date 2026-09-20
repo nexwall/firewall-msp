@@ -26,15 +26,15 @@ include $(TOPDIR)/feeds/packages/lang/python/python3-package.mk
  
 define Package/python3-nethsec
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity python libraries
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall python libraries
 	URL:=https://github.com/NethServer/nethsecurity/tree/master/packages/python3-nethsec
 	DEPENDS:=+python3-uci +python3-libpass
 	PKGARCH:=all
 endef
 
 define Package/python3-nethsec/description
-    NethSecurity python utilities
+    Nexwall Firewall python utilities
 endef
 
 # Source lives in this repository under ./src, so build the wheel from the

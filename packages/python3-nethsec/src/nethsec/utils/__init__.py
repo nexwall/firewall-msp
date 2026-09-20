@@ -41,7 +41,7 @@ def get_random_id():
 def get_id(name, length = 100):
     '''
     Return a valid UCI id based on the given string.
-    All auto-generated NethSecurity ids:
+    All auto-generated Nexwall Firewall ids:
 
       - have a maximum length of 100 characters
       - start with ns\_ prefix

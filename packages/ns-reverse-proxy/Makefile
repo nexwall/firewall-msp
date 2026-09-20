@@ -18,8 +18,8 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-reverse-proxy
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity reverse-proxy manager
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall reverse-proxy manager
 	URL:=https://github.com/NethServer/nethsecurity/
 	DEPENDS:=+nginx
 	PKGARCH:=all

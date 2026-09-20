@@ -13,7 +13,7 @@ PKG_RELEASE:=2
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/nexwall/nexwall-ui.git
-PKG_SOURCE_VERSION:=bb05a424d8124cb478c60973ec3b21095538c408
+PKG_SOURCE_VERSION:=ccab8ddb3f8f89ab0ed98c7c7ae1dc369e99fc82
 PKG_SOURCE_SUBDIR:=nexwall-ui-$(PKG_VERSION)
 # tarball name tied to the commit, so a cached upstream tarball is never reused
 PKG_SOURCE:=nexwall-ui-$(PKG_SOURCE_VERSION).tar.zst
@@ -30,15 +30,15 @@ include $(INCLUDE_DIR)/package.mk
 
 define Package/ns-ui
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity UI
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall UI
 	URL:=https://github.com/nexwall/nexwall-ui/
 	DEPENDS:=+nginx-ssl
 	PKGARCH:=all
 endef
 
 define Package/ns-ui/description
-NethSecurity web user interface
+Nexwall Firewall web user interface
 endef
 
 define Build/Configure

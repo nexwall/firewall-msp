@@ -173,7 +173,7 @@ To generate a valid `.ovpn` file, see the `download-user-configuration` API insi
 To debug the remote authentication process, you can use the following command:
 
 ```bash
-debug=1 config=openvpn-ns_roadwarrior1.conf username=giacomo password=Nethesis,1234 /usr/libexec/ns-openvpn/openvpn-remote-auth
+debug=1 config=openvpn-ns_roadwarrior1.conf username=giacomo password=Nexwall,1234 /usr/libexec/ns-openvpn/openvpn-remote-auth
 echo $? # should return 0
 ```
 

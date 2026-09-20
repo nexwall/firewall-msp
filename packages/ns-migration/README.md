@@ -9,7 +9,7 @@ Before proceed, make sure to export NS7 configuration using [nethserver-firewall
   ```
   firewall-export
   ```
-- copy `/var/lib/nethserver/firewall-migration/export.tar.gz` inside NethSecurity installation using SSH
+- copy `/var/lib/nethserver/firewall-migration/export.tar.gz` inside Nexwall Firewall installation using SSH
 
 ## Usage
 
@@ -321,7 +321,7 @@ The following NS7 options will not be migrated:
 
 ## Other features
 
-The following features are not migrated to NethSecurity:
+The following features are not migrated to Nexwall Firewall:
 
 - Web proxy (Squid) and filter (ufdbGuard)
 - IPS (Suricata) and IPS alerts (EveBox)

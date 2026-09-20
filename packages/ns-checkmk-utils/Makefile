@@ -16,7 +16,7 @@ PKG_LICENSE:=GPL-3.0-only
 
 # Base URL for downloads: Nexwall fork of nethesis/checkmk-tools, pinned to a commit.
 # The files below are byte-identical to upstream v$(PKG_VERSION); the HASH lines verify that.
-NS_CHECKMK_UTILS_BASE_URL:=https://raw.githubusercontent.com/nexwall/checkmk-tools/06b5a811bec0922bf6f029f91700758678e7bf40/script-check-nsec8/full
+NS_CHECKMK_UTILS_BASE_URL:=https://raw.githubusercontent.com/nexwall/checkmk-tools/374b602dbeccdfb5b6fc883ea73f3816fd2827c0/script-check-nsec8/full
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -102,17 +102,17 @@ $(eval $(call Download,check_wan_throughput))
 
 define Package/ns-checkmk-utils
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=Check_MK NethSecurity utilities and plugins
+	CATEGORY:=Nexwall
+	TITLE:=Check_MK Nexwall Firewall utilities and plugins
 	URL:=https://github.com/nexwall/checkmk-tools
 	DEPENDS:=+checkmk-agent
 	PKGARCH:=all
 endef
 
 define Package/ns-checkmk-utils/description
-	NethSecurity-specific plugins and utilities for the Check_MK agent.
+	Nexwall Firewall-specific plugins and utilities for the Check_MK agent.
 	This package extends the base checkmk-agent package with custom monitoring plugins
-	tailored for NethSecurity firewall systems.
+	tailored for Nexwall Firewall firewall systems.
 endef
 
 define Build/Prepare

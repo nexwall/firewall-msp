@@ -1,3 +1,3 @@
 '''
-NethSecurity python library
+Nexwall Firewall python library
 '''

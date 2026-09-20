@@ -6,7 +6,7 @@
 #
 
 #
-# Connect to a remote NethSecurity controller
+# Connect to a remote Nexwall Firewall controller
 #
 
 UCI_CONF="ns-plug"
@@ -149,7 +149,7 @@ fi
 
 ## Configure rsyslog to send to promtail
 cat <<EOF > ${RSYSLOG_CONF}
-# Rsyslog configuration for NethSecurity controller logging
+# Rsyslog configuration for Nexwall Firewall controller logging
 \$PreserveFQDN on
 
 ruleset(name="forward") {

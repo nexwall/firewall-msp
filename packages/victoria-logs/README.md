@@ -2,7 +2,7 @@
 
 ## Overview
 
-This package provides **Victoria Logs** for centralized log storage and aggregation in NethSecurity. All system logs are collected from rsyslog and stored in Victoria Logs, which can be queried and visualized.
+This package provides **Victoria Logs** for centralized log storage and aggregation in Nexwall Firewall. All system logs are collected from rsyslog and stored in Victoria Logs, which can be queried and visualized.
 
 **Key Components:**
 - **victoria-logs**: Log database on port 9428

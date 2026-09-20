@@ -161,7 +161,7 @@ def import_client(tunnel):
         u.set("openvpn", iname, "cert", cert)
         u.set("openvpn", iname, "key", cert)
         u.set("openvpn", iname, "ca", cert)
-        # Enable cert verification only for NethSecurity 8 tunnels
+        # Enable cert verification only for Nexwall Firewall 8 tunnels
         ext = subprocess.run(["openssl", "x509", "-noout", "-ext", "keyUsage", "-in", cert], capture_output=True, text=True, check=True)
         if ext and "Key Agreement" in ext.stdout:
             u.set("openvpn", iname, "remote_cert_tls", "server")

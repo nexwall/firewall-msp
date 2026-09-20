@@ -5,7 +5,7 @@
 #
 # Collect procd service status via ubus.
 #
-# Monitored services: fixed whitelist of NethSecurity services.
+# Monitored services: fixed whitelist of Nexwall Firewall services.
 # Services with no instances are ignored because they are disabled or not
 # configured.
 #

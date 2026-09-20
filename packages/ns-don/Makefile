@@ -18,7 +18,7 @@ include $(INCLUDE_DIR)/package.mk
  
 define Package/ns-don
 	SECTION:=base
-	CATEGORY:=NethSecurity
+	CATEGORY:=Nexwall
 	TITLE:=Windmill Don client
 	URL:=https://github.com/NethServer/nethsecurity/
 	DEPENDS:=+openvpn +dropbearconvert +openssh-server

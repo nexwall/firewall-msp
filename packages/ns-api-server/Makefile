@@ -30,14 +30,14 @@ endef
 
 define Package/ns-api-server
 	SECTION:=base
-	CATEGORY:=NethSecurity
-	TITLE:=NethSecurity REST API server
+	CATEGORY:=Nexwall
+	TITLE:=Nexwall Firewall REST API server
 	URL:=https://github.com/NethServer/nethsecurity-api
 	DEPENDS:=$(GO_ARCH_DEPENDS) +victoria-metrics
 endef
  
 define Package/ns-api-server/description
-	NethSecurity REST API server
+	Nexwall Firewall REST API server
 endef
 
 

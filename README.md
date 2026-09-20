@@ -1,36 +1,33 @@
-# Nexwall Firewall (MSP edition)
+# Nexwall Firewall
 
-An OpenWrt-based firewall for managed service providers, forked from
-[NethSecurity](https://github.com/NethServer/nethsecurity) (upstream commit `9a60b9c`), a downstream rebuild of
-[OpenWrt](https://openwrt.org/).
+Source code of Nexwall Firewall, an OpenWrt-based firewall distribution for managed service providers.
 
-The upstream remote is kept as `upstream` so we can merge upstream fixes. Internal names (`ns-*` packages, `nethsec`
-python module, UCI options) are intentionally unchanged to keep those merges cheap.
+## Repositories
 
-## Build
+| Repository | Content |
+|---|---|
+| `nexwall/firewall-msp` | this repository: packages, configuration and image definition |
+| `nexwall/nexwall-ui` | web interface (standalone and controller modes) |
+| `nexwall/vue-components` | component library used by the web interface |
+| `nexwall/nexwall-monitoring` | flow and statistics services |
+| `nexwall/captive-portal` | captive portal (`dedalo` runs on the firewall) |
+| `nexwall/checkmk-tools` | Checkmk local checks |
+| `nexwall/nexwall-controller` | Central Management server |
 
-Requires Linux with rootless Podman 4.x, 8+ GB RAM, 100+ GB free disk and 8+ CPU cores.
-
-```
-./build-nethsec.sh
-```
-
-Output goes to `bin/` (images and packages) and `build-logs/`. The image is
-`bin/targets/x86/64/*-combined-efi.img.gz` (UEFI disk image, written to disk with `dd`). See `docs/build/index.md`.
-
-## Where things are
+## Layout
 
 | Path | Content |
 |---|---|
-| `builder/`, `build-nethsec.sh` | Podman build container and driver |
-| `packages/` | Local OpenWrt feed (`ns-*` packages and forks) |
-| `config/` | Feature fragments and per-target config |
-| `files/` | Root filesystem overlay |
-| `patches/` | Patches applied to upstream OpenWrt feeds |
-| `msp/` | Fork documentation: upstream repos, netifyd analysis, outbound endpoints |
-| `LICENSES/`, `NOTICE.md`, `THIRD_PARTY_LICENSES.md`, `FORK-CHANGES.md` | Licensing and attribution |
+| `packages/` | packages of the distribution (`ns-*` and forks of OpenWrt packages) |
+| `config/` | feature selection and per-target configuration |
+| `files/` | root filesystem overlay |
+| `patches/` | patches applied to upstream OpenWrt feeds |
+| `builder/`, `build-nethsec.sh`, `build.conf.defaults` | image definition and build scripts |
+
+Every package Makefile records the exact revision of the source it uses.
 
 ## License
 
-GPL-2.0-only for the build system and files carrying that tag; GPL-3.0-only for packages that declare it.
-See `NOTICE.md`. Some components are not free software, see `msp/NETIFYD.md`.
+GPL-2.0-only for the build scripts and files that carry that tag, GPL-3.0-only for the packages that declare it. Full
+texts are in `LICENSES/`; attribution is in `NOTICE.md`; modifications are recorded in `FORK-CHANGES.md`; third-party
+components are listed in `THIRD_PARTY_LICENSES.md`.

@@ -1,0 +1,30 @@
+{
+        "nexwall_malware_level1": {
+                "url": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_malware_level1.dns",
+                "rule": "feed 1",
+                "size": "XL",
+                "focus": "malware",
+                "descurl": "https://nexwall.com.br"
+        },
+        "nexwall_malware_level2": {
+                "url": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_malware_level2.dns",
+                "rule": "feed 1",
+                "size": "XL",
+                "focus": "malware",
+                "descurl": "https://nexwall.com.br"
+        },
+        "nexwall_susp_level1": {
+                "url": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_suspicious_level1.dns",
+                "rule": "feed 1",
+                "size": "XL",
+                "focus": "malware",
+                "descurl": "https://nexwall.com.br"
+        },
+        "nexwall_susp_level2": {
+                "url": "https://__USER__:__PASSWORD__@lists.nexwall.com.br/plain/__TYPE__/nexwall-blacklists/nexwall_suspicious_level2.dns",
+                "rule": "feed 1",
+                "size": "XL",
+                "focus": "malware",
+                "descurl": "https://nexwall.com.br"
+        }
+}

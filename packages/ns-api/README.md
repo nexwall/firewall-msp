@@ -1,6 +1,6 @@
 # ns-api
 
-NethSecurity APIs for `rpcd`.
+Nexwall Firewall APIs for `rpcd`.
 
 * TOC
 {:toc}
@@ -1413,7 +1413,7 @@ Response example:
 
 Configure SMTP options to send mail using a NS7 machine:
 ```
-echo '{"host": "mail.nethserver.org", "port": 587, "auth": "on", "user": "myuser", "password": "Nethesis,1234", "tls": "on", "tls_starttls": "on", "from": "no-reply@nethserver.org", "syslog": "LOG_MAIL"}' | api-cli ns.smtp set --data -
+echo '{"host": "mail.nethserver.org", "port": 587, "auth": "on", "user": "myuser", "password": "Nexwall,1234", "tls": "on", "tls_starttls": "on", "from": "no-reply@nethserver.org", "syslog": "LOG_MAIL"}' | api-cli ns.smtp set --data -
 
 ```
 
@@ -2035,7 +2035,7 @@ Response example:
     {
       "id": 1746,
       "name": "nethsecurityng",
-      "description": "NethSecurity dev"
+      "description": "Nexwall Firewall dev"
     }
   ]
 }
@@ -2485,7 +2485,7 @@ Response example:
     ],
     "version": {
       "arch": "x86_64",
-      "release": "NethSecurity 22.03.5"
+      "release": "Nexwall Firewall 22.03.5"
     },
     "hostname": "NethSec",
     "hardware": "Standard PC (Q35 + ICH9, 2009)",
@@ -2669,7 +2669,7 @@ Response example:
     "system": {
       "uptime": 8500.37,
       "load": [0.05, 0.09, 0.09],
-      "version": {"arch": "x86_64", "release": "NethSecurity 8 23.05.5"},
+      "version": {"arch": "x86_64", "release": "Nexwall Firewall 8 23.05.5"},
       "hostname": "NethSec",
       "hardware": "Standard PC (Q35 + ICH9, 2009)",
       "memory": {"mem_total": 4090400768, "mem_available": 3126558720},
@@ -4795,8 +4795,8 @@ api-cli ns.update check-system-update
 Response example - system update available:
 ```json
 {
-  "currentVersion": "NethSecurity 23.05.0",
-  "lastVersion": "NethSecurity 23.05.1",
+  "currentVersion": "Nexwall Firewall 23.05.0",
+  "lastVersion": "Nexwall Firewall 23.05.1",
   "scheduleAt": -1
 }
 ```
@@ -4804,8 +4804,8 @@ Response example - system update available:
 Response example - system update available and scheduled:
 ```json
 {
-  "currentVersion": "NethSecurity 23.05.0",
-  "lastVersion": "NethSecurity 23.05.1",
+  "currentVersion": "Nexwall Firewall 23.05.0",
+  "lastVersion": "Nexwall Firewall 23.05.1",
   "scheduleAt": 1699615827
 }
 ```
@@ -7123,7 +7123,7 @@ Response example:
 
 ## ns.plug
 
-Manager registration to NethSecurity controller.
+Manager registration to Nexwall Firewall controller.
 
 ### status
 
@@ -7143,7 +7143,7 @@ Response example with connected machine:
   "tls_verify": false,
   "push_status": "enabled",
   "push_last_sent": 1727703300,
-  "description": "My NethSecurity unit"
+  "description": "My Nexwall Firewall unit"
 }
 ```
 
@@ -7173,9 +7173,9 @@ The `description` field is optional and can be used to provide additional inform
 
 ### register
 
-Register the device to the NethSecurity controller:
+Register the device to the Nexwall Firewall controller:
 ```
-api-cli ns.plug register --data '{"join_code": "eyJmcWRuIjoiY29udHJvbGxlci5ncy5uZXRoc2VydmVyLm5ldCIsInRva2VuIjoiMTIzNCIsInVuaXRfaWQiOiI5Njk0Y2Y4ZC03ZmE5LTRmN2EtYjFjNC1iY2Y0MGUzMjhjMDIifQ==", "tls_verify": true, "unit_name": "fw.test.local", "description": "My NethSecurity unit"}'
+api-cli ns.plug register --data '{"join_code": "eyJmcWRuIjoiY29udHJvbGxlci5ncy5uZXRoc2VydmVyLm5ldCIsInRva2VuIjoiMTIzNCIsInVuaXRfaWQiOiI5Njk0Y2Y4ZC03ZmE5LTRmN2EtYjFjNC1iY2Y0MGUzMjhjMDIifQ==", "tls_verify": true, "unit_name": "fw.test.local", "description": "My Nexwall Firewall unit"}'
 ```
 
 Response example:
@@ -7185,7 +7185,7 @@ Response example:
 
 ### unregister
 
-Unregister the device from the NethSecurity controller:
+Unregister the device from the Nexwall Firewall controller:
 ```
 api-cli ns.plug unregister
 ```
@@ -7292,7 +7292,7 @@ Response example:
 ```json
 {
   "unit_name": "MyFirewall",
-  "version": "NethSecurity 8 23.05.2-ns.0.0.2-beta2-88-gd3a896a",
+  "version": "Nexwall Firewall 8 23.05.2-ns.0.0.2-beta2-88-gd3a896a",
   "subscription_type": "enterprise",
   "system_id": "xxxxxxxxxxxxxxx",
   "ssh_port": 22,
@@ -8790,7 +8790,7 @@ Request example:
 ```bash
 api-cli ns.ha call check-remote --data '{
   "backup_node_ip": "100.100.100.2",
-  "ssh_password": "Nethesis,1234",
+  "ssh_password": "Nexwall,1234",
   "lan_interface": "lan",
   "wan_interface": "wan"
 }'

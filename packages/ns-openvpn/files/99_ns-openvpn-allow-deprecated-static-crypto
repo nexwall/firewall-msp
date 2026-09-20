@@ -8,7 +8,7 @@
 changed=0
 restart=0
 
-# only tunnels managed by NethSecurity
+# only tunnels managed by Nexwall Firewall
 instances=$(uci show openvpn 2>/dev/null | sed -n 's/^openvpn\.\(ns_[^.=]*\)=openvpn$/\1/p')
 
 for name in $instances; do

@@ -11,7 +11,7 @@ package response
 
 type LoginRequestJWT struct {
 	Username string `json:"username" example:"edoardo" structs:"username"`
-	Password string `json:"password" example:"Nethesis,1234" structs:"password"`
+	Password string `json:"password" example:"Nexwall,1234" structs:"password"`
 }
 
 type LoginResponseJWT struct {

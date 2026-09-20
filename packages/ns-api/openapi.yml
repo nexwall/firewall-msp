@@ -1,7 +1,7 @@
 ---
 openapi: 3.1.0
 info:
-  title: NethSecurity RPCD APIs
+  title: Nexwall Firewall RPCD APIs
   description: |
     Complete OpenAPI 3.1.0 specification for all `ns.*` RPCD API methods.
     

@@ -45,7 +45,7 @@ data = {
     "installation": "nethsecurity",
     "facts": {
         "distro": {
-            "name": "NethSecurity",
+            "name": "Nexwall Firewall",
             "version": version
         },
         "processors": { 

@@ -153,7 +153,7 @@ ns-ha-config check-backup-node 192.168.100.239 lan
 
 Example with password on standard input:
 ```
-echo Nethesis,1234 | ns-ha-config check-backup-node 192.168.100.239 lan
+echo Nexwall,1234 | ns-ha-config check-backup-node 192.168.100.239 lan
 ```
 
 ### Initlialize the primary node
@@ -192,7 +192,7 @@ echo "password" | ns-ha-config init-backup-node lan
 
 Example with password on standard input:
 ```
-echo Nethesis,1234 | ns-ha-config init-backup-node lan
+echo Nexwall,1234 | ns-ha-config init-backup-node lan
 ```
 
 At this point, the primary node and the backup node are configured to talk to each other
@@ -658,7 +658,7 @@ The backup node maintains synchronized configuration but keeps most services dis
 
 **Network limitations for backup node:**
 - No Internet access (cannot resolve DNS or reach external services)
-- Cannot connect to Controller or Nethesis portals
+- Cannot connect to Controller or Nexwall portals
 - Does not receive automatic updates
 
 During failover, the backup node activates all necessary services and takes over the virtual IP addresses, ensuring seamless service continuity.

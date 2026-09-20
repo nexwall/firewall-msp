@@ -2,7 +2,7 @@
 
 ## Overview
 
-This package provides **Victoria Metrics** and **vmalert** for time-series metrics storage and alerting in NethSecurity. Metrics are collected by Telegraf, stored in Victoria Metrics, and evaluated by vmalert according to alert rules.
+This package provides **Victoria Metrics** and **vmalert** for time-series metrics storage and alerting in Nexwall Firewall. Metrics are collected by Telegraf, stored in Victoria Metrics, and evaluated by vmalert according to alert rules.
 
 **Key Components:**
 - **victoria-metrics**: Time-series database on port 8428
