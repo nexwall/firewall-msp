@@ -16,7 +16,7 @@ import pyotp
 import ipaddress
 import subprocess
 from euci import EUci
-from nethsec import utils, ovpn, firewall, users, objects
+from nethsec import utils, ovpn, firewall, users, objects, ipconf
 from datetime import datetime, timezone
 import tarfile
 import io
@@ -92,7 +92,7 @@ def get_ip_and_mask(bridge):
     for i in interfaces:
         interface = interfaces[i]
         if i == bridge and interface.get("proto") == "static" and is_bridge(interface.get("device")):
-            return (interface.get("ipaddr"), interface.get("netmask"))
+            return ipconf.get_ipv4(interface) or (None, None)
     return (None, None)
 
 def is_valid_ip(ovpninstance, ip):

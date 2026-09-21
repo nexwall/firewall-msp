@@ -35,6 +35,11 @@ Record of modifications to files inherited from NethSecurity (upstream commit `9
 - **Defaults**: hostname `Nexwall`; default password `Nexwall,1234` (hash in
   `files/etc/uci-defaults/90-nethsec-root-password` regenerated; same value in the HA, API CLI and inventory defaults).
 - **Runtime references**: the dashboard connectivity check no longer contacts the previous vendor site, the certificate account email and a DHCP example domain were changed (`ns.dashboard`, `ns.reverseproxy`, `ns.dhcp`).
+- **Interface address handling** (`python3-nethsec` `nethsec.ipconf`, `ns.dhcp`, `ns.devices`, `ns.ovpnrw`): the code
+  assumed every static interface has separate `ipaddr` and `netmask` options, which broke the DNS and DHCP page when
+  OpenWrt wrote the address as `192.168.1.1/24` (option or list). A shared helper now reads every form and interfaces
+  without a usable IPv4 address are skipped instead of raising an error. Unit tests in
+  `packages/python3-nethsec/tests/test_ipconf.py`.
 - **Wording**: product name in package descriptions, READMEs and messages; package category `Nexwall`.
 - **Removed from the repository**: upstream documentation site, release and CI tooling, deployment examples, agent
   guides and repository automation.

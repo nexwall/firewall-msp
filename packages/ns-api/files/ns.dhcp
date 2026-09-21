@@ -13,7 +13,7 @@ import ipaddress
 import os
 import subprocess
 from euci import EUci
-from nethsec import utils, objects
+from nethsec import utils, objects, ipconf
 
 def ip2int(ip):
     parts = ip.split('.')
@@ -86,6 +86,11 @@ def list_interfaces():
         if i == "loopback" or i in wans or not ('ipaddr' in interfaces[i]) or interfaces[i].get('proto') == 'bonding' or interfaces[i].get('device', '').startswith('@'):
             continue
 
+        addr = ipconf.get_ipv4(interfaces[i])
+        if addr is None:
+            # no usable IPv4 address, nothing to serve
+            continue
+
         record['device'] = interfaces[i].get('device', '')
         record['zone'] = zones.get(i, '')
         for d in dhcps:
@@ -93,7 +98,7 @@ def list_interfaces():
             if 'interface' in ds and ds['interface'] == i:
                 if 'ignore' in ds and ds['ignore'] == "1":
                     continue
-                (first, last) = conf_to_range(interfaces[i]['ipaddr'], interfaces[i]['netmask'], ds.get('start', 100), ds.get('limit', 150))
+                (first, last) = conf_to_range(addr[0], addr[1], ds.get('start', 100), ds.get('limit', 150))
                 record['active'] = ds.get('dhcpv4', 'server') == 'server'
                 # handle existing active configurations:
                 # - old default was force off, as OpenWrt
@@ -125,8 +130,10 @@ def edit_interface(args):
     if 'ns_binding' in args and args['ns_binding'] not in [0, 1, 2]:
         return utils.validation_error("ns_binding", "invalid", args["ns_binding"])
 
-    ipaddr = u.get('network', args['interface'], 'ipaddr')
-    netmask = u.get('network', args['interface'], 'netmask')
+    addr = ipconf.get_ipv4(u.get_all('network', args['interface']))
+    if addr is None:
+        return utils.generic_error("interface_without_ipv4_address")
+    ipaddr, netmask = addr
     network = ipaddress.ip_network(f"{ipaddr}/{netmask}", strict=False)
     
     # ranges validation
@@ -202,9 +209,10 @@ def get_interface(args):
     # get options from the first dhcp section since they are the same for all sections
     dhcp = dhcp_sections[0]
 
-    if 'ipaddr' in interface:
+    addr = ipconf.get_ipv4(interface)
+    if addr is not None:
         for ds in dhcp_sections:
-            (first, last) = conf_to_range(interface['ipaddr'], interface['netmask'], ds.get('start', 100), ds.get('limit', 150))
+            (first, last) = conf_to_range(addr[0], addr[1], ds.get('start', 100), ds.get('limit', 150))
             ret['ranges'].append({"first": first, "last": last})
 
     ret["leasetime"] = dhcp.get("leasetime")
@@ -223,8 +231,8 @@ def get_interface(args):
             tmp[0] = tmp[0].removeprefix('option:')
             ret["options"].append({tmp[0]: ",".join(tmp[1:])})
     ret['ns_binding'] = int(dhcp.get('ns_binding', 0))
-    if 'ipaddr' in interface and 'netmask' in interface:
-        network = ipaddress.ip_network(f"{interface['ipaddr']}/{interface['netmask']}", strict=False)
+    if addr is not None:
+        network = ipaddress.ip_network(f"{addr[0]}/{addr[1]}", strict=False)
         ret['class_start_ip'] = str(network.network_address + 1)
         ret['class_end_ip'] = str(network.broadcast_address - 1)
 
@@ -233,8 +241,9 @@ def get_interface(args):
 def get_interface_device(uci, ip):
     for i in utils.get_all_by_type(uci, 'network', 'interface'):
         idata = uci.get_all('network', i)
-        if 'ipaddr' in idata and 'netmask' in idata:
-            if ipaddress.ip_address(ip) in ipaddress.ip_network(f'{idata["ipaddr"]}/{idata["netmask"]}', strict=False):
+        addr = ipconf.get_ipv4(idata)
+        if addr is not None:
+            if ipaddress.ip_address(ip) in ipaddress.ip_network(f'{addr[0]}/{addr[1]}', strict=False):
                 return (i, idata.get('device', ''))
     return ('', '')
 
