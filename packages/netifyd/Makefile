@@ -71,6 +71,10 @@ endef
 TARGET_CFLAGS+=-Wno-psabi
 TARGET_CXXFLAGS+=-std=c++11 -Wno-psabi
 
+# libndpi.a is static and was built with libgcrypt (QUIC decryption), so the agent
+# link must pull libgcrypt and libgpg-error in explicitly.
+TARGET_LDFLAGS+=-lgcrypt -lgpg-error
+
 CONFIGURE_ARGS+= \
 	--disable-shared \
 	--without-local-libgcrypt \

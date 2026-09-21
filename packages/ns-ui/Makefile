@@ -9,11 +9,11 @@ PKG_NAME:=ns-ui
 # Nexwall fork of NethServer/nethsecurity-ui (upstream 2.24.1), pinned to a commit.
 # Bump PKG_SOURCE_VERSION (and PKG_RELEASE) to ship a new UI build.
 PKG_VERSION:=2.24.1
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/nexwall/nexwall-ui.git
-PKG_SOURCE_VERSION:=88ef6ec7c55def37cb439cd17e817935334c858f
+PKG_SOURCE_VERSION:=9131a5936e59dae00da01b0b3c0b1eb166a8c699
 PKG_SOURCE_SUBDIR:=nexwall-ui-$(PKG_VERSION)
 # tarball name tied to the commit, so a cached upstream tarball is never reused
 PKG_SOURCE:=nexwall-ui-$(PKG_SOURCE_VERSION).tar.zst
