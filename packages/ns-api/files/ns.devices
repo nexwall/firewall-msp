@@ -10,7 +10,7 @@ import sys
 import subprocess
 import re
 from euci import EUci
-from nethsec import utils, firewall, ipconf
+from nethsec import utils, firewall
 
 
 def get_all_by_type_as_list(uci, config, utype):
@@ -121,9 +121,11 @@ def list_devices():
     for deviceOrIface in all_devices:
         if deviceOrIface.get('.type') == 'interface':
             # convert ip4 addresses to CIDR notation
-            cidr = ipconf.get_cidr(deviceOrIface)
-            if cidr:
-                deviceOrIface['ipaddr'] = cidr
+            if deviceOrIface.get('ipaddr') and deviceOrIface.get('netmask'):
+                ipaddr = deviceOrIface.get('ipaddr')
+                netmask = deviceOrIface.get('netmask')
+                deviceOrIface['ipaddr'] = convert_ip4_addr_to_cidr(
+                    ipaddr, netmask)
         else:
             # it's a device, associate its interface
 
@@ -143,9 +145,10 @@ def list_devices():
 
             if iface:
                 # convert ip4 addresses to CIDR notation
-                cidr = ipconf.get_cidr(iface)
-                if cidr:
-                    iface['ipaddr'] = cidr
+                if iface.get('ipaddr') and iface.get('netmask'):
+                    ipaddr = iface.get('ipaddr')
+                    netmask = iface.get('netmask')
+                    iface['ipaddr'] = convert_ip4_addr_to_cidr(ipaddr, netmask)
 
                 deviceOrIface['iface'] = iface
 

@@ -56,16 +56,3 @@ def get_ipv4(section):
     except ValueError:
         return None
     return addr, str(network.netmask)
-
-
-def get_cidr(section):
-    """
-    Return the address as ``a.b.c.d/nn``, or ``None``. A section with several addresses is
-    left alone (``None``), because a single CIDR would hide the others.
-    """
-    if len(_as_list(section.get('ipaddr'))) != 1:
-        return None
-    result = get_ipv4(section)
-    if result is None:
-        return None
-    return f'{result[0]}/{ipaddress.ip_network("0.0.0.0/" + result[1]).prefixlen}'

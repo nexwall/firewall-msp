@@ -40,18 +40,5 @@ class GetIpv4Test(unittest.TestCase):
                          ('192.168.7.1', '255.255.255.0'))
 
 
-class GetCidrTest(unittest.TestCase):
-    def test_forms(self):
-        self.assertEqual(ipconf.get_cidr({'ipaddr': '192.168.1.1', 'netmask': '255.255.255.0'}), '192.168.1.1/24')
-        self.assertEqual(ipconf.get_cidr({'ipaddr': '192.168.1.1/24'}), '192.168.1.1/24')
-        self.assertEqual(ipconf.get_cidr({'ipaddr': ['192.168.1.1/24']}), '192.168.1.1/24')
-
-    def test_several_addresses_are_left_alone(self):
-        self.assertIsNone(ipconf.get_cidr({'ipaddr': ['192.168.1.1/24', '10.0.0.1/8']}))
-
-    def test_none(self):
-        self.assertIsNone(ipconf.get_cidr({}))
-
-
 if __name__ == '__main__':
     unittest.main()
