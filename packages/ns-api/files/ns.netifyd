@@ -34,10 +34,17 @@ def status():
 
     config = configparser.ConfigParser()
     config.read('/etc/netifyd.conf')
-    if not config.has_section('netifyd') or not config.has_option('netifyd', 'enable_sink'):
-        return utils.generic_error("failed_to_read_netifyd_conf")
-    enable_sink = config.get('netifyd', 'enable_sink')
-    return {"enabled": enable_sink == "yes", "uuid": uuid}
+    # auto_informatics is the real config key the agent itself reads and writes
+    # (the earlier "enable_sink" key checked here was never a real netifyd.conf
+    # key in any version of the agent - found live, see FORK-CHANGES.md). A
+    # config this engine does not understand at all (for example restored from
+    # a backup taken with a different netifyd package) is repaired by
+    # netifyd-selfheal on the next service start; until then, report the sink
+    # as disabled instead of failing the whole status card.
+    if not config.has_section('netifyd') or not config.has_option('netifyd', 'auto_informatics'):
+        return {"enabled": False, "uuid": uuid}
+    auto_informatics = config.get('netifyd', 'auto_informatics')
+    return {"enabled": auto_informatics == "yes", "uuid": uuid}
 
 def enable():
     try:
