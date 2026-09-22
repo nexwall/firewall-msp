@@ -1,0 +1,27 @@
+offline0: i4pcu------r---- UDP [L] 127.0.0.1:40983 --> [OL] 127.0.0.1:11111
+    : DTLS
+    : CT ID: 0: MARK: 0
+    : V: 0xfefd CS: 0x1301
+    : JA4: dd2d270600_991e33d7eb74_10f9deb96590
+    : RID 35: TLS SNI Extension Not Found
+    : RID 47: TLS ALPN Not Found
+    : DP: 2
+
+offline0: i4pc--x----r---- UDP [L] 192.168.13.57:56515 --> [OL] 192.168.13.203:40739
+    : DTLS
+    : CT ID: 0: MARK: 0
+    : V: 0xfefd
+    : JA4: dd2d120700_7c0e62f61317_d9dd6182da81
+    : RID 35: TLS SNI Extension Not Found
+    : RID 47: TLS ALPN Not Found
+    : DP: 2
+
+offline0: i4pc--x----rs--- UDP [L] 10.191.227.13:54162 --> [OR] 157.240.16.128:3478
+    : STUN.netify.meta-messaging
+    : CT ID: 0: MARK: 0
+    : VLAN: 10
+    : RID 33: TLS Fatal Alert
+    : RID 35: TLS SNI Extension Not Found
+    : RID 47: TLS ALPN Not Found
+    : DP: 4
+

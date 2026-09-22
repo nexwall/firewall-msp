@@ -1,0 +1,10 @@
+offline0: i4pc-------r--F- TCP [OR] 143.204.14.183:80 <-- [L] 192.168.1.29:51536
+    : HTTP.netify.amazon
+    : CT ID: 0: MARK: 0
+    : H: ocsp.rootg2.amazontrust.com
+    : HTTP/UA: **
+    : URL: ocsp.rootg2.amazontrust.com/
+    : RID 12: HTTP Suspicious Header
+    : RID 14: HTTP Suspicious User-Agent
+    : DP: 6
+

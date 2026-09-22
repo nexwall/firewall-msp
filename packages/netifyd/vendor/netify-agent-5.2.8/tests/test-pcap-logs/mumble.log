@@ -1,0 +1,20 @@
+offline0: i4pc------------ UDP [OR] 5.39.185.162:64738 --> [L] 192.168.88.208:50085
+    : Mumble/VoIP
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ UDP [OR] 87.122.110.156:64738 --> [L] 192.168.88.208:50085
+    : Mumble/VoIP
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pcu-x----r---- TCP [OR] 151.101.66.217:443 <-- [L] 192.168.88.208:50059
+    : HTTP/S.netify.mumble
+    : CT ID: 0: MARK: 0
+    : H: publist.mumble.info
+    : V: 0x0303 CS: 0xcca8
+    : TLS/SNI: publist.mumble.info
+    : JA4: t13d571100_131602cb7446_24695f2957a7
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+

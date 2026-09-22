@@ -1,0 +1,22 @@
+offline0: i4pc-------r---- UDP [L] 10.0.123.1:4342 <-- [OL] 10.0.123.2:4342
+    : LISP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ TCP [L] 10.0.123.1:4342 <-- [OL] 10.0.123.2:15373
+    : LISP
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc-------r---- UDP [L] 10.0.123.1:4342 <-- [OL] 10.0.123.3:4342
+    : LISP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ TCP [L] 10.0.123.1:4342 <-- [OL] 10.0.123.3:52995
+    : LISP
+    : CT ID: 0: MARK: 0
+    : DP: 4
+

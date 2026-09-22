@@ -1,0 +1,30 @@
+offline0: i4pc--x----r---- TCP [OR] 104.22.71.197:443 <-- [L] 192.168.1.12:49897
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303
+    : JA4: t13d1813h2_29a2cd9e9f10_0d6ff543c596
+    : RID 35: TLS SNI Extension Not Found
+    : RID 39: TLS Suspicious Extension
+    : RID 53: TLS ALPN/SNI Mismatch
+    : DP: 1
+
+offline0: i4pc--x----r---- TCP [OR] 104.16.125.175:443 <-- [L] 192.168.1.12:49887
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303
+    : JA4: t13d1813h2_29a2cd9e9f10_0d6ff543c596
+    : RID 35: TLS SNI Extension Not Found
+    : RID 39: TLS Suspicious Extension
+    : RID 53: TLS ALPN/SNI Mismatch
+    : DP: 1
+
+offline0: i4pc--x----r---- TCP [OR] 104.27.129.77:443 <-- [L] 192.168.1.12:49886
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303
+    : JA4: t13d1813h2_29a2cd9e9f10_0d6ff543c596
+    : RID 35: TLS SNI Extension Not Found
+    : RID 39: TLS Suspicious Extension
+    : RID 53: TLS ALPN/SNI Mismatch
+    : DP: 1
+

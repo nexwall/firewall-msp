@@ -1,0 +1,53 @@
+offline0: i4pc-------r---- TCP [L] 10.140.231.26:61202 --> [OR] 159.65.12.169:443
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : VLAN: 113
+    : H: wludo.superkinglabs.com
+    : URL: wludo.superkinglabs.com:443/ws
+    : RID 14: HTTP Suspicious User-Agent
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 48: HTTP Obsolete Server
+    : DP: 4
+
+offline0: i4pc------------ UDP [L] 10.136.43.69:21048 <-- [OL] 10.192.92.81:52070
+    : RTP
+    : CT ID: 0: MARK: 0
+    : VLAN: 20
+    : DP: 4
+
+offline0: i4pc------------ UDP [L] 10.102.45.249:31046 --> [OL] 10.133.48.100:21176
+    : RTP
+    : CT ID: 0: MARK: 0
+    : VLAN: 10
+    : DP: 17
+
+offline0: i4pc------------ UDP [L] 10.126.70.67:23784 <-- [OL] 10.236.7.225:50160
+    : RTP
+    : CT ID: 0: MARK: 0
+    : VLAN: 107
+    : DP: 7
+
+offline0: i4pc-------r---- TCP [OR] 89.31.79.12:3389 <-- [L] 91.238.181.21:35888
+    : RDP
+    : CT ID: 0: MARK: 0
+    : VLAN: 77
+    : RID  4: Desktop/File Sharing
+    : RID 15: Text With Non-Printable Characters
+    : RID 20: Possible Exploit
+    : RID 35: TLS SNI Extension Not Found
+    : RID 39: TLS Suspicious Extension
+    : RID 47: TLS ALPN Not Found
+    : DP: 5
+
+offline0: i4pc-gx----r---- UDP [OR] 57.128.172.97:9981 <-- [L] 192.168.12.156:37649
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 6
+
+offline0: i4pc--x--------- UDP [L] 10.110.31.25:1272 <-- [OL] 10.133.32.101:36408
+    : RTP
+    : CT ID: 0: MARK: 0
+    : VLAN: 10
+    : DP: 20
+

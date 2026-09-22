@@ -1,0 +1,72 @@
+offline0: i4pcu----------- TCP [OR] 104.16.249.249:443 <-- [L] 192.168.1.119:51606
+    : HTTP/S.netify.cloudflare-dns
+    : CT ID: 0: MARK: 0
+    : H: mozilla.cloudflare-dns.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: mozilla.cloudflare-dns.com
+    : JA4: t13d1814h2_e8a523a41297_7673359314f0
+    : DP: 8
+
+offline0: i4pcu------r---- TCP [OR] 104.16.124.96:443 <-- [L] 192.168.1.119:51612
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303 CS: 0x1301
+    : JA4: t13d1813h2_e8a523a41297_a36e8500eb55
+    : RID 35: TLS SNI Extension Not Found
+    : RID 39: TLS Suspicious Extension
+    : RID 53: TLS ALPN/SNI Mismatch
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 104.17.198.37:443 <-- [L] 192.168.1.119:51635
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: 951c558a-5e07-47ca-a0c0-225da1b33163.is-cf.help.every1dns.net
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: 951c558a-5e07-47ca-a0c0-225da1b33163.is-cf.help.every1dns.net
+    : JA4: t13d1814h2_e8a523a41297_d267a5f792d4
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 104.17.198.37:443 <-- [L] 192.168.1.119:51636
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: 951c558a-5e07-47ca-a0c0-225da1b33163.is-doh.help.every1dns.net
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: 951c558a-5e07-47ca-a0c0-225da1b33163.is-doh.help.every1dns.net
+    : JA4: t13d1814h2_e8a523a41297_d267a5f792d4
+    : DP: 6
+
+offline0: i4pcu------r---- TCP [OR] 104.22.72.170:443 <-- [L] 192.168.1.119:51637
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303 CS: 0x1301
+    : JA4: t13d1813h2_e8a523a41297_0d6ff543c596
+    : RID 35: TLS SNI Extension Not Found
+    : RID 39: TLS Suspicious Extension
+    : RID 53: TLS ALPN/SNI Mismatch
+    : DP: 6
+
+offline0: i4pcu------r--F- TCP [OR] 104.22.72.170:443 <-- [L] 192.168.1.119:51639
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303 CS: 0x1301
+    : JA4: t13d1813h2_e8a523a41297_0d6ff543c596
+    : RID 35: TLS SNI Extension Not Found
+    : RID 39: TLS Suspicious Extension
+    : RID 53: TLS ALPN/SNI Mismatch
+    : DP: 6
+
+offline0: i4pcu------r--F- TCP [OR] 104.22.72.170:443 <-- [L] 192.168.1.119:51638
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303 CS: 0x1301
+    : JA4: t13d1813h2_e8a523a41297_0d6ff543c596
+    : RID 35: TLS SNI Extension Not Found
+    : RID 39: TLS Suspicious Extension
+    : RID 53: TLS ALPN/SNI Mismatch
+    : DP: 6
+
+offline0: i4pc--x-------F- TCP [OR] 104.16.249.249:443 <-- [L] 192.168.1.119:51331
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : DP: 7
+

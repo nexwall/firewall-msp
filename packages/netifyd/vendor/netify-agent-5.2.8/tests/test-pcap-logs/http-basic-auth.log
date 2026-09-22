@@ -1,0 +1,191 @@
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54317 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/password-ok.php
+    : RID  8: Error Code
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54318 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/password-ok.php
+    : RID  3: Clear-Text Credentials
+    : RID  8: Error Code
+    : DP: 8
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54337 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/password-ok.php
+    : RID  3: Clear-Text Credentials
+    : RID  8: Error Code
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54338 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/password-ok.php
+    : RID  3: Clear-Text Credentials
+    : RID  8: Error Code
+    : DP: 8
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54340 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/theme/default.css
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54341 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/js/jquery.js
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54342 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/pics/logo.png
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54343 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/pics/menunew.png
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54487 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/password.php
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54505 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/password.php
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc----------F- TCP [L] 192.168.0.4:54506 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/?_=1381844104551
+    : DP: 8
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54580 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/password-ok.php
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54581 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/theme/reset.css
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54582 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/theme/default.css
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54583 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/js/jquery.js
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-------r--F- TCP [L] 192.168.0.4:54584 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: browserspy.dk
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/30.0.1599.69 Safari/537.36
+    : URL: browserspy.dk/pics/logo.png
+    : RID  3: Clear-Text Credentials
+    : DP: 6
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54319 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54596 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54509 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54354 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54320 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54322 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54321 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54508 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+
+offline0: i4pc-gx-------F- TCP [L] 192.168.0.4:54507 --> [OR] 192.254.189.169:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : DP: 9
+

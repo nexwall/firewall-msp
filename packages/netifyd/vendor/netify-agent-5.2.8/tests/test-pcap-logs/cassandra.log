@@ -1,0 +1,15 @@
+offline0: i4pc------------ TCP [L] 127.0.0.1:9042 <-- [OL] 127.0.0.1:46536
+    : Cassandra
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc------------ TCP [OR] 198.18.0.2:9042 <-- [L] 198.18.0.3:37892
+    : Cassandra
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc------------ TCP [OR] 198.18.0.2:37184 --> [L] 198.18.0.3:7000
+    : Cassandra
+    : CT ID: 0: MARK: 0
+    : DP: 4
+

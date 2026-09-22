@@ -1,0 +1,7 @@
+offline0: i4pc------------ UDP [OR] 37.41.101.140:11892 --> [L] 208.67.222.222:53
+    : DNS.netify.msn
+    : CT ID: 0: MARK: 0
+    : VLAN: 103
+    : H: api.msn.com
+    : DP: 3
+

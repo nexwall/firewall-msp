@@ -1,0 +1,6 @@
+offline0: i6pc--x----r---- UDP [L] ::1:4443 <-- [OL] ::1:58822
+    : QUIC
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 1
+

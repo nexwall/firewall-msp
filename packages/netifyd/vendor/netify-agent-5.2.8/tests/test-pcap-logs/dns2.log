@@ -1,0 +1,6 @@
+offline0: i4pc------------ UDP [OR] 8.8.8.8:53 <-- [L] 192.168.255.251:56550
+    : DNS.netify.github
+    : CT ID: 0: MARK: 0
+    : H: www.github.com
+    : DP: 3
+

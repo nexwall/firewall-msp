@@ -1,0 +1,9 @@
+offline0: i4pcu----------- TCP [OR] 35.219.252.146:80 <-- [L] 192.168.1.117:51296
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.35.171.86:51262
+    : STUN/PEER: 93.33.26.150:37920
+    : STUN/RELAYED: 35.219.252.146:13140
+    : DP: 10
+

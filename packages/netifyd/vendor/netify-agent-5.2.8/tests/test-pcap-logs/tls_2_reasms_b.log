@@ -1,0 +1,9 @@
+offline0: i4pcu----------- TCP [OR] 88.14.137.195:443 <-- [L] 196.234.165.216:37658
+    : HTTP/S.netify.meta-cdn
+    : CT ID: 0: MARK: 0
+    : H: video.fmct2-3.fna.fbcdn.net
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: video.fmct2-3.fna.fbcdn.net
+    : JA4: t00d0309ht_55b375c5d22e_566d5108064c
+    : DP: 5
+

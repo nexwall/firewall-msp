@@ -1,0 +1,6 @@
+offline0: i4pc-------r---- UDP [L] 172.23.2.15:6060 --> [OL] 172.23.2.27:1024
+    : Ether/S/IO
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

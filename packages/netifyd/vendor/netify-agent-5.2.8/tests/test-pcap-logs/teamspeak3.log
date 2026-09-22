@@ -1,0 +1,11 @@
+offline0: i4pc-------r---- UDP [L] 10.0.0.1:53187 --> [OL] 10.0.0.2:9987
+    : TeamSpeak
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ UDP [OR] 51.68.181.92:2010 <-- [L] 193.31.25.70:2011
+    : TeamSpeak
+    : CT ID: 0: MARK: 0
+    : DP: 3
+

@@ -1,0 +1,6 @@
+offline0: i4pc-g-----r---- TCP [OR] 63.190.145.43:80 <-- [L] 172.17.36.21:57619
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 32
+

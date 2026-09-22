@@ -10,16 +10,21 @@ PKG_BUILD_PARALLEL:=1
 PKG_FIXUP:=autoreconf
 PKG_INSTALL:=1
 
-# Open source Netify Agent (GPL), built from the vendor source at the tag v5.2.8-1.
-# This is the same major version the original design used (inline NFQUEUE capture,
-# native plugin loading), unlike the earlier Nexwall build of this package which
-# used the community v4.4.7 (passive capture, no plugin loader). The vendor ships
-# an OpenWrt package template at deploy/openwrt/ in this same source tree; this
-# Makefile mirrors it (deploy/openwrt/Makefile.in), translated to concrete values.
-PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://gitlab.com/netify.ai/public/netify-agent.git
-PKG_SOURCE_VERSION:=19458098898353ed1950cbdd35c85ee79c70a204
-PKG_MIRROR_HASH:=skip
+# Open source Netify Agent (GPL), source at gitlab.com/netify.ai/public/netify-agent
+# tag v5.2.8-1, commit 19458098898353ed1950cbdd35c85ee79c70a204. This is the same
+# major version the original design used (inline NFQUEUE capture, native plugin
+# loading), unlike the earlier Nexwall build of this package which used the
+# community v4.4.7 (passive capture, no plugin loader).
+#
+# Vendored under ./vendor/netify-agent-5.2.8/ instead of fetched at build time:
+# part of the vendor's normal submodule chain needs credentials we don't have
+# (see vendor/netify-agent-5.2.8/VENDORING.md for exactly what and why). The
+# three real vendor libraries it depends on (nDPI, inih, gperftools) are
+# included at their exact pinned commits.
+#
+# The vendor ships an OpenWrt package template at deploy/openwrt/ inside this
+# same source tree; this Makefile mirrors it (deploy/openwrt/Makefile.in),
+# translated to concrete values.
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -69,6 +74,11 @@ define Package/netifyd/conffiles
 /etc/netifyd.conf
 /etc/config/netifyd
 /etc/netifyd/agent.uuid
+endef
+
+define Build/Prepare
+	mkdir -p $(PKG_BUILD_DIR)
+	$(CP) ./vendor/netify-agent-5.2.8/. $(PKG_BUILD_DIR)/
 endef
 
 TARGET_CFLAGS+=-ffunction-sections -fdata-sections -Wno-psabi

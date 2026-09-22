@@ -1,0 +1,10 @@
+offline0: i6pcu----------- TCP [OR] 2001:b07:a3d:c112:ce16:b409:3d0a:9177:47460 --> [L] 2606:4700::6812:1e4e:443
+    : HTTP/S.netify.cloudflare
+    : CT ID: 0: MARK: 0
+    : H: performance.radar.cloudflare.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: performance.radar.cloudflare.com
+    : TLS/ECH: 0xfe0d
+    : JA4: t13d1516h2_8daaf6152771_02713d6af862
+    : DP: 6
+

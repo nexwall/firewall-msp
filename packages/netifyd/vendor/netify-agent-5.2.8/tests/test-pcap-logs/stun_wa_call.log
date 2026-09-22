@@ -1,0 +1,90 @@
+offline0: i4pcu----------- UDP [OR] 93.57.123.227:3478 <-- [L] 192.168.12.156:46652
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61494
+    : STUN/RELAYED: 93.57.123.227:3478
+    : DP: 7
+
+offline0: i4pcu----------- UDP [OR] 157.240.203.62:3478 <-- [L] 192.168.12.156:46652
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61494
+    : STUN/RELAYED: 157.240.203.62:3478
+    : DP: 7
+
+offline0: i4pcu----------- UDP [OR] 157.240.231.62:3478 <-- [L] 192.168.12.156:46652
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61494
+    : STUN/RELAYED: 157.240.231.62:3478
+    : DP: 7
+
+offline0: i4pcu----------- UDP [OR] 157.240.21.51:3478 <-- [L] 192.168.12.156:46652
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61494
+    : STUN/RELAYED: 157.240.21.51:3478
+    : DP: 7
+
+offline0: i4pcu----------- UDP [OR] 157.240.195.48:3478 <-- [L] 192.168.12.156:46652
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61494
+    : STUN/RELAYED: 157.240.195.48:3478
+    : DP: 7
+
+offline0: i4pcu----------- UDP [OR] 157.240.203.62:3478 <-- [L] 192.168.12.156:49526
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61517
+    : STUN/RELAYED: 157.240.203.62:3478
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 93.33.118.87:41107 <-- [L] 192.168.12.156:49526
+    : RTP
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [L] 10.82.40.241:40436 <-- [OL] 192.168.12.156:49526
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+
+offline0: i4pc-------r---- ICMP [OR] 93.63.100.129:0 --> [L] 192.168.12.156:0
+    : ICMP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pcu-x--------- UDP [OR] 157.240.196.62:3478 <-- [L] 192.168.12.156:49526
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61517
+    : STUN/RELAYED: 157.240.196.62:3478
+    : DP: 5
+
+offline0: i4pcu-x--------- UDP [OR] 157.240.231.62:3478 <-- [L] 192.168.12.156:49526
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61517
+    : STUN/RELAYED: 157.240.231.62:3478
+    : DP: 5
+
+offline0: i4pcu-x--------- UDP [OR] 179.60.192.48:3478 <-- [L] 192.168.12.156:49526
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61517
+    : STUN/RELAYED: 179.60.192.48:3478
+    : DP: 5
+
+offline0: i4pcu-x--------- UDP [OR] 185.60.216.51:3478 <-- [L] 192.168.12.156:49526
+    : WhatsApp/Call.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61517
+    : STUN/RELAYED: 185.60.216.51:3478
+    : DP: 5
+

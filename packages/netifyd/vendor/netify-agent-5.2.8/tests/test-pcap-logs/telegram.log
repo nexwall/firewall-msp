@@ -1,0 +1,287 @@
+offline0: i4pc------------ UDP [L] 192.168.0.1:68 --> [OB] 255.255.255.255:67
+    : DHCP
+    : CT ID: 0: MARK: 0
+    : H: tl-sg116e
+    : DHCP/FP: 1,3 DHCP/CI: TL-SG116E
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.53:54306 --> [OM] 239.255.255.250:1900
+    : SSDP
+    : CT ID: 0: MARK: 0
+    : H: 239.255.255.250
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.69:5353 --> [OM] 224.0.0.251:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _spotify-connect._tcp.local
+    : MDNS/DN: sonos7828CA05FACC._spotify-connect._tcp.local
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.75:5353 --> [OM] 224.0.0.251:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _dacp._tcp.local
+    : MDNS/DN: Gabrieles-iPad.local
+    : DP: 1
+
+offline0: i6pc------------ UDP [L] fe80::4ba:91a:7817:e318:5353 --> [OM] ff02::fb:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _dacp._tcp.local
+    : MDNS/DN: Gabrieles-iPad.local
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.75:5353 <-- [OL] 192.168.1.77:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _companion-link._tcp.local
+    : MDNS/DN: Luca___s iMac._companion-link._tcp.local
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:61631
+    : DNS.netify.akamai
+    : CT ID: 0: MARK: 0
+    : H: e7047.e12.akamaiedge.net
+    : DP: 2
+
+offline0: i4pc------------ UDP [L] 192.168.1.77:17500 --> [OB] 255.255.255.255:17500
+    : Dropbox
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.77:17500 --> [OB] 192.168.1.255:17500
+    : Dropbox
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.53:5353 <-- [OL] 192.168.1.77:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _companion-link._tcp.local
+    : MDNS/DN: Luca___s iMac._companion-link._tcp.local
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:52118
+    : DNS.netify.microsoft
+    : CT ID: 0: MARK: 0
+    : H: in.appcenter.ms
+    : DP: 2
+
+offline0: i4pc------------ UDP [L] 192.168.1.53:57621 --> [OB] 192.168.1.255:57621
+    : Spotify.netify.spotify
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.75:57916 --> [OM] 239.255.255.250:1900
+    : SSDP
+    : CT ID: 0: MARK: 0
+    : H: 239.255.255.250
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:61120
+    : DNS.netify.mpulse-performance
+    : CT ID: 0: MARK: 0
+    : H: e4518.dscx.akamaiedge.net
+    : DP: 2
+
+offline0: i4pc------------ UDP [OR] 91.108.12.1:536 <-- [L] 192.168.1.77:23174
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.12.5:523 <-- [L] 192.168.1.77:23174
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.8.7:521 <-- [L] 192.168.1.77:23174
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.8.8:538 <-- [L] 192.168.1.77:23174
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.16.1:527 <-- [L] 192.168.1.77:23174
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.16.4:538 <-- [L] 192.168.1.77:23174
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:47127
+    : DNS.netify.google-ads
+    : CT ID: 0: MARK: 0
+    : H: www.googletagservices.com
+    : RID 50: Minor Issues
+    : DP: 2
+
+offline0: i4pc-g-----r---- UDP [L] 192.168.1.52:31480 --> [OL] 192.168.1.77:23174
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 32
+
+offline0: i4pc------------ UDP [L] 0.0.0.0:68 --> [OB] 255.255.255.255:67
+    : DHCP
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.43:138 --> [OB] 192.168.1.255:138
+    : NETBIOS
+    : CT ID: 0: MARK: 0
+    : H: desktop-rb5t12g
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.77:137 --> [OB] 192.168.1.255:137
+    : NETBIOS
+    : CT ID: 0: MARK: 0
+    : H: workgroup
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:49764
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: dati.ntop.org
+    : DP: 2
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:5812
+    : DNS.netify.wordpress
+    : CT ID: 0: MARK: 0
+    : H: pixel.wp.com
+    : RID 50: Minor Issues
+    : DP: 2
+
+offline0: i4pcu----------- UDP [L] 192.168.1.53:5353 --> [OM] 224.0.0.251:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _googlecast._tcp.local
+    : DP: 6
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.77:61974 --> [OR] 216.58.205.68:443
+    : QUIC.netify.google
+    : CT ID: 0: MARK: 0
+    : H: www.google.com
+    : TLS/SNI: www.google.com
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.77:50822 --> [OR] 216.58.205.68:443
+    : QUIC.netify.google
+    : CT ID: 0: MARK: 0
+    : H: www.google.com
+    : TLS/SNI: www.google.com
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.77:57621 --> [OB] 192.168.1.255:57621
+    : Spotify.netify.spotify
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:54595
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: b._dns-sd._udp.ntop.org
+    : RID  8: Error Code
+    : DP: 3
+
+offline0: i4pc------------ UDP [L] 192.168.1.77:52127 --> [OM] 239.255.255.250:1900
+    : SSDP
+    : CT ID: 0: MARK: 0
+    : H: 239.255.255.250
+    : HTTP/UA: Google Chrome/83.0.4103.34 Mac OS X
+    : DP: 1
+
+offline0: i4pc------------ UDP [OR] 91.108.8.8:529 <-- [L] 192.168.1.77:28150
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.12.3:530 <-- [L] 192.168.1.77:28150
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.8.1:533 <-- [L] 192.168.1.77:28150
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.12.5:537 <-- [L] 192.168.1.77:28150
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.16.3:537 <-- [L] 192.168.1.77:28150
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [OR] 91.108.16.1:529 <-- [L] 192.168.1.77:28150
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pc------------ UDP [L] 192.168.1.53:50698 --> [OM] 239.255.255.250:1900
+    : SSDP
+    : CT ID: 0: MARK: 0
+    : H: 239.255.255.250
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.53:56384 --> [OM] 239.255.255.250:1900
+    : SSDP
+    : CT ID: 0: MARK: 0
+    : H: 239.255.255.250
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:49533
+    : DNS.netify.mpulse-performance
+    : CT ID: 0: MARK: 0
+    : H: e4518.dscx.akamaiedge.net
+    : DP: 2
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.77:58615
+    : DNS.netify.dropbox
+    : CT ID: 0: MARK: 0
+    : H: telemetry.dropbox.com
+    : DP: 2
+
+offline0: i4pc-gx----r---- UDP [OR] 87.11.205.195:60723 --> [L] 192.168.1.77:23174
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 2
+
+offline0: i6pcu-x--------- UDP [L] fe80::18a0:a412:8935:c01b:5353 --> [OM] ff02::fb:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _sleep-proxy._udp.local
+    : DP: 5
+
+offline0: i4pc-gx----r---- UDP [OR] 87.11.205.195:59772 --> [L] 192.168.1.77:28150
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 3
+
+offline0: i4pc--x--------- UDP [L] 192.168.1.52:5353 --> [OM] 224.0.0.251:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _raop._tcp.local
+    : DP: 1
+
+offline0: i6pc--x--------- UDP [L] fe80::4dc:edec:5b0c:a661:5353 --> [OM] ff02::fb:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _raop._tcp.local
+    : DP: 1
+

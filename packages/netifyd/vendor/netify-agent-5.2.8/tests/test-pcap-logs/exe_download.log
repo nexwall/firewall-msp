@@ -1,0 +1,13 @@
+offline0: i4pc-------r---- TCP [L] 10.9.25.101:49165 --> [OR] 144.91.69.195:80
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: 144.91.69.195
+    : HTTP/UA: pwtyyEKzNtGatwnJjmCcBLbOveCVpc
+    : URL: 144.91.69.195/solar.php
+    : RID  2: Binary Application Transfer
+    : RID 10: Numeric IP Address
+    : RID 14: HTTP Suspicious User-Agent
+    : RID 48: HTTP Obsolete Server
+    : RID 55: Binary File/Data Transfer
+    : DP: 6
+

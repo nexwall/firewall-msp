@@ -1,0 +1,13 @@
+offline0: i4pcu------r--F- TCP [L] 127.0.0.1:51607 <-- [OL] 127.0.0.1:3001
+    : TLS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: localhost
+    : V: 0x0303 CS: 0xc030
+    : TLS/SNI: localhost
+    : TLS/IDN: C=IT, ST=Some-State, O=ntop.org TLS/SDN: C=IT, ST=Some-State, O=ntop.org
+    : JA4: t12d6707h2_2955a3196ffa_c83f907a73d3
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 30: TLS Certificate Expired
+    : RID 37: Self-signed Certificate
+    : DP: 7
+

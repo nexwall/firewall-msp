@@ -1,0 +1,18 @@
+offline0: i4pc-gx----r---- TCP [OR] 3.3.3.3:444 <-- [L] 192.168.1.245:59682
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [OR] 3.3.3.3:446 <-- [L] 192.168.1.245:58288
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 3
+
+offline0: i4pc-gx----r---- TCP [OR] 3.3.3.3:443 <-- [L] 192.168.1.245:56866
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 3
+

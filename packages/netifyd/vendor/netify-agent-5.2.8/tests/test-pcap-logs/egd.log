@@ -1,0 +1,6 @@
+offline0: i4pc-------r---- UDP [L] 192.168.8.77:18246 --> [OL] 192.168.8.169:18246
+    : EGD
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

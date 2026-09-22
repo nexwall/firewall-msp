@@ -1,0 +1,48 @@
+offline0: i4pc-------r---- UDP [OR] 48.220.224.78:11898 <-- [L] 207.134.64.89:36251
+    : ISO/11898/1/CAN
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 55.97.32.36:56551 --> [L] 61.40.63.42:25353
+    : ISO/11898/1/CAN
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 128.244.36.46:34952 --> [L] 196.77.109.252:11898
+    : ISO/11898/1/CAN
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 73.121.85.123:63575 --> [L] 103.183.191.240:46565
+    : ISO/11898/1/CAN
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 172.44.102.53:11898 <-- [L] 247.111.83.65:53276
+    : ISO/11898/1/CAN
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 69.120.47.124:540 <-- [L] 248.12.123.236:39411
+    : ISO/11898/1/CAN
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 156.187.243.113:52611 --> [L] 211.116.172.72:11898
+    : ISO/11898/1/CAN
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 89.92.174.8:32367 <-- [L] 140.194.231.1:58665
+    : ISO/11898/1/CAN
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

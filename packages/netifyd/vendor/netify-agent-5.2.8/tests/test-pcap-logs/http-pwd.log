@@ -1,0 +1,9 @@
+offline0: i4pc-------r--F- TCP [L] 127.0.0.1:56451 <-- [OL] 127.0.0.1:3000
+    : HTTP.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: localhost
+    : HTTP/UA: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15
+    : URL: localhost:3000/authorize.html
+    : RID  3: Clear-Text Credentials
+    : DP: 9
+

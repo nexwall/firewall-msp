@@ -1,0 +1,10 @@
+offline0: i4pc------------ TCP [OR] 159.100.232.124:24120 <-- [L] 192.168.88.231:56158
+    : ElderScrollsOnline
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc------------ TCP [OR] 159.100.232.114:24504 <-- [L] 192.168.88.231:47860
+    : ElderScrollsOnline
+    : CT ID: 0: MARK: 0
+    : DP: 4
+

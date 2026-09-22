@@ -1,0 +1,54 @@
+offline0: i4pcu----------- TCP [OR] 146.48.58.18:443 <-- [L] 192.168.1.178:64393
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.iit.cnr.it
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: www.iit.cnr.it
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 146.48.58.18:443 <-- [L] 192.168.1.178:64394
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.iit.cnr.it
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: www.iit.cnr.it
+    : JA4: t13d1516h2_8daaf6152771_9b887d9acb53
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 146.48.58.18:443 <-- [L] 192.168.1.178:64409
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.iit.cnr.it
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: www.iit.cnr.it
+    : JA4: t13d1516h2_8daaf6152771_9b887d9acb53
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 146.48.58.18:443 <-- [L] 192.168.1.178:64408
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.iit.cnr.it
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: www.iit.cnr.it
+    : JA4: t13d1516h2_8daaf6152771_9b887d9acb53
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 146.48.58.18:443 <-- [L] 192.168.1.178:64411
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.iit.cnr.it
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: www.iit.cnr.it
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 146.48.58.18:443 <-- [L] 192.168.1.178:64410
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.iit.cnr.it
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: www.iit.cnr.it
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+

@@ -1,0 +1,6 @@
+offline0: i4pc-------r---- UDP [OR] 78.46.76.11:123 <-- [L] 85.22.62.120:123
+    : NTP.netify.ntp
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

@@ -1,0 +1,7 @@
+offline0: i4pcu------r---- UDP [L] 172.16.63.21:13958 <-- [OL] 172.16.63.224:55050
+    : RTP
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 172.16.63.224:55050
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+

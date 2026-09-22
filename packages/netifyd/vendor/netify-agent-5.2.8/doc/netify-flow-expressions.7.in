@@ -1,0 +1,490 @@
+.TH NETIFY-FLOW-EXPRESSIONS 7
+.SH NAME
+netify-flow-expressions \- Netify Flow Expression Engine Syntax
+.SH DESCRIPTION
+The Netify Flow Expression engine provides a powerful way to filter and classify network traffic based on flow metadata and deep-packet inspection (DPI) results. It supports two syntax modes: \fBCompact Syntax\fR for simple application, protocol, and category matching, and \fBStandard Syntax\fR for complex logical expressions.
+.SH COMPACT SYNTAX
+Compact syntax is a shorthand for matching flows based on application or protocol tags and categories.
+.TP
+\fBai:\fR\fITAG\fR
+Match by application tag (e.g., \fBai:facebook\fR).
+.TP
+\fBac:\fR\fITAG\fR
+Match by application category tag (e.g., \fBac:social-media\fR).
+.TP
+\fBpi:\fR\fITAG\fR
+Match by protocol tag (e.g., \fBpi:tls\fR).
+.TP
+\fBpc:\fR\fITAG\fR
+Match by protocol category tag (e.g., \fBpc:web\fR).
+.SH STANDARD SYNTAX
+Standard syntax allows for complex logic, multiple attributes, and comparison operators.
+.SS Operators
+.TP
+\fBComparison\fR
+\fB==\fR (equal), \fB!=\fR (not equal), \fB>\fR (greater than), \fB>=\fR (greater than or equal), \fB<\fR (less than), \fB<=\fR (less than or equal).
+.TP
+\fBBoolean\fR
+\fB&&\fR or \fBand\fR (logical AND), \fB||\fR or \fBor\fR (logical OR), \fB!\fR (logical NOT).
+.TP
+\fBGrouping\fR
+Parentheses \fB(\fR \fB)\fR can be used to group expressions and enforce precedence.
+.SS Data Types
+.TP
+\fBAddresses\fR
+Supports IPv4, IPv6, CIDR notation, and MAC addresses. Address groups can be referenced using the \fB@\fR prefix (e.g., \fB@iot\fR).
+.TP
+\fBStrings\fR
+String constants should be enclosed in single (\') or double (") quotes.
+.TP
+\fBRegular Expressions\fR
+String comparisons support regular expressions when prefixed with \fBrx:\fR (e.g., \fBdetected_hostname == 'rx:.*google.com'\fR).
+.TP
+\fBIntegers\fR
+Supports decimal and hexadecimal (prefixed with \fB0x\fR) values.
+.TP
+\fBBooleans\fR
+Literal \fBtrue\fR and \fBfalse\fR values.
+.SH ATTRIBUTES
+The following attributes are available for use in standard expressions, organized by category. Each attribute has an expected data type (e.g., address, string, integer, boolean, hex, mixed, constant).
+
+.SS Application & Protocol
+.TP
+\fBapp_ip_override\fR (boolean)
+Flag indicating if the application IP was overridden.
+.TP
+\fBapp_proto_twins\fR (boolean)
+Flag indicating application and protocol twins.
+.TP
+\fBapplication\fR (mixed)
+The detected application tag or ID. (Aliases: \fBapplication_id\fR, \fBapp\fR, \fBapp_id\fR)
+.TP
+\fBapplication_category\fR (string)
+The detected application category tag. (Alias: \fBapp_category\fR)
+.TP
+\fBapplication_category_id\fR (integer)
+The detected application category ID. (Alias: \fBapp_category_id\fR)
+.TP
+\fBcategory\fR (string)
+The detected application category tag in an application, domain, category list, overlay, or network intelligence domain categorization. (Alias: \fBcat\fR)
+.TP
+\fBcategory_id\fR (integer)
+The detected application category ID in an application, domain, category list, overlay, or network intelligence domain categorization. (Alias: \fBcat_id\fR)
+.TP
+\fBdomain_category\fR (string)
+The detected category tag from custom category lists. (Alias: \fBdom_category\fR)
+.TP
+\fBdomain_category_id\fR (integer)
+The detected category ID from custom category lists. (Alias: \fBdom_category_id\fR)
+.TP
+\fBprotocol\fR (mixed)
+The detected protocol ID or tag. (Aliases: \fBprotocol_id\fR, \fBproto\fR, \fBproto_id\fR)
+.TP
+\fBprotocol_category\fR (string)
+The detected protocol category tag. (Alias: \fBproto_category\fR)
+.TP
+\fBprotocol_category_id\fR (integer)
+The detected protocol category ID. (Alias: \fBproto_category_id\fR)
+
+.SS Network Metadata
+.TP
+\fBip\fR (address)
+Any IP address (local or other).
+.TP
+\fBsrc_ip\fR (address)
+Source IP address.
+.TP
+\fBdst_ip\fR (address)
+Destination IP address.
+.TP
+\fBlocal_ip\fR (address)
+Local IP address.
+.TP
+\fBother_ip\fR (address)
+Other IP address.
+.TP
+\fBmac\fR (address)
+Any MAC address (local or other).
+.TP
+\fBsrc_mac\fR (address)
+Source MAC address.
+.TP
+\fBdst_mac\fR (address)
+Destination MAC address.
+.TP
+\fBlocal_mac\fR (address)
+Local MAC address.
+.TP
+\fBother_mac\fR (address)
+Other MAC address.
+.TP
+\fBport\fR (integer)
+Any port number (local or other).
+.TP
+\fBsrc_port\fR (integer)
+Source port number.
+.TP
+\fBdst_port\fR (integer)
+Destination port number.
+.TP
+\fBlocal_port\fR (integer)
+Local port number.
+.TP
+\fBother_port\fR (integer)
+Other port number.
+.TP
+\fBip_protocol\fR (integer)
+Internet protocol ID (e.g., 6 for TCP, 17 for UDP).
+.TP
+\fBip_version\fR (integer)
+IP version (Values: 4, 6).
+.TP
+\fBip_dscp\fR (integer)
+Differentiated Services Code Point (DSCP) value.
+.TP
+\fBip_nat\fR (boolean)
+Set if the flow is in the connection tracking table on a WAN (Linux only).
+.TP
+\fBiface\fR (string)
+Network interface name (or index).
+.TP
+\fBiface_nfq_dst\fR (string)
+NFQUEUE destination interface name.
+.TP
+\fBiface_nfq_src\fR (string)
+NFQUEUE source interface name.
+.TP
+\fBnfq_dst_ifindex\fR (integer)
+NFQUEUE destination interface index.
+.TP
+\fBnfq_src_ifindex\fR (integer)
+NFQUEUE source interface index.
+.TP
+\fBvlan_id\fR (integer)
+Virtual LAN (VLAN) ID.
+.TP
+\fBorigin\fR (constant)
+The origin end-point of the flow. (Values: \fBorigin_local\fR, \fBorigin_other\fR, \fBorigin_unknown\fR)
+.TP
+\fBother_type\fR (constant)
+The flow other type. (Values: \fBother_local\fR, \fBother_multicast\fR, \fBother_remote\fR, \fBother_broadcast\fR, \fBother_unknown\fR, \fBother_unsupported\fR, \fBother_error\fR)
+.TP
+\fBtunnel_type\fR (constant)
+Set if encapsulated data (like GTP) is identified. (Values: \fBtunnel_none\fR, \fBtunnel_gtp\fR)
+
+.SS Deep Packet Inspection (DPI) & TLS
+.TP
+\fBbt_info_hash\fR (string)
+BitTorrent info hash.
+.TP
+\fBdetected_hostname\fR (string)
+The detected hostname, extracted from various protocols.
+.TP
+\fBdetection_complete\fR (boolean)
+Flag indicating classification is complete (typically < 32 packets).
+.TP
+\fBdetection_guessed\fR (boolean)
+Flag indicating the protocol was 'guessed' (e.g., via ports) if packet analysis failed.
+.TP
+\fBdetection_init\fR (boolean)
+Flag indicating initial application and/or protocol has been detected.
+.TP
+\fBdetection_packets\fR (integer)
+Number of packets processed during detection.
+.TP
+\fBdetection_updated\fR (boolean)
+Flag indicating flow metadata has been extracted (e.g., TLS info) and application refined.
+.TP
+\fBdhcp_class_ident\fR (string)
+DHCP class identifier.
+.TP
+\fBdhcp_fingerprint\fR (string)
+DHCP fingerprint.
+.TP
+\fBdns_hostname\fR (string)
+Hostname extracted from DNS queries.
+.TP
+\fBhttp_url\fR (string)
+HTTP URL.
+.TP
+\fBhttp_user_agent\fR (string)
+HTTP User-Agent string.
+.TP
+\fBmdns_domain_name\fR (string)
+mDNS domain name.
+.TP
+\fBndpi_risk_client\fR (integer)
+Client risk score or mask.
+.TP
+\fBndpi_risk_score\fR (integer)
+Flow risk score or mask.
+.TP
+\fBndpi_risk_server\fR (integer)
+Server risk score or mask.
+.TP
+\fBrisks\fR (integer)
+Flow risks bitmask.
+.TP
+\fBsmtp_tls\fR (boolean)
+Flag indicating SMTP over TLS.
+.TP
+\fBsoft_dissector\fR (boolean)
+Flag indicating a soft dissector was used for classification.
+.TP
+\fBssh_client_agent\fR (string)
+SSH client agent string.
+.TP
+\fBssh_server_agent\fR (string)
+SSH server agent string.
+.TP
+\fBstun_mapped\fR (address)
+STUN mapped address.
+.TP
+\fBstun_other\fR (address)
+STUN other address.
+.TP
+\fBstun_peer\fR (address)
+STUN peer address.
+.TP
+\fBstun_relayed\fR (address)
+STUN relayed address.
+.TP
+\fBstun_response\fR (address)
+STUN response address.
+.TP
+\fBtls_alpn\fR (string)
+TLS Application-Layer Protocol Negotiation (ALPN).
+.TP
+\fBtls_alpn_server\fR (string)
+TLS ALPN selected by server.
+.TP
+\fBtls_cert_fingerprint\fR (string)
+TLS certificate fingerprint.
+.TP
+\fBtls_cipher\fR (hex)
+The TLS negotiated cipher. (Alias: \fBssl_cipher\fR)
+.TP
+\fBtls_ech\fR (hex)
+TLS ECH (Encrypted Client Hello) version.
+.TP
+\fBtls_issuer_dn\fR (string)
+TLS certificate issuer distinguished name.
+.TP
+\fBtls_ja4\fR (string)
+JA4 TLS fingerprint or identifier.
+.TP
+\fBtls_proc_certificate\fR (boolean)
+TLS processed certificate flag.
+.TP
+\fBtls_proc_hello\fR (boolean)
+TLS processed hello flag.
+.TP
+\fBtls_server_cn\fR (string)
+TLS server common name.
+.TP
+\fBtls_subject_dn\fR (string)
+TLS certificate subject distinguished name.
+.TP
+\fBtls_version\fR (hex)
+The TLS version (e.g., \fB0x0303\fR for TLS v1.3). (Alias: \fBssl_version\fR)
+
+.SS TCP & Transport Metadata
+.TP
+\fBtcp_fin_ack\fR (boolean)
+TCP FIN ACK flag seen.
+.TP
+\fBtcp_last_seq\fR (boolean)
+TCP last sequence state.
+.TP
+\fBtcp_resets\fR (integer)
+Count of TCP resets.
+.TP
+\fBtcp_retrans\fR (integer)
+Count of TCP retransmissions.
+.TP
+\fBtcp_seq_errors\fR (integer)
+Count of TCP sequence errors.
+
+.SS Flow Statistics & Timing
+.TP
+\fBdst_bytes\fR (integer)
+Bytes sent to the destination.
+.TP
+\fBdst_packets\fR (integer)
+Packets sent to the destination.
+.TP
+\fBdst_rate\fR (integer)
+Flow rate to the destination.
+.TP
+\fBlocal_bytes\fR (integer)
+Bytes sent from local.
+.TP
+\fBlocal_packets\fR (integer)
+Packets sent from local.
+.TP
+\fBlocal_rate\fR (integer)
+Flow rate from local.
+.TP
+\fBother_bytes\fR (integer)
+Bytes sent from other.
+.TP
+\fBother_packets\fR (integer)
+Packets sent from other.
+.TP
+\fBother_rate\fR (integer)
+Flow rate from other.
+.TP
+\fBsrc_bytes\fR (integer)
+Bytes sent from the source.
+.TP
+\fBsrc_packets\fR (integer)
+Packets sent from the source.
+.TP
+\fBsrc_rate\fR (integer)
+Flow rate from the source.
+.TP
+\fBtotal_bytes\fR (integer)
+Total flow bytes.
+.TP
+\fBtotal_dst_bytes\fR (integer)
+Total bytes to destination (including overhead).
+.TP
+\fBtotal_dst_packets\fR (integer)
+Total packets to destination.
+.TP
+\fBtotal_local_bytes\fR (integer)
+Total bytes from local.
+.TP
+\fBtotal_local_packets\fR (integer)
+Total packets from local.
+.TP
+\fBtotal_other_bytes\fR (integer)
+Total bytes from other.
+.TP
+\fBtotal_other_packets\fR (integer)
+Total packets from other.
+.TP
+\fBtotal_packets\fR (integer)
+Total flow packets.
+.TP
+\fBtotal_src_bytes\fR (integer)
+Total bytes from source.
+.TP
+\fBtotal_src_packets\fR (integer)
+Total packets from source.
+.TP
+\fBts_first_seen\fR (integer)
+Flow first seen timestamp (UNIX epoch).
+.TP
+\fBts_last_seen\fR (integer)
+Flow last seen timestamp (UNIX epoch).
+
+.SS Networking Groups & Overlays
+.TP
+\fBnetwork_category\fR (string)
+Network category tag. (Alias: \fBnet_category\fR)
+.TP
+\fBnetwork_category_id\fR (integer)
+Network category ID. (Alias: \fBnet_category_id\fR)
+.TP
+\fBlocal_network_category\fR (string)
+Local network category tag. (Alias: \fBlocal_net_category\fR)
+.TP
+\fBlocal_network_category_id\fR (integer)
+Local network category ID. (Alias: \fBlocal_net_category_id\fR)
+.TP
+\fBother_network_category\fR (string)
+Other network category tag. (Alias: \fBother_net_category\fR)
+.TP
+\fBother_network_category_id\fR (integer)
+Other network category ID. (Alias: \fBother_net_category_id\fR)
+.TP
+\fBsrc_network_category\fR (string)
+Source network category tag. (Alias: \fBsrc_net_category\fR)
+.TP
+\fBsrc_network_category_id\fR (integer)
+Source network category ID. (Alias: \fBsrc_net_category_id\fR)
+.TP
+\fBdst_network_category\fR (string)
+Destination network category tag. (Alias: \fBdst_net_category\fR)
+.TP
+\fBdst_network_category_id\fR (integer)
+Destination network category ID. (Alias: \fBdst_net_category_id\fR)
+.TP
+\fBtag\fR (string)
+Custom tag defined in the overlay feature.
+.TP
+\fBtag_category\fR (string)
+Custom tag category defined in the overlay feature.
+.TP
+\fBtag_category_id\fR (integer)
+Custom tag category ID defined in the overlay feature.
+
+.SS Caches & Conntrack
+.TP
+\fBconntrack_id\fR (integer)
+The connection tracking ID. (Alias: \fBct_id\fR)
+.TP
+\fBconntrack_mark\fR (integer)
+The connection tracking mark. (Alias: \fBct_mark\fR)
+.TP
+\fBct_reply_dst_ip\fR (address)
+The connection tracking destination IP.
+.TP
+\fBct_reply_src_ip\fR (address)
+The connection tracking source IP.
+.TP
+\fBdhc_hit\fR (boolean)
+Flag indicating a hit in the DNS hint cache (DHC).
+.TP
+\fBfhc_hit\fR (boolean)
+Flag indicating a hit in the flow hash cache (FHC).
+
+.SS Miscellaneous & Flow State
+.TP
+\fBexpired\fR (boolean)
+Flag indicating the flow has expired.
+.TP
+\fBexpiring\fR (boolean)
+Flag indicating the flow is nearing expiration.
+.TP
+\fBintel_*\fR (string)
+Intel metadata fields with dynamic suffixes (matches tokens starting with \fBintel_\fR).
+.SH EXAMPLES
+.PP
+Match all flows belonging to the 'social-media' category:
+.RS
+\fBac:social-media\fR
+.RE
+.PP
+Match Netflix or YouTube traffic on port 443:
+.RS
+\fB(app == 'netflix' || app == 'youtube') && local_port == 443;\fR
+.RE
+.PP
+Match traffic from a specific local network that is NOT using TLS 1.3:
+.RS
+\fBsrc_ip == 192.168.1.0/24 && tls_version != 0x0303;\fR
+.RE
+.PP
+Match flows where the detected hostname ends with '.org':
+.RS
+\fBdetected_hostname == 'rx:.*\\.org$';\fR
+.RE
+.SH SEE ALSO
+.BR netifyd (8),
+.BR netifyd.conf (5)
+.SH ONLINE DOCUMENTATION
+For additional documentation, please visit:
+.UR https://www.netify.ai/documentation
+.UE
+.SH COPYRIGHT
+Copyright (C) 2015-2026
+.UR http://www.egloo.ca
+eGloo Incorporated
+.UE
+.SH LICENSE
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.

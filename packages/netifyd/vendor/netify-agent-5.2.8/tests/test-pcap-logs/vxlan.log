@@ -1,0 +1,63 @@
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:60887 --> [OL] 192.168.22.5:4789
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:4789 <-- [OL] 192.168.22.5:43866
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:49762 --> [OL] 192.168.22.5:4789
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:4789 <-- [OL] 192.168.22.5:60230
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:60351 --> [OL] 192.168.22.5:4789
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:4789 <-- [OL] 192.168.22.5:50251
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:40646 --> [OL] 192.168.22.5:4789
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:4789 <-- [OL] 192.168.22.5:36286
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.22.4:60230 --> [OL] 192.168.22.5:4789
+    : VXLAN
+    : CT ID: 0: MARK: 0
+    : VLAN: 5
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

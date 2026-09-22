@@ -1,0 +1,6 @@
+offline0: i4pc--x--------- UDP [L] 10.1.66.20:53 <-- [OL] 10.1.67.250:41335
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: ckaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    : DP: 1
+

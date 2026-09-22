@@ -1,0 +1,28 @@
+offline0: i4pc-------r---- UDP [OR] 155.1.13.1:49152 --> [L] 155.1.13.3:3784
+    : BFD
+    : CT ID: 0: MARK: 0
+    : VLAN: 13
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 155.1.13.1:3784 <-- [L] 155.1.13.3:49152
+    : BFD
+    : CT ID: 0: MARK: 0
+    : VLAN: 13
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 155.1.13.1:49152 --> [L] 155.1.13.1:3785
+    : BFD
+    : CT ID: 0: MARK: 0
+    : VLAN: 13
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 155.1.13.3:49152 --> [L] 155.1.13.3:3785
+    : BFD
+    : CT ID: 0: MARK: 0
+    : VLAN: 13
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

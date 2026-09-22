@@ -1,0 +1,24 @@
+offline0: i4pc-------r---- UDP [L] 192.168.239.2:137 <-- [OL] 192.168.239.129:137
+    : NETBIOS
+    : CT ID: 0: MARK: 0
+    : H: mdjr98
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ ICMP [L] 192.168.239.129:0 --> [OM] 224.0.0.2:0
+    : ICMP
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.239.129:137 --> [OL] 192.168.239.255:137
+    : NETBIOS
+    : CT ID: 0: MARK: 0
+    : H: mdjr98
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.239.129:138 --> [OL] 192.168.239.255:138
+    : NETBIOS
+    : CT ID: 0: MARK: 0
+    : H: mdjr98
+    : DP: 1
+

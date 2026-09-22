@@ -1,0 +1,7 @@
+offline0: i4pc-------r---- UDP [L] 10.189.122.71:60524 --> [OR] 213.202.7.26:443
+    : QUIC
+    : CT ID: 0: MARK: 0
+    : VLAN: 1508
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

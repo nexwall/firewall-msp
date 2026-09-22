@@ -1,0 +1,16 @@
+offline0: i4pc-gx----r---- TCP [OR] 52.41.135.135:443 <-- [L] 192.168.26.22:51817
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 3
+
+offline0: i4pcu-x----r---- TCP [OR] 35.234.85.218:443 <-- [L] 192.168.26.22:51949
+    : HTTP/S.netify.riot-games
+    : CT ID: 0: MARK: 0
+    : V: 0x0303 CS: 0xc02f
+    : TLS/CN: embed.rgpub.io
+    : TLS/IDN: C=US, O=IdenTrust, OU=HydrantID Trusted Certificate Service, CN=HydrantID Server CA O1 TLS/SDN: CN=embed.rgpub.io, O=Riot Games Inc, L=Los Angeles, ST=California, C=US
+    : RID 30: TLS Certificate Expired
+    : DP: 4
+

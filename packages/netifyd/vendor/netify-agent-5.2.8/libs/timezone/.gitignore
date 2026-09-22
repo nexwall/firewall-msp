@@ -1,0 +1,8 @@
+*.cpp-e
+.deps/
+.dirstamp
+*.la
+.libs
+*.lo
+*.o
+*.tmp

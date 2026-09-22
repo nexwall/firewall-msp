@@ -1,0 +1,30 @@
+offline0: i4pc------------ TCP [L] 127.0.0.1:5432 <-- [OL] 127.0.0.1:45930
+    : PGSQL
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc------------ TCP [L] 127.0.0.1:5432 <-- [OL] 127.0.0.1:45931
+    : PGSQL
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc----------F- TCP [L] 172.16.20.75:5432 <-- [OL] 172.16.20.244:59036
+    : PGSQL
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc----------F- TCP [L] 172.16.20.75:5432 <-- [OL] 172.16.20.244:59037
+    : PGSQL
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc----------F- TCP [L] 172.16.20.75:5432 <-- [OL] 172.16.20.244:59038
+    : PGSQL
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc------------ TCP [L] 172.16.20.75:5432 <-- [OL] 172.16.20.244:59039
+    : PGSQL
+    : CT ID: 0: MARK: 0
+    : DP: 6
+

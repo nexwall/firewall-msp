@@ -1,0 +1,8 @@
+offline0: i4pc----------F- TCP [OR] 176.31.225.118:80 <-- [L] 192.168.1.128:46882
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: tracker.trackerfix.com
+    : HTTP/UA: Transmission/2.94
+    : URL: tracker.trackerfix.com/announce?info_hash=%aa7i%c4S%0d%de%06%24%18s%da%d4%3a%b5%cc%ec%2c%e6%22&peer_id=-TR2940-chho92c56pul&port=51413&uploaded=0&downloaded=0&left=282050560&numwant=80&key=3b5502cc&compact=1&supportcrypto=1&requirecrypto=1&event=started
+    : DP: 7
+

@@ -1,0 +1,60 @@
+offline0: i4pcu----------- TCP [L] 10.77.110.51:41588 --> [OL] 10.206.50.239:42000
+    : Skype/Teams/Call.netify.teams
+    : CT ID: 0: MARK: 0
+    : VLAN: 1611
+    : STUN/MAPPED: 10.77.110.51:41588
+    : DP: 9
+
+offline0: i4pcu-------s--- UDP [OR] 74.125.247.128:3478 <-- [L] 192.168.12.169:43016
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : H: turn.l.google.com
+    : STUN/MAPPED: 93.47.225.225:23616
+    : STUN/RELAYED: 10.2.0.86:44908
+    : DP: 7
+
+offline0: i4pc-------r---- ICMP [OR] 74.125.247.128:0 <-- [L] 192.168.12.169:0
+    : ICMP.netify.google
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc------------ UDP [OR] 2a38:e156:8167:a333:face:b00c:0:24d9:3478 <-- [L] 3516:bf0b:fc53:75e7:70af:f67f:8e49:f603:56880
+    : STUN
+    : CT ID: 0: MARK: 0
+    : DP: 7
+
+offline0: i4pcu------r---- UDP [OR] 31.13.86.54:40003 --> [L] 192.168.12.169:38123
+    : Facebook/VoIP.netify.meta
+    : CT ID: 0: MARK: 0
+    : H: turner.facebook
+    : STUN/MAPPED: 93.47.226.1:11162
+    : STUN/PEER: 192.168.0.102:44459
+    : STUN/RELAYED: 31.13.86.54:53789
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc------------ TCP [OR] 54.1.57.155:37257 --> [L] 87.47.100.17:3478
+    : STUN
+    : CT ID: 0: MARK: 0
+    : H: apps-host.com
+    : DP: 8
+
+offline0: i4pcu------rs--- UDP [OR] 142.250.82.99:3478 <-- [L] 192.168.12.169:49153
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.47.225.70:12165
+    : RID 30: TLS Certificate Expired
+    : DP: 17
+
+offline0: i4pc--x--------- UDP [OR] 134.224.90.111:8801 <-- [L] 192.168.43.169:48854
+    : STUN
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i6pc--x--------- UDP [OR] 2001:b07:a3d:c112:48a1:1094:1227:281e:48094 --> [L] 2600:1900:4160:5999:0:19:::3478
+    : STUN
+    : CT ID: 0: MARK: 0
+    : DP: 3
+

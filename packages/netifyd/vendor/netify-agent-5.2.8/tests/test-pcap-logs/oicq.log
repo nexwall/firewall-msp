@@ -1,0 +1,174 @@
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:60213
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:51884
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:52991
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:60288
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:56476
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:63120
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:65276
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:64916
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:49340
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:58434
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:55338
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:54233
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:55774
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:52663
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:58797
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:50315
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:65163
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:59802
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:60434
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:60436
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:57677
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:61686
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:54462
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:64415
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:57872
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:59394
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:49199
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:61163
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 58.60.10.45:8000 <-- [L] 90.147.69.210:64420
+    : OICQ
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

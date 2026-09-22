@@ -1,0 +1,40 @@
+offline0: i4pcu----------- TCP [OR] 76.223.92.165:443 <-- [L] 192.168.12.67:47464
+    : HTTP/S.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: chat.signal.org
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: chat.signal.org
+    : JA4: t13d0912ht_f91f431d341e_40271e0a5736
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 76.223.92.165:443 <-- [L] 192.168.12.67:47466
+    : HTTP/S.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: chat.signal.org
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: chat.signal.org
+    : JA4: t13d0912ht_f91f431d341e_40271e0a5736
+    : DP: 6
+
+offline0: i4pcu-------s--- UDP [OR] 141.101.90.1:3478 <-- [L] 192.168.12.67:43281
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: turn.cloudflare.com
+    : STUN/MAPPED: 93.35.168.238:53643
+    : STUN/RELAYED: 104.30.149.151:29665
+    : DP: 7
+
+offline0: i4pcu------r---- UDP [OR] 93.40.63.219:49514 --> [L] 192.168.12.67:43281
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.168.238:53644
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [L] 10.219.164.8:50017 --> [OL] 192.168.12.67:43281
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+

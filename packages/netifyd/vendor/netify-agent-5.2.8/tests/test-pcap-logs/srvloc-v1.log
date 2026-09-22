@@ -1,0 +1,12 @@
+offline0: i4pc-------r---- UDP [OR] 23.220.116.175:427 <-- [L] 192.168.199.71:57782
+    : SLP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 172.30.246.115:427 <-- [OR] 250.83.105.78:51708
+    : SLP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

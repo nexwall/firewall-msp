@@ -1,0 +1,7 @@
+offline0: i4pc--x----r---- UDP [OR] 26.83.9.81:57567 --> [L] 33.35.223.103:540
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 30: TLS Certificate Expired
+    : RID 37: Self-signed Certificate
+    : DP: 6
+

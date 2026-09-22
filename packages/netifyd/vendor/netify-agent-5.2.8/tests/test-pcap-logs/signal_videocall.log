@@ -1,0 +1,23 @@
+offline0: i4pcu-------s--- UDP [OR] 35.216.234.234:3478 <-- [L] 192.168.12.67:47926
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.35.168.30:45265
+    : STUN/RELAYED: 35.216.234.234:29688
+    : DP: 7
+
+offline0: i4pcu-------s--- UDP [OR] 35.219.252.146:3478 <-- [L] 192.168.12.67:47926
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.35.168.30:45265
+    : STUN/RELAYED: 35.219.252.146:40378
+    : DP: 7
+
+offline0: i4pcu------r---- UDP [OR] 35.219.252.146:56377 --> [L] 192.168.12.67:47926
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.168.30:45266
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+

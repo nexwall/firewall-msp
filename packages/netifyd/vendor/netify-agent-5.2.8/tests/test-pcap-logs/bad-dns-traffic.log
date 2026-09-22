@@ -1,0 +1,27 @@
+offline0: i4pcu------r---- UDP [OR] 4.2.2.4:53 <-- [L] 192.168.43.91:35966
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: 958700a621c3620001636f6e736f6c65202873697276696d65732900.skullseclabs.org
+    : RID  7: Suspicious DNS Traffic
+    : RID 23: Risky Domain Name
+    : RID 27: Suspicious DGA Domain name
+    : DP: 3
+
+offline0: i4pcu------r---- UDP [OR] 4.2.2.4:53 <-- [L] 192.168.43.91:56354
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: c75900fdf525320021636f6d6d616e64202873697276696d65732900.skullseclabs.org
+    : RID  7: Suspicious DNS Traffic
+    : RID 23: Risky Domain Name
+    : RID 27: Suspicious DGA Domain name
+    : DP: 6
+
+offline0: i4pc-------r---- UDP [OR] 4.2.2.4:53 <-- [L] 192.168.43.91:46961
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: a05700e6da83510001636f6e736f6c65202873697276696d65732900.skullseclabs.org
+    : RID  7: Suspicious DNS Traffic
+    : RID 23: Risky Domain Name
+    : RID 27: Suspicious DGA Domain name
+    : DP: 2
+

@@ -1,0 +1,14 @@
+offline0: i4pc-------r---- UDP [L] 10.1.0.3:57730 <-- [OL] 10.10.0.1:65226
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [L] 10.1.0.3:5853 --> [OL] 10.10.0.1:2808
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+

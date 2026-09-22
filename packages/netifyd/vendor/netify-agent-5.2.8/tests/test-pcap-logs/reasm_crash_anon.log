@@ -1,0 +1,6 @@
+offline0: i4pc-g-----r--F- TCP [L] 10.209.8.148:21999 <-- [OL] 192.168.145.147:51218
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 32
+

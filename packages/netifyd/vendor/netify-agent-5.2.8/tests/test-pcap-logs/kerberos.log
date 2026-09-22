@@ -1,0 +1,205 @@
+offline0: i4pc------------ TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49157
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49160
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49166
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49171
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49176
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49181
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49187
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc--x--------- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49182
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:49155 <-- [OL] 172.16.8.201:49185
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 3
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:389 <-- [OL] 172.16.8.201:49191
+    : LDAP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49162
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49173
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:445 <-- [OL] 172.16.8.201:49174
+    : SMBv23
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49159
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49183
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49189
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:49155 <-- [OL] 172.16.8.201:49165
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 6
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49196
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:445 <-- [OL] 172.16.8.201:49194
+    : SMBv23
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:445 <-- [OL] 172.16.8.201:49156
+    : SMBv23
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49190
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49195
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49175
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49170
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc--x--------- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49167
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49168
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc--x--------- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49158
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49192
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:389 <-- [OL] 172.16.8.201:49169
+    : LDAP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc--x--------- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49188
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:389 <-- [OL] 172.16.8.201:49193
+    : LDAP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:389 <-- [OL] 172.16.8.201:49172
+    : LDAP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:389 <-- [OL] 172.16.8.201:49180
+    : LDAP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:88 <-- [OL] 172.16.8.201:49186
+    : Kerberos
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:389 <-- [OL] 172.16.8.201:49179
+    : LDAP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 172.16.8.8:389 <-- [OL] 172.16.8.201:49161
+    : LDAP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 2
+

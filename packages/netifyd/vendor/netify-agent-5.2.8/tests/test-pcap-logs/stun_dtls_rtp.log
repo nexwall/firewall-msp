@@ -1,0 +1,16 @@
+offline0: i4pcu------rs--- UDP [OR] 142.250.82.76:19305 <-- [L] 192.168.12.156:37967
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.3:61536
+    : RID 30: TLS Certificate Expired
+    : DP: 17
+
+offline0: i4pcu-------s--- TCP [OR] 142.250.82.249:3478 <-- [L] 192.168.12.182:50221
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : H: turn.l.google.com
+    : STUN/MAPPED: 93.35.170.27:64994
+    : STUN/PEER: 10.13.0.50:1259
+    : STUN/RELAYED: 10.13.0.62:15530
+    : DP: 11
+

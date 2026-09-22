@@ -1,0 +1,11 @@
+offline0: i6pcu------r---- TCP [OR] 2001:b07:a3d:c112:9726:f643:a838:b0c4:40294 --> [L] 2a00:1450:4002:414::2013:443
+    : HTTP/S.netify.google
+    : CT ID: 0: MARK: 0
+    : H: www.prbtest.dev
+    : V: 0x0303 CS: 0xcca8
+    : TLS/SNI: www.prbtest.dev TLS/CN: www.prbtest.dev
+    : TLS/IDN: C=US, O=Google Trust Services LLC, CN=GTS CA 1D4 TLS/SDN: CN=www.prbtest.dev
+    : JA4: t12d2808h2_d943125447b4_dd0a478c1db3
+    : RID 30: TLS Certificate Expired
+    : DP: 8
+

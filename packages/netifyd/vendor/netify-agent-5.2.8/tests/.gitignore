@@ -1,0 +1,11 @@
+check-protocols
+check-risks
+.deps
+.libs
+/*.log
+Makefile.in
+/netifyd
+netifyd-test-pcap.conf
+*.o
+/test-util
+/*.trs

@@ -1,0 +1,9 @@
+offline0: i4pcu------r---- TCP [OR] 1.1.1.1:443 <-- [L] 192.168.1.253:35996
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303 CS: 0x1303
+    : JA4: t13d1909h2_9dc949149365_97f8aa674fd9
+    : RID 35: TLS SNI Extension Not Found
+    : RID 53: TLS ALPN/SNI Mismatch
+    : DP: 6
+

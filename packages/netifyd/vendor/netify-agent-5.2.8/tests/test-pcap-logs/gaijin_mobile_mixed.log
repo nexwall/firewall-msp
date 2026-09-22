@@ -1,0 +1,29 @@
+offline0: i4pcu------r---- TCP [L] 10.215.173.1:47666 --> [OR] 54.75.230.133:443
+    : HTTP/S.netify.gaijin-entertainment
+    : CT ID: 0: MARK: 0
+    : H: yupmaster.gaijinent.com
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: yupmaster.gaijinent.com TLS/CN: gaijinent.com
+    : TLS/IDN: C=US, O=DigiCert Inc, OU=www.digicert.com, CN=GeoTrust TLS RSA CA G1 TLS/SDN: CN=*.gaijinent.com
+    : JA4: t13d3113ht_e8f1e7e78f70_ce5650b735ce
+    : RID 30: TLS Certificate Expired
+    : DP: 7
+
+offline0: i4pcu------r---- TCP [L] 10.215.173.1:39314 --> [OR] 81.171.31.37:443
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: ta-receiver-balancer-xom.crossout.net
+    : V: 0x0303 CS: 0xc030
+    : TLS/SNI: ta-receiver-balancer-xom.crossout.net TLS/CN: crossout.net
+    : TLS/IDN: C=US, O=DigiCert Inc, OU=www.digicert.com, CN=GeoTrust TLS RSA CA G1 TLS/SDN: CN=*.crossout.net
+    : JA4: t12d800700_ee0b5a6c69b8_cdbdbcd6f742
+    : RID 30: TLS Certificate Expired
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+
+offline0: i4pc-------r---- UDP [L] 10.215.173.1:42424 --> [OR] 95.211.246.178:20011
+    : Gaijin
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

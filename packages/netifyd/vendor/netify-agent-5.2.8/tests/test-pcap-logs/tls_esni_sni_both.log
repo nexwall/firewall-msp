@@ -1,0 +1,22 @@
+offline0: i4pcu------r--F- TCP [OR] 104.17.175.85:443 <-- [L] 192.168.1.21:55500
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: these-are-not-the-droids-youre-looking-for.com
+    : V: 0x0303 CS: 0x1303
+    : TLS/SNI: these-are-not-the-droids-youre-looking-for.com
+    : JA4: t13d031100_55b375c5d22e_77359c92d649
+    : RID 39: TLS Suspicious Extension
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+
+offline0: i4pcu------r--F- TCP [OR] 104.17.175.85:443 <-- [L] 192.168.1.21:55514
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: you-think-thats-normal-tls-traffic-youre-seeing.com
+    : V: 0x0303 CS: 0x1303
+    : TLS/SNI: you-think-thats-normal-tls-traffic-youre-seeing.com
+    : JA4: t13d031100_55b375c5d22e_77359c92d649
+    : RID 39: TLS Suspicious Extension
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+

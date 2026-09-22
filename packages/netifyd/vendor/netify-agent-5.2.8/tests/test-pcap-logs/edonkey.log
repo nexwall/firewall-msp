@@ -1,0 +1,6 @@
+offline0: i4pc-gx----r--F- TCP [OR] 135.192.214.240:7551 <-- [L] 201.15.177.227:1754
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 17
+

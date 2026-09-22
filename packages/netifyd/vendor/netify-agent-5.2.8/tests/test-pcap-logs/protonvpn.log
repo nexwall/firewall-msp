@@ -1,0 +1,23 @@
+offline0: i4pcu------r---- TCP [L] 10.0.2.15:37810 --> [OR] 185.159.159.148:443
+    : HTTP/S.netify.proton-vpn
+    : CT ID: 0: MARK: 0
+    : H: vpn-api.proton.me
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: vpn-api.proton.me TLS/CN: proton.me
+    : TLS/IDN: C=US, O=Let's Encrypt, CN=R3 TLS/SDN: CN=proton.me
+    : JA4: t12d1209h2_d34a8e72043a_b39be8c56a14
+    : RID 30: TLS Certificate Expired
+    : DP: 11
+
+offline0: i4pc-------r---- UDP [L] 10.0.2.15:57701 --> [OR] 217.23.3.76:443
+    : WireGuard
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [OR] 2.58.241.67:37710 --> [L] 8.8.8.8:443
+    : HTTP/S.netify.google
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
