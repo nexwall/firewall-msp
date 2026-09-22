@@ -65,6 +65,16 @@ define Package/ns-monitoring/install
 	# additional binaries
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./files/ns-stats-cleanup $(1)/usr/bin/ns-stats-cleanup
+	# netifyd plugin wiring: proc-core -> sink-http -> ns-flows (both open source,
+	# installed by the netifyd package); proc-aggregator -> sink-http -> ns-stats
+	# (aggregator not yet part of this image, see 10-ns-stats.conf)
+	$(INSTALL_DIR) $(1)/etc/netifyd/plugins.d
+	$(INSTALL_DATA) ./files/netifyd/plugins.d/10-ns-flows.conf $(1)/etc/netifyd/plugins.d/10-ns-flows.conf
+	$(INSTALL_DATA) ./files/netifyd/plugins.d/10-ns-stats.conf $(1)/etc/netifyd/plugins.d/10-ns-stats.conf
+	$(INSTALL_DATA) ./files/netifyd/netify-ns-flows-proc.json $(1)/etc/netifyd/netify-ns-flows-proc.json
+	$(INSTALL_DATA) ./files/netifyd/netify-ns-flows-sink.json $(1)/etc/netifyd/netify-ns-flows-sink.json
+	$(INSTALL_DATA) ./files/netifyd/netify-ns-stats-proc.json $(1)/etc/netifyd/netify-ns-stats-proc.json
+	$(INSTALL_DATA) ./files/netifyd/netify-ns-stats-sink.json $(1)/etc/netifyd/netify-ns-stats-sink.json
 endef
 
 define Package/ns-monitoring/postinst
