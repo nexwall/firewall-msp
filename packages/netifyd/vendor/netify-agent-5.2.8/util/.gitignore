@@ -1,8 +1,0 @@
-.deps/
-generate-alpn-include.sh
-generate-protocol-csv.sh
-.libs
-Makefile.in
-nd-match-export
-*.o
-risks-to-csv
