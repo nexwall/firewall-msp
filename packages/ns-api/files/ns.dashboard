@@ -44,15 +44,50 @@ def get_version():
                 ret["arch"] = line[line.index('=')+2:-2]
     return ret
 
+# Hypervisor vendor strings (DMI sys_vendor) recognized as virtual machines. The
+# board/product name DMI reports in these cases (for example "440BX Desktop
+# Reference Platform" on VMware, or "Standard PC (i440FX + PIIX, 1996)" on QEMU)
+# is the hypervisor's own emulated hardware, not meaningful to an administrator.
+_HYPERVISOR_VENDORS = {
+    'vmware': 'VMware',
+    'qemu': 'QEMU/KVM',
+    'kvm': 'QEMU/KVM',
+    'microsoft corporation': 'Microsoft Hyper-V',
+    'xen': 'Xen',
+    'innotek gmbh': 'VirtualBox',
+    'oracle corporation': 'VirtualBox',
+    'amazon ec2': 'Amazon EC2',
+    'google': 'Google Cloud',
+    'bochs': 'Bochs',
+    'parallels': 'Parallels',
+}
+
+def _read_dmi_field(name):
+    path = f'/sys/devices/virtual/dmi/id/{name}'
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            value = f.read().strip()
+            return value or None
+    except OSError:
+        return None
+
 def get_hardware():
     # read info for x86_64
     if os.path.isdir('/sys/devices/virtual/dmi/id'):
-        if os.path.exists('/sys/devices/virtual/dmi/id/board_name'):
-            with open('/sys/devices/virtual/dmi/id/board_name') as f:
-                return f.read().lstrip().rstrip()
-        if os.path.exists('/sys/devices/virtual/dmi/id/product_name'):
-            with open('/sys/devices/virtual/dmi/id/product_name') as f:
-                return f.read().lstrip().rstrip()
+        vendor = _read_dmi_field('sys_vendor')
+        if vendor:
+            vendor_lower = vendor.strip().lower()
+            for marker, friendly in _HYPERVISOR_VENDORS.items():
+                if marker in vendor_lower:
+                    return f'{friendly} (Virtual Machine)'
+        board = _read_dmi_field('board_name')
+        if board:
+            return board
+        product = _read_dmi_field('product_name')
+        if product:
+            return product
     # read info for arm
     if os.path.exists('/sys/firmware/devicetree/base/model'):
         with open('/sys/firmware/devicetree/base/model') as f:
