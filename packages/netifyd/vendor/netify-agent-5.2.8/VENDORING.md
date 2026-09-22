@@ -25,3 +25,14 @@ package build.
 
 `configure`, `Makefile.in` and other autotools-generated files are intentionally not vendored; the
 package Makefile keeps `PKG_FIXUP:=autoreconf` and regenerates them at build time from this source.
+
+## Correction (same day)
+
+The first attempt at vendoring this tree ran a cleanup pass (removing leftover files from a
+local `autoreconf` test run) that was not scoped narrowly enough: `find . -name "Makefile.in" -delete`
+ran across the whole tree, including inside `libs/ndpi`, which genuinely ships pre-generated
+`Makefile.in` files as tracked content (not something `autoreconf` needs to regenerate from
+scratch here). That broke `automake` when the real OpenWrt build reached it
+(`required file 'example/Makefile.in' not found`, and others). Fixed by re-cloning `libs/ndpi`,
+`libs/inih` and `libs/gperftools` fresh and only stripping their `.git` directories this time -
+nothing else inside them.
