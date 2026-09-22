@@ -1,23 +1,24 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=netifyd
-PKG_VERSION:=4.4.7
+PKG_VERSION:=5.2.8
 PKG_RELEASE:=1
 PKG_MAINTAINER:=Nexwall <dev@nexwall.com.br>
 PKG_LICENSE:=GPL-3.0-or-later
-PKG_LICENSE_FILES:=LICENSE
 
 PKG_BUILD_PARALLEL:=1
 PKG_FIXUP:=autoreconf
 PKG_INSTALL:=1
-PKG_BUILD_FLAGS:=gc-sections
 
-# Open source Netify Agent (GPL), built from the vendor source at the tag v4.4.7
-# (same version as the package in the OpenWrt packages feed). The source pulls its
-# libraries (nDPI and others) as git submodules.
+# Open source Netify Agent (GPL), built from the vendor source at the tag v5.2.8-1.
+# This is the same major version the original design used (inline NFQUEUE capture,
+# native plugin loading), unlike the earlier Nexwall build of this package which
+# used the community v4.4.7 (passive capture, no plugin loader). The vendor ships
+# an OpenWrt package template at deploy/openwrt/ in this same source tree; this
+# Makefile mirrors it (deploy/openwrt/Makefile.in), translated to concrete values.
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://gitlab.com/netify.ai/public/netify-agent.git
-PKG_SOURCE_VERSION:=4d8d92104e694db3115a1615106022fc28aaed0f
+PKG_SOURCE_VERSION:=19458098898353ed1950cbdd35c85ee79c70a204
 PKG_MIRROR_HASH:=skip
 
 include $(INCLUDE_DIR)/package.mk
@@ -30,36 +31,38 @@ define Package/netifyd
 	DEPENDS:= \
 		@(aarch64||x86_64) \
 		+ca-bundle \
-		+kmod-ipt-conntrack-label \
-		+kmod-ipt-ipset \
 		+libatomic \
-		+libblobmsg-json \
-		+libc \
-		+libcap \
 		+libcurl \
-		+libgcrypt \
-		+libgpg-error \
-		+libipset \
-		+libjson-c \
 		+libmnl \
 		+libnetfilter-conntrack \
 		+libnetfilter-queue \
-		+libopenssl \
 		+libpcap \
 		+libpthread \
 		+libstdcpp \
+		+libcap \
 		+libubox \
+		+libblobmsg-json \
+		+libjson-c \
 		+libubus \
 		+libuci \
+		+libnftnl \
 		+nftables \
+		+kmod-ipt-conntrack-label \
+		+kmod-ipt-ipset \
+		+libipset \
+		+libgcrypt \
+		+libgpg-error \
 		+zlib \
 		+zoneinfo-core
 endef
 
 define Package/netifyd/description
 The Netify Agent is a deep-packet inspection engine built on nDPI. It detects
-network protocols and applications, and streams the detections as JSON events.
-Application names come from the open signature list installed with the package.
+network protocols and applications inline (NFQUEUE capture) and streams the
+detections as JSON events, and can load plugins to act on them. Application
+names come from the open signature list installed with the package; the
+proprietary Nexwall plugins (see ns-dpi) add rule-based blocking, QoS marking
+and traffic analytics.
 endef
 
 define Package/netifyd/conffiles
@@ -68,23 +71,28 @@ define Package/netifyd/conffiles
 /etc/netifyd/agent.uuid
 endef
 
-TARGET_CFLAGS+=-Wno-psabi
-TARGET_CXXFLAGS+=-std=c++11 -Wno-psabi
-
-# libndpi.a is static and was built with libgcrypt (QUIC decryption), so the agent
-# link must pull libgcrypt and libgpg-error in explicitly.
-TARGET_LDFLAGS+=-lgcrypt -lgpg-error
+TARGET_CFLAGS+=-ffunction-sections -fdata-sections -Wno-psabi
+TARGET_CXXFLAGS+=-ffunction-sections -fdata-sections -Wno-psabi -std=c++17
+TARGET_LDFLAGS+=-Wl,--gc-sections -lgcrypt -lgpg-error
 
 CONFIGURE_ARGS+= \
 	--disable-shared \
-	--without-local-libgcrypt \
-	--sharedstatedir=/var/run \
+	--enable-conntrack-counters \
+	--enable-conntrack-mdata \
+	--enable-extended-stats \
+	--enable-interface-metadata \
 	--enable-lean-and-mean \
+	--enable-nfqueue \
+	--enable-uci \
+	--enable-ubus \
+	--disable-tpacketv3 \
+	--disable-capabilities \
+	--with-local-libgcrypt \
+	--with-stdcpp=17 \
+	--sharedstatedir=/var/run \
 	--disable-libtcmalloc \
-	--disable-jemalloc \
 	--without-systemdsystemunitdir \
-	--without-tmpfilesdir \
-	--disable-inotify
+	--without-tmpfilesdir
 
 ifneq ($(CONFIG_LIBCURL_ZLIB),y)
 CONFIGURE_ARGS+= --without-libcurl-zlib
@@ -92,20 +100,30 @@ endif
 
 define Package/netifyd/install
 	$(INSTALL_DIR) $(1)/etc
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_DIR) $(1)/etc/netifyd
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_DIR) $(1)/usr/share/netifyd
 	$(INSTALL_DATA) ./files/netifyd.conf $(1)/etc/netifyd.conf
+	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/netifyd.config $(1)/etc/config/netifyd
+	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/netifyd.init $(1)/etc/init.d/netifyd
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/netifyd $(1)/usr/sbin/netifyd
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/netify-apps.conf $(1)/etc/netifyd/netify-apps.conf
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/netify-categories.json $(1)/etc/netifyd/netify-categories.json
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/functions.sh $(1)/usr/share/netifyd/functions.sh
-	# the agent reads its data under /etc/netify.d, the rest of the system uses /etc/netifyd
-	$(LN) netifyd $(1)/etc/netify.d
+	$(INSTALL_BIN) ./files/netifyd-selfheal.init $(1)/etc/init.d/netifyd-selfheal
+	$(INSTALL_DIR) $(1)/usr/sbin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/netifyd $(1)/usr/sbin
+	$(INSTALL_DIR) $(1)/etc/netifyd
+	$(INSTALL_DIR) $(1)/etc/netifyd/address-groups.d
+	$(INSTALL_DIR) $(1)/etc/netifyd/categories.d
+	$(INSTALL_DIR) $(1)/etc/netifyd/profiles.d
+	$(CP) $(PKG_INSTALL_DIR)/etc/netifyd/profiles.d/* $(1)/etc/netifyd/profiles.d
+	$(INSTALL_DIR) $(1)/etc/netifyd/interfaces.d
+	$(CP) $(PKG_INSTALL_DIR)/etc/netifyd/interfaces.d/* $(1)/etc/netifyd/interfaces.d
+	$(INSTALL_DIR) $(1)/etc/netifyd/plugins.d
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/netify-apps.conf $(1)/etc/netifyd
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/netify-categories.json $(1)/etc/netifyd
+	$(INSTALL_DIR) $(1)/usr/share/netifyd/plugins.d
+	$(INSTALL_DATA) ./files/netifyd.conf $(1)/usr/share/netifyd/netifyd.conf.default
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/functions.sh $(1)/usr/share/netifyd
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/netify-apps.conf $(1)/usr/share/netifyd
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/*.json $(1)/usr/share/netifyd
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/plugins.d/*.conf $(1)/usr/share/netifyd/plugins.d
 endef
 
 $(eval $(call BuildPackage,netifyd))
