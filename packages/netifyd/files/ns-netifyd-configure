@@ -1,0 +1,68 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+"""
+Points the traffic classification engine at the real LAN and WAN devices of this
+unit, by firewall zone membership - not by a fixed interface name.
+
+The engine's own init script (files/netifyd.init, vendor code, unmodified) can
+autodetect interfaces, but only by guessing a UCI network section named exactly
+"wan" (see files/functions.sh, also vendor code). Nexwall lets an administrator
+name the WAN interface anything (a unit boots with no WAN configured at all, and
+the name is chosen when it's set up), so that guess is frequently wrong and the
+engine ends up only watching the LAN side, or nothing.
+
+This script is the Nexwall equivalent of that guess: it resolves devices from
+the "lan" and "wan" firewall zones (the same zones firewall rules, NAT and
+everything else already key off), the same way python3-nethsec already does
+it for other features. It disables the engine's own autoconfig and writes the
+result directly as internal_if/external_if, which the vendor init script reads
+without any further change needed there.
+
+Run on boot (etc/init.d/netifyd-zones, before netifyd itself) and on every
+interface up/down event (etc/hotplug.d/iface/), so a WAN configured after first
+boot, or changed later, is picked up without a reboot.
+"""
+
+import sys
+
+from euci import EUci
+from nethsec import utils
+
+
+def configure():
+    uci = EUci()
+    lan_devices = utils.get_all_lan_devices(uci)
+    wan_devices = utils.get_all_wan_devices(uci, exclude_aliases=True)
+
+    if not lan_devices and not wan_devices:
+        # nothing configured yet (for example straight after first boot, before
+        # the setup wizard); leave the engine on its own autoconfig rather than
+        # writing an internal_if/external_if list that would disable capture
+        # entirely once autoconfig is turned off
+        return False
+
+    changed = False
+    if uci.get('netifyd', '@netifyd[0]', 'autoconfig', dtype=str, default='1') != '0':
+        uci.set('netifyd', '@netifyd[0]', 'autoconfig', '0')
+        changed = True
+    if list(uci.get('netifyd', '@netifyd[0]', 'internal_if', list=True, default=[])) != lan_devices:
+        uci.set('netifyd', '@netifyd[0]', 'internal_if', lan_devices)
+        changed = True
+    if list(uci.get('netifyd', '@netifyd[0]', 'external_if', list=True, default=[])) != wan_devices:
+        uci.set('netifyd', '@netifyd[0]', 'external_if', wan_devices)
+        changed = True
+
+    if changed:
+        uci.commit('netifyd')
+    return changed
+
+
+if __name__ == '__main__':
+    # exit 0 if something changed (caller should reload netifyd), 1 if nothing
+    # to do - matches the usual shell "if script; then reload; fi" idiom
+    sys.exit(0 if configure() else 1)

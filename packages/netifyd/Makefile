@@ -58,7 +58,8 @@ define Package/netifyd
 		+libgcrypt \
 		+libgpg-error \
 		+zlib \
-		+zoneinfo-core
+		+zoneinfo-core \
+		+python3-nethsec
 endef
 
 define Package/netifyd/description
@@ -116,8 +117,12 @@ define Package/netifyd/install
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/netifyd.init $(1)/etc/init.d/netifyd
 	$(INSTALL_BIN) ./files/netifyd-selfheal.init $(1)/etc/init.d/netifyd-selfheal
+	$(INSTALL_BIN) ./files/netifyd-zones.init $(1)/etc/init.d/netifyd-zones
+	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
+	$(INSTALL_BIN) ./files/hotplug.d.iface/20-netifyd $(1)/etc/hotplug.d/iface/20-netifyd
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/netifyd $(1)/usr/sbin
+	$(INSTALL_BIN) ./files/ns-netifyd-configure $(1)/usr/sbin/ns-netifyd-configure
 	$(INSTALL_DIR) $(1)/etc/netifyd
 	$(INSTALL_DIR) $(1)/etc/netifyd/address-groups.d
 	$(INSTALL_DIR) $(1)/etc/netifyd/categories.d

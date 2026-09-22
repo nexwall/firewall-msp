@@ -1,0 +1,17 @@
+#!/bin/sh /etc/rc.common
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Points the traffic classification engine at the real LAN/WAN devices,
+# by firewall zone, before the engine itself starts. See ns-netifyd-configure
+# for why this is needed. Runs once at boot; /etc/hotplug.d/iface/20-netifyd
+# keeps it in sync afterward, since an interface can be configured, changed,
+# or reconfigured at any later time, not just at first boot.
+
+START=48
+
+start() {
+	/usr/sbin/ns-netifyd-configure
+	exit 0
+}
