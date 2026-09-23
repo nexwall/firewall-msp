@@ -13,9 +13,20 @@
 // and hands it to the sink named in this instance's own JSON config
 // ("sinks": {"<name>": {"types": [...]}}), matching how the real plugin
 // pair (proc-core + sink-http) was configured.
+//
+// DispatchProcessorEvent() runs with ndPluginManager's own lock held (the
+// agent's BroadcastProcessorEvent() takes it before calling in) - found live,
+// the hard way, with debug logging: calling ndPlugin::DispatchSinkPayload()
+// directly from here deadlocks the whole agent, since that call needs the
+// same lock, on the same thread, and std::mutex is not recursive. So this
+// only ever encodes and queues; the actual dispatch happens from Entry(),
+// this plugin's own thread, same as ndPluginSink already does for its own
+// payload queue - that's what Entry() is for.
 
+#include <condition_variable>
+#include <deque>
 #include <fstream>
-#include <unistd.h>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
 
@@ -28,46 +39,46 @@ class ndPluginNxProcFlows : public ndPluginProcessor
 public:
     ndPluginNxProcFlows(const string &tag, const ndPlugin::Params &params)
       : ndPluginProcessor(tag, params) {
-        nd_printf("nx-proc-flows: DEBUG constructed, tag=%s, conf=%s\n",
-          tag.c_str(), GetConfiguration().c_str());
         if (! GetConfiguration().empty()) LoadSinks(GetConfiguration());
-        nd_printf("nx-proc-flows: DEBUG %zu sink channel(s) loaded\n",
-          sink_channels.size());
-        for (auto &c : sink_channels)
-            nd_printf("nx-proc-flows: DEBUG   channel: %s\n", c.c_str());
     }
 
     virtual void GetName(string &name) { name = "nx-proc-flows"; }
     virtual void GetVersion(string &version) { version = "1.0.0-nexwall"; }
 
     virtual void *Entry(void) {
-        // purely event-driven (DispatchProcessorEvent below), nothing to
-        // poll; just wait until the agent asks this thread to terminate.
-        while (! ShouldTerminate()) sleep(1);
+        while (! ShouldTerminate()) {
+            nlohmann::json jevent;
+            if (! PopQueue(jevent)) continue;
+
+            for (auto &target : sink_channels) {
+                try {
+                    ndPlugin::DispatchSinkPayload(target, {}, jevent,
+                      ndPlugin::DispatchFlags::FORMAT_JSON_OBJECT);
+                }
+                catch (exception &e) {
+                    nd_printf("nx-proc-flows: dispatch to %s: %s\n",
+                      target.c_str(), e.what());
+                }
+            }
+        }
         return nullptr;
     }
 
     virtual void DispatchProcessorEvent(Event event, ndFlow::Ptr &flow) {
-        nd_printf("nx-proc-flows: DEBUG DispatchProcessorEvent called, "
-          "event=%u, flow=%p, channels=%zu\n",
-          (unsigned)event, (void *)flow.get(), sink_channels.size());
         if (sink_channels.empty() || ! flow) return;
 
         switch (event) {
-        case Event::DPI_COMPLETE:
-            nd_printf("nx-proc-flows: DEBUG DPI_COMPLETE, emitting\n");
-            Emit("flow_dpi_complete", flow);
-            break;
-        case Event::FLOW_EXPIRE:
-            nd_printf("nx-proc-flows: DEBUG FLOW_EXPIRE, emitting\n");
-            Emit("flow_purge", flow);
-            break;
+        case Event::DPI_COMPLETE: Queue("flow_dpi_complete", flow); break;
+        case Event::FLOW_EXPIRE: Queue("flow_purge", flow); break;
         default: break;
         }
     }
 
 private:
     ndPlugin::Channels sink_channels;
+    mutex queue_lock;
+    condition_variable queue_cond;
+    deque<nlohmann::json> queue;
 
     void LoadSinks(const string &conf_filename) {
         ifstream f(conf_filename);
@@ -93,7 +104,9 @@ private:
         }
     }
 
-    void Emit(const char *type, ndFlow::Ptr &flow) {
+    // Called with ndPluginManager's lock held by the caller - must be fast
+    // and must not call back into the plugin manager (see class comment).
+    void Queue(const char *type, ndFlow::Ptr &flow) {
         nlohmann::json jflow;
         flow->Encode(jflow, flow->stats);
 
@@ -103,20 +116,21 @@ private:
             flow->iface->ifname : string();
         jevent["flow"] = jflow;
 
-        for (auto &target : sink_channels) {
-            nd_printf("nx-proc-flows: DEBUG dispatching to target=%s\n",
-              target.c_str());
-            try {
-                ndPlugin::DispatchSinkPayload(target, {}, jevent,
-                  ndPlugin::DispatchFlags::FORMAT_JSON_OBJECT);
-                nd_printf("nx-proc-flows: DEBUG dispatch to %s ok\n",
-                  target.c_str());
-            }
-            catch (exception &e) {
-                nd_printf("nx-proc-flows: DEBUG dispatch to %s FAILED: %s\n",
-                  target.c_str(), e.what());
-            }
+        {
+            lock_guard<mutex> l(queue_lock);
+            queue.push_back(std::move(jevent));
         }
+        queue_cond.notify_one();
+    }
+
+    bool PopQueue(nlohmann::json &jevent) {
+        unique_lock<mutex> l(queue_lock);
+        queue_cond.wait_for(l, chrono::seconds(1),
+          [this] { return ! queue.empty() || ShouldTerminate(); });
+        if (queue.empty()) return false;
+        jevent = std::move(queue.front());
+        queue.pop_front();
+        return true;
     }
 };
 
