@@ -28,7 +28,13 @@ class ndPluginNxProcFlows : public ndPluginProcessor
 public:
     ndPluginNxProcFlows(const string &tag, const ndPlugin::Params &params)
       : ndPluginProcessor(tag, params) {
+        nd_printf("nx-proc-flows: DEBUG constructed, tag=%s, conf=%s\n",
+          tag.c_str(), GetConfiguration().c_str());
         if (! GetConfiguration().empty()) LoadSinks(GetConfiguration());
+        nd_printf("nx-proc-flows: DEBUG %zu sink channel(s) loaded\n",
+          sink_channels.size());
+        for (auto &c : sink_channels)
+            nd_printf("nx-proc-flows: DEBUG   channel: %s\n", c.c_str());
     }
 
     virtual void GetName(string &name) { name = "nx-proc-flows"; }
@@ -42,11 +48,20 @@ public:
     }
 
     virtual void DispatchProcessorEvent(Event event, ndFlow::Ptr &flow) {
+        nd_printf("nx-proc-flows: DEBUG DispatchProcessorEvent called, "
+          "event=%u, flow=%p, channels=%zu\n",
+          (unsigned)event, (void *)flow.get(), sink_channels.size());
         if (sink_channels.empty() || ! flow) return;
 
         switch (event) {
-        case Event::DPI_COMPLETE: Emit("flow_dpi_complete", flow); break;
-        case Event::FLOW_EXPIRE: Emit("flow_purge", flow); break;
+        case Event::DPI_COMPLETE:
+            nd_printf("nx-proc-flows: DEBUG DPI_COMPLETE, emitting\n");
+            Emit("flow_dpi_complete", flow);
+            break;
+        case Event::FLOW_EXPIRE:
+            nd_printf("nx-proc-flows: DEBUG FLOW_EXPIRE, emitting\n");
+            Emit("flow_purge", flow);
+            break;
         default: break;
         }
     }
@@ -89,8 +104,18 @@ private:
         jevent["flow"] = jflow;
 
         for (auto &target : sink_channels) {
-            ndPlugin::DispatchSinkPayload(target, {}, jevent,
-              ndPlugin::DispatchFlags::FORMAT_JSON_OBJECT);
+            nd_printf("nx-proc-flows: DEBUG dispatching to target=%s\n",
+              target.c_str());
+            try {
+                ndPlugin::DispatchSinkPayload(target, {}, jevent,
+                  ndPlugin::DispatchFlags::FORMAT_JSON_OBJECT);
+                nd_printf("nx-proc-flows: DEBUG dispatch to %s ok\n",
+                  target.c_str());
+            }
+            catch (exception &e) {
+                nd_printf("nx-proc-flows: DEBUG dispatch to %s FAILED: %s\n",
+                  target.c_str(), e.what());
+            }
         }
     }
 };

@@ -29,8 +29,15 @@ class ndPluginNxSinkHTTP : public ndPluginSink
 public:
     ndPluginNxSinkHTTP(const string &tag, const ndPlugin::Params &params)
       : ndPluginSink(tag, params) {
+        nd_printf("nx-sink-http: DEBUG constructed, tag=%s, conf=%s\n",
+          tag.c_str(), GetConfiguration().c_str());
         if (! GetConfiguration().empty()) LoadChannels(GetConfiguration());
         curl = curl_easy_init();
+        nd_printf("nx-sink-http: DEBUG %zu channel(s) loaded, curl=%p\n",
+          channels.size(), (void *)curl);
+        for (auto &kv : channels)
+            nd_printf("nx-sink-http: DEBUG   channel %s enable=%d url=%s\n",
+              kv.first.c_str(), kv.second.enable, kv.second.url.c_str());
     }
 
     virtual ~ndPluginNxSinkHTTP() {
@@ -41,8 +48,10 @@ public:
     virtual void GetVersion(string &version) { version = "1.0.0-nexwall"; }
 
     virtual void *Entry(void) {
+        nd_printf("nx-sink-http: DEBUG Entry started, tag=%s\n", GetTag().c_str());
         while (! ShouldTerminate()) {
-            WaitOnPayloadQueue();
+            size_t n = WaitOnPayloadQueue();
+            if (n > 0) nd_printf("nx-sink-http: DEBUG woke with %zu queued\n", n);
             ndPluginSinkPayload::Ptr payload;
             while (PopPayloadQueue(payload)) {
                 if (payload) Post(payload);
@@ -89,7 +98,11 @@ private:
     }
 
     void PostTo(const string &url, const ndPluginSinkPayload::Ptr &payload) {
-        if (curl == nullptr) return;
+        nd_printf("nx-sink-http: DEBUG PostTo url=%s\n", url.c_str());
+        if (curl == nullptr) {
+            nd_printf("nx-sink-http: DEBUG curl handle is null!\n");
+            return;
+        }
 
         string body;
         const void *data;
@@ -119,14 +132,14 @@ private:
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
         CURLcode rc = curl_easy_perform(curl);
-        if (rc != CURLE_OK) {
-            nd_dprintf("nx-sink-http: %s: %s\n",
-              url.c_str(), curl_easy_strerror(rc));
-        }
+        nd_printf("nx-sink-http: DEBUG curl_easy_perform rc=%d (%s)\n",
+          (int)rc, curl_easy_strerror(rc));
         curl_slist_free_all(headers);
     }
 
     void Post(const ndPluginSinkPayload::Ptr &payload) {
+        nd_printf("nx-sink-http: DEBUG Post() called, %zu channels known\n",
+          channels.size());
         bool matched = false;
         for (auto &kv : channels) {
             if (! kv.second.enable) continue;
