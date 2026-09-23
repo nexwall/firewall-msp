@@ -107,3 +107,19 @@ endif
 
 # For debugging ns_initparse
 #netifyd_SOURCES += ns-parse.c
+
+# Nexwall plugins (open-source equivalents of the proprietary proc-core/
+# sink-http distribution, not buildable against this engine version - see
+# msp/DPI_PLAN.md in the internal repo), against the same public plugin ABI.
+# -module -avoid-version: these are dlopen'd plugins, not a versioned shared
+# library like libnetifyd.la itself, so they must not carry a SONAME suffix.
+plugin_LTLIBRARIES = libnx-proc-flows.la libnx-sink-http.la
+plugindir = $(plugin_libdir)
+
+libnx_proc_flows_la_SOURCES = plugins/nx-proc-flows.cpp
+libnx_proc_flows_la_LDFLAGS = -module -avoid-version -shared
+libnx_proc_flows_la_LIBADD = libnetifyd.la
+
+libnx_sink_http_la_SOURCES = plugins/nx-sink-http.cpp
+libnx_sink_http_la_LDFLAGS = -module -avoid-version -shared
+libnx_sink_http_la_LIBADD = libnetifyd.la $(LIBCURL_LIBS)

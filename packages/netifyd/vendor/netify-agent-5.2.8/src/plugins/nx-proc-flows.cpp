@@ -1,0 +1,98 @@
+// Nexwall proc-flows plugin
+//
+// Copyright (C) 2026 Nexwall
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Reimplementation of the real Netify Agent proc-core plugin (proprietary
+// distribution, not buildable against this engine version - see
+// msp/DPI_PLAN.md in the internal repo), against the public, documented
+// plugin ABI (nd-plugin.hpp) and the agent's own ndFlow::Encode() (used
+// throughout the agent's own source for exactly this purpose). Wraps each
+// encoded flow in the same {"type","interface","flow":{...}} shape
+// ns-flows' own parser already expects (nexwall-monitoring/flows/parser.go),
+// and hands it to the sink named in this instance's own JSON config
+// ("sinks": {"<name>": {"types": [...]}}), matching how the real plugin
+// pair (proc-core + sink-http) was configured.
+
+#include <fstream>
+#include <unistd.h>
+#include <nlohmann/json.hpp>
+#include <string>
+
+#include "nd-plugin.hpp"
+
+using namespace std;
+
+class ndPluginNxProcFlows : public ndPluginProcessor
+{
+public:
+    ndPluginNxProcFlows(const string &tag, const ndPlugin::Params &params)
+      : ndPluginProcessor(tag, params) {
+        if (! GetConfiguration().empty()) LoadSinks(GetConfiguration());
+    }
+
+    virtual void GetName(string &name) { name = "nx-proc-flows"; }
+    virtual void GetVersion(string &version) { version = "1.0.0-nexwall"; }
+
+    virtual void *Entry(void) {
+        // purely event-driven (DispatchProcessorEvent below), nothing to
+        // poll; just wait until the agent asks this thread to terminate.
+        while (! ShouldTerminate()) sleep(1);
+        return nullptr;
+    }
+
+    virtual void DispatchProcessorEvent(Event event, ndFlow::Ptr &flow) {
+        if (sink_channels.empty() || ! flow) return;
+
+        switch (event) {
+        case Event::DPI_COMPLETE: Emit("flow_dpi_complete", flow); break;
+        case Event::FLOW_EXPIRE: Emit("flow_purge", flow); break;
+        default: break;
+        }
+    }
+
+private:
+    ndPlugin::Channels sink_channels;
+
+    void LoadSinks(const string &conf_filename) {
+        ifstream f(conf_filename);
+        if (! f.is_open()) {
+            nd_printf("nx-proc-flows: could not open %s\n",
+              conf_filename.c_str());
+            return;
+        }
+        try {
+            nlohmann::json j;
+            f >> j;
+            if (! j.contains("sinks")) return;
+            // channel names here are the sink plugin instance tags this
+            // processor forwards to (matching plugins.d [sink-*] sections);
+            // "types" (stream-flows/stream-stats) is accepted but this
+            // plugin only ever emits flow events, so it is not filtered on.
+            for (auto &item : j["sinks"].items())
+                sink_channels.insert(item.key());
+        }
+        catch (exception &e) {
+            nd_printf("nx-proc-flows: %s: %s\n",
+              conf_filename.c_str(), e.what());
+        }
+    }
+
+    void Emit(const char *type, ndFlow::Ptr &flow) {
+        nlohmann::json jflow;
+        flow->Encode(jflow, flow->stats);
+
+        nlohmann::json jevent;
+        jevent["type"] = type;
+        jevent["interface"] = flow->iface ?
+            flow->iface->ifname : string();
+        jevent["flow"] = jflow;
+
+        for (auto &target : sink_channels) {
+            ndPlugin::DispatchSinkPayload(target, {}, jevent,
+              ndPlugin::DispatchFlags::FORMAT_JSON_OBJECT);
+        }
+    }
+};
+
+ndPluginInit(ndPluginNxProcFlows)
