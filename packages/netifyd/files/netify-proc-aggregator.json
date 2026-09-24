@@ -1,0 +1,7 @@
+{
+    "batched_rows": 0,
+    "log_interval": 10,
+    "sinks": {
+        "sink-log": {}
+    }
+}
