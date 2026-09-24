@@ -5,15 +5,9 @@
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Reverted to the original conntrack-label design (see
-# github.com/NethServer/nethsecurity PR #1520, "we cannot reliably block
-# applications" - the nftables-set version this project used in between,
-# "Connections matched by ns-dpi-bridge are added to these sets", was a
-# stopgap for when nothing could write real conntrack labels; see
-# msp/DPI_PLAN.md in the internal repo). Blocking/QoS is now enforced by
-# actually-set connection labels, written by proc-flow-actions
-# (nx-proc-flow-actions, see netify-plugins-pro), not by nftables set
-# membership.
+# Blocking/QoS is enforced by real conntrack labels, written by
+# proc-flow-actions (nx-proc-flow-actions, see netify-plugins-pro) and
+# matched here directly via nftables 'ct label' rules.
 #
 
 import os

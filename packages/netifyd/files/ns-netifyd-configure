@@ -9,18 +9,7 @@
 # into the NFQUEUE queues declared in /etc/netifyd/interfaces.d/10-nfqueue.conf
 # (queues 50-53 for forward/LAN-WAN traffic, 54-57 for input/output traffic
 # to/from the firewall itself), via generic input/forward/output firewall
-# chain hooks - not tied to any specific interface name or device, unlike an
-# earlier version of this script (see msp/DPI_PLAN.md in the internal repo
-# for the full history: an interim fix resolved LAN/WAN devices by firewall
-# zone for passive -I/-E capture, which turned out not to be how the real,
-# original design achieves inline NFQUEUE capture at all).
-#
-# Adapted directly from the real, current NethSecurity source
-# (packages/netifyd/files/usr/sbin/ns-netifyd-configure.py, confirmed
-# against their live repository, not guessed or reconstructed from memory),
-# same design, same UCI schema (netifyd.config.bypassv4/bypassv6/
-# firewall_traffic), so existing documentation/support knowledge about this
-# mechanism transfers directly.
+# chain hooks - not tied to any specific interface name or device.
 
 import os
 import subprocess

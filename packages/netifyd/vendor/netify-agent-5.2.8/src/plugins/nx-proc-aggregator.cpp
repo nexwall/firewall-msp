@@ -3,25 +3,16 @@
 // Copyright (C) 2026 Nexwall. All rights reserved.
 // Proprietary - not for redistribution.
 //
-// Reimplementation of the real Netify Agent proc-aggregator plugin
-// (proprietary distribution, not buildable against this engine version -
-// see msp/DPI_PLAN.md in the internal repo), against the public, documented
-// plugin ABI (nd-plugin.hpp) and the agent's own ndFlow::Encode(). Batches
-// per-flow byte/packet counters and POSTs them periodically in the exact
-// {"log_time_end","stats":[...]} shape ns-stats' real Go source expects
-// (nexwall-monitoring/stats/stats.go AggregatorPayload/AggregatorEntry,
-// itself a fork of github.com/nethserver/nethsecurity-monitoring, read
-// directly rather than guessed) to the sink named in this instance's own
-// JSON config, matching how the flows-side plugins are already configured
-// and verified working.
+// Batches per-flow byte/packet counters and POSTs them periodically in the
+// {"log_time_end","stats":[...]} shape ns-stats' Go backend expects
+// (nexwall-monitoring/stats/stats.go AggregatorPayload/AggregatorEntry) to
+// the sink named in this instance's own JSON config. Written against the
+// public plugin ABI (nd-plugin.hpp) and the engine's own ndFlow::Encode().
 //
-// Same threading discipline as nx-proc-flows (see its own comment for the
-// full explanation): DispatchProcessorEvent runs with ndPluginManager's own
-// lock held, so it must only encode and queue - never call DispatchSinkPayload
-// directly. The actual dispatch happens from Entry(), this plugin's own
-// thread, on a timer (log_interval) or when the batch reaches batched_rows,
-// matching the real plugin's own JSON config keys (already present in
-// netify-ns-stats-proc.json, unchanged).
+// DispatchProcessorEvent runs with the plugin manager's lock held, so it
+// only encodes and enqueues here; the actual dispatch happens from Entry(),
+// this plugin's own thread, on a timer (log_interval) or when the batch
+// reaches batched_rows.
 
 #include <chrono>
 #include <condition_variable>

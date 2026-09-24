@@ -3,25 +3,17 @@
 // Copyright (C) 2026 Nexwall
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Reimplementation of the real Netify Agent proc-core plugin (proprietary
-// distribution, not buildable against this engine version - see
-// msp/DPI_PLAN.md in the internal repo), against the public, documented
-// plugin ABI (nd-plugin.hpp) and the agent's own ndFlow::Encode() (used
-// throughout the agent's own source for exactly this purpose). Wraps each
-// encoded flow in the same {"type","interface","flow":{...}} shape
-// ns-flows' own parser already expects (nexwall-monitoring/flows/parser.go),
-// and hands it to the sink named in this instance's own JSON config
-// ("sinks": {"<name>": {"types": [...]}}), matching how the real plugin
-// pair (proc-core + sink-http) was configured.
+// Open-source equivalent of the real Netify Agent proc-core plugin, written
+// against the public plugin ABI (nd-plugin.hpp) and the engine's own
+// ndFlow::Encode(). Wraps each encoded flow in the
+// {"type","interface","flow":{...}} shape ns-flows' parser expects and
+// hands it to the sink named in this instance's own JSON config.
 //
-// DispatchProcessorEvent() runs with ndPluginManager's own lock held (the
-// agent's BroadcastProcessorEvent() takes it before calling in) - found live,
-// the hard way, with debug logging: calling ndPlugin::DispatchSinkPayload()
-// directly from here deadlocks the whole agent, since that call needs the
-// same lock, on the same thread, and std::mutex is not recursive. So this
-// only ever encodes and queues; the actual dispatch happens from Entry(),
-// this plugin's own thread, same as ndPluginSink already does for its own
-// payload queue - that's what Entry() is for.
+// DispatchProcessorEvent() runs with the plugin manager's lock held, so it
+// only encodes and enqueues here; calling DispatchSinkPayload() directly
+// from this callback would deadlock, since that call needs the same lock
+// on the same thread. The actual dispatch happens from Entry(), this
+// plugin's own thread.
 
 #include <condition_variable>
 #include <deque>

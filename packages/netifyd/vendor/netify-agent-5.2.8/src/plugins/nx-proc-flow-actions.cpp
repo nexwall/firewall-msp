@@ -3,44 +3,28 @@
 // Copyright (C) 2026 Nexwall. All rights reserved.
 // Proprietary - not for redistribution.
 //
-// Reimplementation of the real Netify Agent proc-flow-actions plugin
-// (internal name confirmed as "proc-nfa" from NethServer/nethsecurity issue
-// #1552; proprietary distribution, not buildable against this engine
-// version - see msp/DPI_PLAN.md in the internal repo), against the public,
-// documented plugin ABI (nd-plugin.hpp), the agent's own built-in flow
-// expression parser (ndFlowParser, src/nd-flow-parser.hpp - no expression
-// parsing code needed here at all), and libnetfilter_conntrack.
+// DPI-rule enforcement: evaluates classified flows against dpi-config's
+// action criteria and writes the matching conntrack labels, which dpi-nft's
+// nftables rules then block or QoS-mark on. Written against the public
+// plugin ABI (nd-plugin.hpp), the engine's own flow expression parser
+// (ndFlowParser) for criteria evaluation, and libnetfilter_conntrack for
+// the label writes.
 //
-// Config contract (netify-proc-flow-actions.json, written by dpi-config,
-// original NethSecurity code, unmodified) and the real upstream design this
-// mirrors (github.com/NethServer/nethsecurity PR #1520, confirmed against
-// live history, not guessed) are documented in msp/DPI_PLAN.md.
+// Every enabled action is evaluated independently on each classification
+// pass, not first-match-wins: "block" and "analyzed" are not mutually
+// exclusive, so a flow can carry both labels at once. Each pass
+// authoritatively recomputes the full label state this plugin manages
+// (not just newly-matching bits), using ATTR_CONNLABELS_MASK to touch only
+// those bits, so a label set by an earlier pass is correctly cleared once
+// its rule stops matching, without disturbing labels this plugin doesn't
+// own.
 //
-// Every DPI_COMPLETE/DPI_UPDATE (reprocess_flows in the config), evaluates
-// every enabled action's criteria against the flow (skipping it if the flow
-// matches that action's own exemptions or the global ones), and - unlike a
-// naive "first match wins" design - evaluates ALL actions independently and
-// accumulates every matching one's ctlabel targets, because "block" and
-// "analyzed" are not mutually exclusive (dpi-config's own "analyzed" action
-// is meant to apply alongside whatever else matched). Each evaluation
-// authoritatively recomputes the FULL label state for every label this
-// plugin manages (not just newly-matching ones), using ATTR_CONNLABELS_MASK
-// to touch only those bits - so a label set by an earlier, now-stale
-// evaluation gets correctly cleared if its rule no longer matches, without
-// disturbing labels this plugin doesn't manage at all.
-//
-// Threading: DispatchProcessorEvent runs with ndPluginManager's lock held
-// (see nx-proc-flows in firewall-msp for the full explanation - same
-// lesson, applied from the start here). ndFlowParser::Parse() is pure
-// computation, safe to call directly from the callback. The actual netlink
-// conntrack update is deferred to Entry(), this plugin's own thread, both
-// for that reason and because of NethServer/nethsecurity issue #1552: the
-// real proc-nfa plugin crashed in production, in libnetfilter_conntrack -
-// keeping the write path on its own thread, simple, and defensively
-// checked (never assuming a lookup/update succeeds; a conntrack entry that
-// no longer exists is an ordinary, expected outcome of the queueing delay,
-// not a bug) is a direct, deliberate response to that precedent, not a
-// hypothetical precaution.
+// DispatchProcessorEvent runs with the plugin manager's lock held, so it
+// only evaluates criteria and enqueues the resulting label update; the
+// netlink conntrack write happens from Entry(), this plugin's own thread.
+// A conntrack entry that no longer exists by the time the write runs is
+// treated as a normal, expected outcome of that queueing delay, not an
+// error.
 
 #include <arpa/inet.h>
 #include <fstream>
@@ -167,15 +151,11 @@ private:
     mutex queue_lock;
     vector<PendingUpdate> queue;
 
-    // constructed lazily (see DispatchProcessorEvent) - not in this plugin's
-    // own constructor, which runs during plugin loading; ndFlowParser
-    // inherits ndInstanceClient, whose constructor calls the agent's own
-    // singleton accessor (ndInstance::GetInstance()), and constructing it
-    // that early crashed in testing (general protection fault, consistent
-    // and immediate - almost certainly the singleton not being ready yet
-    // at plugin-load time). By the time DispatchProcessorEvent is ever
-    // called, the agent is definitely fully initialized and actively
-    // dispatching real flows, so constructing it there is provably safe.
+    // Constructed lazily rather than in this plugin's own constructor:
+    // ndFlowParser inherits ndInstanceClient, whose constructor accesses
+    // the agent's own singleton, which is not guaranteed ready at
+    // plugin-load time. By the time DispatchProcessorEvent runs, the agent
+    // is fully initialized, so construction here is safe.
     unique_ptr<ndFlowParser> parser;
 
     static void SetBit(uint8_t *bytes, int bit) {
@@ -361,10 +341,9 @@ private:
 
         int rc = nfct_query(ct_handle, NFCT_Q_UPDATE, ct);
         if (rc == -1 && errno != ENOENT) {
-            // ENOENT (entry already gone - expired, torn down, NATed away
-            // between classification and this update) is an ordinary,
-            // expected outcome of the queueing delay, not a bug: see the
-            // class comment on NethServer/nethsecurity issue #1552.
+            // ENOENT means the conntrack entry is already gone (expired,
+            // torn down, or NATed away between classification and this
+            // update) - an ordinary, expected outcome, not an error.
             nd_dprintf("nx-proc-flow-actions: conntrack update failed: %s\n",
               strerror(errno));
         }
