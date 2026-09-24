@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
 
 #
-# Copyright (C) 2025 Nethesis S.r.l.
+# Copyright (C) 2026 Nethesis S.r.l.
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
+#
+# Reverted to the original conntrack-label design (see
+# github.com/NethServer/nethsecurity PR #1520, "we cannot reliably block
+# applications" - the nftables-set version this project used in between,
+# "Connections matched by ns-dpi-bridge are added to these sets", was a
+# stopgap for when nothing could write real conntrack labels; see
+# msp/DPI_PLAN.md in the internal repo). Blocking/QoS is now enforced by
+# actually-set connection labels, written by proc-flow-actions
+# (nx-proc-flow-actions, see netify-plugins-pro), not by nftables set
+# membership.
 #
 
 import os
@@ -12,43 +22,33 @@ import sys
 from euci import EUci
 from jinja2 import Environment, BaseLoader
 
-# Connections matched by ns-dpi-bridge are added to these sets; the chain rejects them
-# or changes their priority. The rules are validated before they replace the old ones,
-# because an invalid snippet would prevent the firewall from loading.
 RULES = """
-{% for family, kind in (('4', 'ipv4_addr'), ('6', 'ipv6_addr')) -%}
-{% for action in actions -%}
-set dpi_{{ action }}{{ family }} {
-    type {{ kind }} . {{ kind }} . inet_proto . inet_service . inet_service
-    flags timeout
-    size 65535
+chain dpi_dummy {
+    # forces the kernel to allocate the conntrack label extension for every
+    # connection up front - "ct label X" match rules silently never match
+    # otherwise, for any connection whose label extension was never
+    # initialized
+    ct label set netify-init
 }
-{% endfor -%}
-{% endfor -%}
+
 chain dpi_actions {
     type filter hook prerouting priority filter + 10; policy accept;
-{%- for family, ip in (('4', 'ip'), ('6', 'ip6')) %}
 {%- if log_enabled %}
-    {{ ip }} saddr . {{ ip }} daddr . meta l4proto . th sport . th dport @dpi_block{{ family }} counter log prefix "DPI block: " limit rate 1/second
+    ct label netify-blocked counter log prefix "DPI block: " limit rate 1/second
 {%- endif %}
-    {{ ip }} saddr . {{ ip }} daddr . meta l4proto . th sport . th dport @dpi_block{{ family }} counter reject
-{%- for action, dscp in qos %}
-    {{ ip }} saddr . {{ ip }} daddr . meta l4proto . th sport . th dport @dpi_{{ action }}{{ family }} counter {{ ip }} dscp set {{ dscp }} return
-{%- endfor %}
-{%- endfor %}
+    ct label netify-blocked counter reject
+    ct label bulk counter ip dscp set cs1 return
+    ct label best_effort counter ip dscp set cs0 return
+    ct label video counter ip dscp set af41 return
+    ct label voice counter ip dscp set cs6 return
 }
 """
-
-ACTIONS = ['block', 'bulk', 'best_effort', 'video', 'voice']
-QOS = [('bulk', 'cs1'), ('best_effort', 'cs0'), ('video', 'af41'), ('voice', 'cs6')]
 
 
 def render():
     e_uci = EUci()
     template = Environment(loader=BaseLoader()).from_string(RULES)
     return template.render(
-        actions=ACTIONS,
-        qos=QOS,
         log_enabled=e_uci.get('dpi', 'config', 'log_blocked', dtype=bool, default=False)
     )
 

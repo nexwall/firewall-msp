@@ -151,6 +151,7 @@ define Package/netifyd/install
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-proc-flows.so $(1)/usr/lib/
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-sink-http.so $(1)/usr/lib/
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-proc-aggregator.so $(1)/usr/lib/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-proc-flow-actions.so $(1)/usr/lib/
 	$(INSTALL_DIR) $(1)/etc/netifyd
 	$(INSTALL_DIR) $(1)/etc/netifyd/address-groups.d
 	$(INSTALL_DIR) $(1)/etc/netifyd/categories.d

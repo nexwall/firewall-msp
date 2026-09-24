@@ -118,7 +118,7 @@ endif
 # msp/DPI_PLAN.md in the internal repo. Against the same public plugin ABI.
 # -module -avoid-version: these are dlopen'd plugins, not a versioned shared
 # library like libnetifyd.la itself, so they must not carry a SONAME suffix.
-plugin_LTLIBRARIES = libnx-proc-flows.la libnx-sink-http.la libnx-proc-aggregator.la
+plugin_LTLIBRARIES = libnx-proc-flows.la libnx-sink-http.la libnx-proc-aggregator.la libnx-proc-flow-actions.la
 plugindir = $(plugin_libdir)
 
 libnx_proc_flows_la_SOURCES = plugins/nx-proc-flows.cpp
@@ -132,3 +132,7 @@ libnx_sink_http_la_LIBADD = libnetifyd.la $(LIBCURL_LIBS)
 libnx_proc_aggregator_la_SOURCES = plugins/nx-proc-aggregator.cpp
 libnx_proc_aggregator_la_LDFLAGS = -module -avoid-version -shared
 libnx_proc_aggregator_la_LIBADD = libnetifyd.la
+
+libnx_proc_flow_actions_la_SOURCES = plugins/nx-proc-flow-actions.cpp
+libnx_proc_flow_actions_la_LDFLAGS = -module -avoid-version -shared
+libnx_proc_flow_actions_la_LIBADD = libnetifyd.la -lnetfilter_conntrack

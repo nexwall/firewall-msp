@@ -3,6 +3,14 @@
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
+# ns-dpi-bridge is superseded by the real plugins (nx-proc-flows/nx-sink-http
+# for flows, nx-proc-aggregator for stats, nx-proc-flow-actions for
+# blocking/QoS enforcement - see netify-plugins-pro for the proprietary two,
+# and msp/DPI_PLAN.md in the internal repo for the full history). Disabled,
+# not removed: the script and this unit file are kept for reference and as
+# a rollback path. Do not re-enable without also reverting the plugins.d
+# configs those three plugins install, or both will be doing the same job
+# at once.
 
 START=95
 STOP=10
@@ -10,10 +18,5 @@ STOP=10
 USE_PROCD=1
 
 start_service() {
-	procd_open_instance
-	procd_set_param command /usr/sbin/ns-dpi-bridge
-	procd_set_param stdout 1
-	procd_set_param stderr 1
-	procd_set_param respawn 3600 5 0
-	procd_close_instance
+	return 0
 }
