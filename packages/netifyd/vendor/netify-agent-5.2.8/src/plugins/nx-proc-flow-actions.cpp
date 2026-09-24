@@ -336,8 +336,27 @@ private:
         }
         nfct_set_attr_u16(ct, ATTR_ORIG_PORT_SRC, up.port_src);
         nfct_set_attr_u16(ct, ATTR_ORIG_PORT_DST, up.port_dst);
-        nfct_set_attr_l(ct, ATTR_CONNLABELS, up.value, LABEL_BYTES);
-        nfct_set_attr_l(ct, ATTR_CONNLABELS_MASK, up.mask, LABEL_BYTES);
+
+        // ATTR_CONNLABELS/_MASK take ownership of a heap-allocated
+        // nfct_bitmask object (nfct_destroy() below frees it via
+        // nfct_bitmask_destroy()) - they do not copy a raw buffer, despite
+        // going through the same nfct_set_attr() call as other attributes.
+        struct nfct_bitmask *value_bm = nfct_bitmask_new(LABEL_BYTES * 8 - 1);
+        struct nfct_bitmask *mask_bm = nfct_bitmask_new(LABEL_BYTES * 8 - 1);
+        if (value_bm != nullptr && mask_bm != nullptr) {
+            for (unsigned bit = 0; bit < LABEL_BYTES * 8; ++bit) {
+                if (up.value[bit / 8] & (1 << (bit % 8)))
+                    nfct_bitmask_set_bit(value_bm, bit);
+                if (up.mask[bit / 8] & (1 << (bit % 8)))
+                    nfct_bitmask_set_bit(mask_bm, bit);
+            }
+            nfct_set_attr(ct, ATTR_CONNLABELS, value_bm);
+            nfct_set_attr(ct, ATTR_CONNLABELS_MASK, mask_bm);
+        }
+        else {
+            if (value_bm != nullptr) nfct_bitmask_destroy(value_bm);
+            if (mask_bm != nullptr) nfct_bitmask_destroy(mask_bm);
+        }
 
         int rc = nfct_query(ct_handle, NFCT_Q_UPDATE, ct);
         if (rc == -1 && errno != ENOENT) {
