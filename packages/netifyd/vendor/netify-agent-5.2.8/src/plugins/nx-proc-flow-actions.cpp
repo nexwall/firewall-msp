@@ -27,6 +27,7 @@
 // error.
 
 #include <arpa/inet.h>
+#include <condition_variable>
 #include <fstream>
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 #include <map>
@@ -149,6 +150,7 @@ private:
     struct nfct_handle *ct_handle = nullptr;
 
     mutex queue_lock;
+    condition_variable queue_cond;
     vector<PendingUpdate> queue;
 
     // Constructed lazily rather than in this plugin's own constructor:
@@ -301,12 +303,17 @@ private:
     }
 
     void QueueUpdate(const PendingUpdate &up) {
-        lock_guard<mutex> l(queue_lock);
-        queue.push_back(up);
+        {
+            lock_guard<mutex> l(queue_lock);
+            queue.push_back(up);
+        }
+        queue_cond.notify_one();
     }
 
     bool PopQueue(PendingUpdate &up) {
-        lock_guard<mutex> l(queue_lock);
+        unique_lock<mutex> l(queue_lock);
+        queue_cond.wait_for(l, chrono::seconds(1),
+          [this] { return ! queue.empty() || ShouldTerminate(); });
         if (queue.empty()) return false;
         up = queue.back();
         queue.pop_back();
