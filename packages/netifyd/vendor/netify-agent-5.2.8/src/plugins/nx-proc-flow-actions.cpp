@@ -46,6 +46,7 @@
 #include <fstream>
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -105,6 +106,7 @@ public:
         if (! flow || ! ct_handle) return;
         if (event != Event::DPI_COMPLETE && event != Event::DPI_UPDATE) return;
         if (managed_bits.empty()) return;
+        if (! parser) parser = make_unique<ndFlowParser>();
 
         if (IsExempt(flow, global_exemptions)) return;
 
@@ -119,7 +121,7 @@ public:
 
             bool matched = false;
             try {
-                matched = parser.Parse(flow, action.criteria);
+                matched = parser->Parse(flow, action.criteria);
             }
             catch (exception &e) {
                 nd_printf("nx-proc-flow-actions: bad criteria in '%s': %s\n",
@@ -161,10 +163,20 @@ private:
     vector<int> managed_bits;  // every bit any enabled ctlabel target can set
 
     struct nfct_handle *ct_handle = nullptr;
-    ndFlowParser parser;
 
     mutex queue_lock;
     vector<PendingUpdate> queue;
+
+    // constructed lazily (see DispatchProcessorEvent) - not in this plugin's
+    // own constructor, which runs during plugin loading; ndFlowParser
+    // inherits ndInstanceClient, whose constructor calls the agent's own
+    // singleton accessor (ndInstance::GetInstance()), and constructing it
+    // that early crashed in testing (general protection fault, consistent
+    // and immediate - almost certainly the singleton not being ready yet
+    // at plugin-load time). By the time DispatchProcessorEvent is ever
+    // called, the agent is definitely fully initialized and actively
+    // dispatching real flows, so constructing it there is provably safe.
+    unique_ptr<ndFlowParser> parser;
 
     static void SetBit(uint8_t *bytes, int bit) {
         if (bit < 0 || (size_t)bit >= LABEL_BYTES * 8) return;
@@ -266,7 +278,7 @@ private:
         }
         expr += ");";
         try {
-            return parser.Parse(flow, expr);
+            return parser->Parse(flow, expr);
         }
         catch (exception &e) {
             nd_printf("nx-proc-flow-actions: bad exemption entry: %s\n", e.what());
