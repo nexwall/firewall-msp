@@ -3,17 +3,10 @@
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Keeps the traffic classification engine's LAN/WAN device list in sync with
-# the firewall zones whenever an interface changes - a WAN configured after
-# first boot, a device swapped, a zone edited. See ns-netifyd-configure.
-
-[ "$ACTION" = "ifup" ] || [ "$ACTION" = "ifdown" ] || exit 0
-
-if /usr/sbin/ns-netifyd-configure; then
-	# restart, not reload: the vendor's own reload_service only sends a signal,
-	# and -I/-E are startup command-line arguments, rebuilt only when the
-	# process actually restarts
-	/etc/init.d/netifyd restart
-fi
+# Superseded: the real NFQUEUE design captures via generic firewall chain
+# hooks (input/forward/output), not per-interface, so there is nothing here
+# that needs to react to individual interfaces coming up or down - see
+# msp/DPI_PLAN.md in the internal repo. Disabled, not removed: kept for
+# reference/rollback.
 
 exit 0

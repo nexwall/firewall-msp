@@ -1,68 +1,198 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 #
+# Copyright (C) 2026 Nethesis S.r.l.
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
+# Generates the standalone "inet netifyd" nftables table that routes packets
+# into the NFQUEUE queues declared in /etc/netifyd/interfaces.d/10-nfqueue.conf
+# (queues 50-53 for forward/LAN-WAN traffic, 54-57 for input/output traffic
+# to/from the firewall itself), via generic input/forward/output firewall
+# chain hooks - not tied to any specific interface name or device, unlike an
+# earlier version of this script (see msp/DPI_PLAN.md in the internal repo
+# for the full history: an interim fix resolved LAN/WAN devices by firewall
+# zone for passive -I/-E capture, which turned out not to be how the real,
+# original design achieves inline NFQUEUE capture at all).
+#
+# Adapted directly from the real, current NethSecurity source
+# (packages/netifyd/files/usr/sbin/ns-netifyd-configure.py, confirmed
+# against their live repository, not guessed or reconstructed from memory),
+# same design, same UCI schema (netifyd.config.bypassv4/bypassv6/
+# firewall_traffic), so existing documentation/support knowledge about this
+# mechanism transfers directly.
 
-"""
-Points the traffic classification engine at the real LAN and WAN devices of this
-unit, by firewall zone membership - not by a fixed interface name.
-
-The engine's own init script (files/netifyd.init, vendor code, unmodified) can
-autodetect interfaces, but only by guessing a UCI network section named exactly
-"wan" (see files/functions.sh, also vendor code). Nexwall lets an administrator
-name the WAN interface anything (a unit boots with no WAN configured at all, and
-the name is chosen when it's set up), so that guess is frequently wrong and the
-engine ends up only watching the LAN side, or nothing.
-
-This script is the Nexwall equivalent of that guess: it resolves devices from
-the "lan" and "wan" firewall zones (the same zones firewall rules, NAT and
-everything else already key off), the same way python3-nethsec already does
-it for other features. It disables the engine's own autoconfig and writes the
-result directly as internal_if/external_if, which the vendor init script reads
-without any further change needed there.
-
-Run on boot (etc/init.d/netifyd-zones, before netifyd itself) and on every
-interface up/down event (etc/hotplug.d/iface/), so a WAN configured after first
-boot, or changed later, is picked up without a reboot.
-"""
-
+import os
+import subprocess
 import sys
 
 from euci import EUci
-from nethsec import utils
+from jinja2 import Environment, BaseLoader
+
+NFQ_TABLE_FILE = '/tmp/netifyd-nfq-table-definition.nft'
 
 
-def configure():
-    uci = EUci()
-    lan_devices = utils.get_all_lan_devices(uci)
-    wan_devices = utils.get_all_wan_devices(uci, exclude_aliases=True)
+NFQ_TABLE = """
+table inet netifyd { }
+delete table inet netifyd
 
-    if not lan_devices and not wan_devices:
-        # nothing configured yet (for example straight after first boot, before
-        # the setup wizard); leave the engine on its own autoconfig rather than
-        # writing an internal_if/external_if list that would disable capture
-        # entirely once autoconfig is turned off
-        return False
+table inet netifyd {
+    set nfq_bypass_v4 {
+        type ipv4_addr; flags interval; auto-merge;
+{%- if v4_elements %}
+        elements = { {{ v4_elements | join(', ') }} }
+{%- endif %}
+    }
 
-    changed = False
-    if uci.get('netifyd', '@netifyd[0]', 'autoconfig', dtype=str, default='1') != '0':
-        uci.set('netifyd', '@netifyd[0]', 'autoconfig', '0')
-        changed = True
-    if list(uci.get('netifyd', '@netifyd[0]', 'internal_if', list=True, default=[])) != lan_devices:
-        uci.set('netifyd', '@netifyd[0]', 'internal_if', lan_devices)
-        changed = True
-    if list(uci.get('netifyd', '@netifyd[0]', 'external_if', list=True, default=[])) != wan_devices:
-        uci.set('netifyd', '@netifyd[0]', 'external_if', wan_devices)
-        changed = True
+    set nfq_bypass_v6 {
+        type ipv6_addr; flags interval; auto-merge;
+{%- if v6_elements %}
+        elements = { {{ v6_elements | join(', ') }} }
+{%- endif %}
+    }
 
-    if changed:
-        uci.commit('netifyd')
-    return changed
+    # push input packets to userspace queues for DPI analysis
+{%- if 'input' in firewall_chains %}
+    chain nfq_input {
+        type filter hook input priority filter + 10; policy accept;
+        iifname lo accept
+
+        # Skip untracked traffic
+        ct state untracked accept
+{%- if 'output' not in firewall_chains %}
+        # Skip reply traffic for connections initiated by the firewall itself
+        # (e.g. DNS responses, monitoring ping replies)
+        ct direction reply accept
+{%- endif %}
+        # Accept traffic matching bypass set
+        ip saddr @nfq_bypass_v4 accept
+        ip daddr @nfq_bypass_v4 accept
+        ip6 saddr @nfq_bypass_v6 accept
+        ip6 daddr @nfq_bypass_v6 accept
+
+        # Netifyd only analyzes the first 32 packets
+        ct packets > 32 accept
+
+        # Traffic to queues 54-57
+        queue flags bypass to 54-57
+    }
+{%- endif %}
+
+    # push forward packets to userspace queues for DPI analysis
+{%- if 'forward' in firewall_chains %}
+    chain nfq_forward {
+        type filter hook forward priority filter + 10; policy accept;
+
+        # Skip untracked traffic
+        ct state untracked accept
+        # Accept traffic matching bypass set
+        ip saddr @nfq_bypass_v4 accept
+        ip daddr @nfq_bypass_v4 accept
+        ip6 saddr @nfq_bypass_v6 accept
+        ip6 daddr @nfq_bypass_v6 accept
+
+        # Netifyd only analyzes the first 32 packets
+        ct packets > 32 accept
+
+        # Traffic to queues 50-53
+        queue flags bypass to 50-53
+    }
+{%- endif %}
+
+{%- if 'output' in firewall_chains %}
+    # push output packets to userspace queues for DPI analysis
+    chain nfq_output {
+        type filter hook output priority filter + 10; policy accept;
+        oifname lo accept
+
+        # Skip untracked traffic
+        ct state untracked accept
+        # Accept traffic matching bypass set
+        ip saddr @nfq_bypass_v4 accept
+        ip daddr @nfq_bypass_v4 accept
+        ip6 saddr @nfq_bypass_v6 accept
+        ip6 daddr @nfq_bypass_v6 accept
+
+        # Netifyd only analyzes the first 32 packets
+        ct packets > 32 accept
+
+        # Traffic to queues 54-57
+        queue flags bypass to 54-57
+    }
+{%- endif %}
+
+}
+"""
 
 
-if __name__ == '__main__':
-    # exit 0 if something changed (caller should reload netifyd), 1 if nothing
-    # to do - matches the usual shell "if script; then reload; fi" idiom
-    sys.exit(0 if configure() else 1)
+def _format_nft_elements(entries):
+    """
+    Format entries for nftables set elements.
+    Each entry can be:
+    - IP/CIDR (no comment)
+    - IP/CIDR | Description (with comment)
+
+    Returns list of formatted elements for nftables.
+    """
+    formatted = []
+    for entry in entries:
+        parts = entry.split('|')
+        ip = parts[0].strip()
+
+        if len(parts) > 1 and parts[1].strip():
+            # Entry has a description - add as nftables comment
+            desc = parts[1].strip()
+            formatted.append(f'{ip} comment "{desc}"')
+        else:
+            # No description
+            formatted.append(ip)
+
+    return formatted
+
+
+def generate_nfq_table():
+    e_uci = EUci()
+
+    # Read IPv4 and IPv6 bypass lists from UCI
+    # Entries can optionally have a description separated by |
+    v4_raw = e_uci.get('netifyd', 'config', 'bypassv4', dtype=str, list=True, default=[])
+    v6_raw = e_uci.get('netifyd', 'config', 'bypassv6', dtype=str, list=True, default=[])
+
+    # Format elements with optional comments for nftables
+    v4_elements = _format_nft_elements(v4_raw)
+    v6_elements = _format_nft_elements(v6_raw)
+
+    # Read which nftables chains to add for DPI analysis.
+    # Valid values: 'input', 'output', 'forward'.
+    # Defaults to all three chains if the option is missing.
+    valid_chains = {'input', 'output', 'forward'}
+    raw_chains = e_uci.get('netifyd', 'config', 'firewall_traffic', dtype=str, list=True, default=list(valid_chains))
+    firewall_chains = []
+    for chain in raw_chains:
+        if chain in valid_chains:
+            firewall_chains.append(chain)
+        else:
+            print(f"Warning: invalid firewall_traffic value '{chain}', ignoring. Valid values: {sorted(valid_chains)}", file=sys.stderr)
+    if not firewall_chains:
+        print("Warning: no valid firewall_traffic chains configured, defaulting to all chains.", file=sys.stderr)
+        firewall_chains = list(valid_chains)
+
+    template = Environment(loader=BaseLoader()).from_string(NFQ_TABLE)
+    render = template.render(
+        v4_elements=v4_elements,
+        v6_elements=v6_elements,
+        firewall_chains=firewall_chains,
+    )
+
+    # Apply nftables
+    with open(NFQ_TABLE_FILE, 'w') as f:
+        f.write(render)
+    try:
+        subprocess.run(['nft', '-f', NFQ_TABLE_FILE], check=True, capture_output=True)
+        os.unlink(NFQ_TABLE_FILE)
+    except subprocess.CalledProcessError as e:
+        print(f"Error applying nftables configuration: {e.stderr.decode()}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    generate_nfq_table()

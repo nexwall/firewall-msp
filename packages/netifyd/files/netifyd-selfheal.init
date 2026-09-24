@@ -3,60 +3,27 @@
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Repairs /etc/netifyd.conf and the netifyd UCI section when they are left in
-# a state that this engine cannot start with, before the netifyd service
-# itself starts (START one lower). See start() below for why this is needed.
+# Superseded: both checks this script used to perform are now stale.
+#
+# 1. The [socket]/listen_path check protected ns-dpi-bridge, which read
+#    netifyd's raw JSON socket output. ns-dpi-bridge is now retired (see
+#    packages/ns-dpi/files/dpi-bridge.init) - none of the real plugins
+#    (nx-proc-flows, nx-sink-http, nx-proc-aggregator, nx-proc-flow-actions)
+#    use the [socket] mechanism at all.
+# 2. The "autoconfig=0 with no internal_if/external_if" check treated that
+#    combination as always broken and force-enabled autoconfig. It is now
+#    the CORRECT, intentional state: the real design captures via NFQUEUE
+#    (generic firewall chain hooks, see ns-netifyd-configure), not via
+#    -I/-E interface flags at all - re-enabling autoconfig would incorrectly
+#    "fix" a valid configuration, activating the vendor's own -I/-E
+#    autodetect logic (which guesses a UCI network section named "wan" -
+#    see msp/DPI_PLAN.md in the internal repo for why that guess is
+#    frequently wrong here) alongside NFQUEUE, redundantly.
+#
+# Disabled, not removed: kept for reference/rollback.
 
 START=49
 
-CONF=/etc/netifyd.conf
-DEFAULT_CONF=/usr/share/netifyd/netifyd.conf.default
-STALE_DIR=/etc/netifyd/stale-conf.d
-
-netifyd_mark_has_if() {
-	netifyd_has_if=1
-}
-
-netifyd_check_instance() {
-	local instance="$1" autoconfig
-	config_get_bool autoconfig "$instance" autoconfig 1
-	netifyd_has_if=0
-	config_list_foreach "$instance" internal_if netifyd_mark_has_if
-	config_list_foreach "$instance" external_if netifyd_mark_has_if
-	[ "$autoconfig" -eq 0 ] && [ "$netifyd_has_if" -eq 0 ] && netifyd_needs_autoconfig=1
-}
-
 start() {
-	# /etc/netifyd.conf is a package conffile: a backup taken on an image with
-	# a different netifyd package (a different engine version, or a config that
-	# never got the [socket] section this package's ns-dpi-bridge needs)
-	# restores its own copy of this file verbatim over the one this package
-	# ships, together with the whole netifyd UCI section. That can leave the
-	# engine unable to start, or running without feeding the bridge, silently.
-	# Fix both cases here, every time this runs, so a config restored while the
-	# service was stopped is repaired too.
-
-	# 1. A config this package's bridge can use always has a [socket] section
-	# with a listen_path. A config that lacks it (restored from an older or
-	# differently-configured backup) is replaced with the package default;
-	# the previous file is kept, not discarded.
-	if [ -f "$CONF" ] && { ! grep -q '^\[socket\]' "$CONF" || ! grep -q 'listen_path' "$CONF"; }; then
-		mkdir -p "$STALE_DIR"
-		cp "$CONF" "$STALE_DIR/netifyd.conf.$(date +%s)"
-		logger -t netifyd-selfheal "/etc/netifyd.conf has no [socket] section for ns-dpi-bridge (likely restored from a backup taken with a different netifyd config); replaced with the package default, the previous file is kept in $STALE_DIR"
-		cp "$DEFAULT_CONF" "$CONF"
-	fi
-
-	# 2. autoconfig disabled with no interface configured at all can never
-	# produce a working command line for this engine (it needs -I or -E).
-	# That combination is never intentional, so make it autoconfig again.
-	netifyd_needs_autoconfig=0
-	config_load netifyd
-	config_foreach netifyd_check_instance netifyd
-
-	if [ "$netifyd_needs_autoconfig" -eq 1 ]; then
-		logger -t netifyd-selfheal "netifyd UCI config has autoconfig disabled with no interfaces listed (this combination can never start); enabling autoconfig"
-		uci -q set netifyd.@netifyd[0].autoconfig='1'
-		uci -q commit netifyd
-	fi
+	return 0
 }

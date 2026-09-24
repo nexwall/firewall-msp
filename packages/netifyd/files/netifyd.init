@@ -89,10 +89,19 @@ start_netifyd() {
 start_service() {
 	[ ! -d /var/run/netifyd ] && mkdir -p /var/run/netifyd
 
+	# generates the standalone "inet netifyd" nftables table (nfq_input/
+	# nfq_forward/nfq_output chains) that actually routes packets into the
+	# NFQUEUE queues declared in /etc/netifyd/interfaces.d/10-nfqueue.conf -
+	# added here to match the real NethSecurity design (confirmed against
+	# their live repository, not the vendor's own generic template this
+	# file otherwise is - see msp/DPI_PLAN.md in the internal repo)
+	/usr/sbin/ns-netifyd-configure
+
 	config_load netifyd
 	config_foreach start_netifyd netifyd
 }
 
 reload_service() {
+	/usr/sbin/ns-netifyd-configure
 	procd_send_signal netifyd
 }

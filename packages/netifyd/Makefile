@@ -159,6 +159,10 @@ define Package/netifyd/install
 	$(CP) $(PKG_INSTALL_DIR)/etc/netifyd/profiles.d/* $(1)/etc/netifyd/profiles.d
 	$(INSTALL_DIR) $(1)/etc/netifyd/interfaces.d
 	$(CP) $(PKG_INSTALL_DIR)/etc/netifyd/interfaces.d/* $(1)/etc/netifyd/interfaces.d
+	# the real, active NFQUEUE capture config (role-based, matches the real
+	# NethSecurity design) - the files copied just above are only the
+	# vendor's own inert usage examples
+	$(INSTALL_DATA) ./files/10-nfqueue.conf $(1)/etc/netifyd/interfaces.d/10-nfqueue.conf
 	$(INSTALL_DIR) $(1)/etc/netifyd/plugins.d
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/netify-apps.conf $(1)/etc/netifyd
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/netify-categories.json $(1)/etc/netifyd
