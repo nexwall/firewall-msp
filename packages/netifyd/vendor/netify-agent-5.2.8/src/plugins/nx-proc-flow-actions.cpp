@@ -92,6 +92,10 @@ public:
         if (managed_bits.empty()) return;
         if (! parser) parser = make_unique<ndFlowParser>();
 
+        nd_printf("nx-proc-flow-actions: DEBUG DispatchProcessorEvent event=%u "
+          "actions=%zu managed_bits=%zu\n",
+          (unsigned)event, actions.size(), managed_bits.size());
+
         if (IsExempt(flow, global_exemptions)) return;
 
         uint8_t value[LABEL_BYTES] = {0};
@@ -122,7 +126,10 @@ public:
         }
 
         PendingUpdate up;
-        if (! BuildTuple(flow, up)) return;
+        bool built = BuildTuple(flow, up);
+        nd_printf("nx-proc-flow-actions: DEBUG BuildTuple=%d value[0]=%02x mask[0]=%02x\n",
+          built, value[0], mask[0]);
+        if (! built) return;
         memcpy(up.value, value, LABEL_BYTES);
         memcpy(up.mask, mask, LABEL_BYTES);
         QueueUpdate(up);
@@ -359,13 +366,10 @@ private:
         }
 
         int rc = nfct_query(ct_handle, NFCT_Q_UPDATE, ct);
-        if (rc == -1 && errno != ENOENT) {
-            // ENOENT means the conntrack entry is already gone (expired,
-            // torn down, or NATed away between classification and this
-            // update) - an ordinary, expected outcome, not an error.
-            nd_dprintf("nx-proc-flow-actions: conntrack update failed: %s\n",
-              strerror(errno));
-        }
+        nd_printf("nx-proc-flow-actions: DEBUG nfct_query rc=%d errno=%d (%s) "
+          "l3=%u l4=%u port_src=%u port_dst=%u value[0]=%02x mask[0]=%02x\n",
+          rc, errno, strerror(errno), up.l3proto, up.l4proto,
+          ntohs(up.port_src), ntohs(up.port_dst), up.value[0], up.mask[0]);
         nfct_destroy(ct);
     }
 };
