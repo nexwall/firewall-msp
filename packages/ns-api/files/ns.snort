@@ -138,6 +138,15 @@ def __setup(enabled, ns_policy='balanced'):
     if enabled:
         uci.set('snort', 'snort', 'enabled', '1')
         add_download_cron_job()
+        # the cron job only covers the next scheduled run (up to 24h away);
+        # if there are no rules yet (first enable, or a previous download
+        # never completed), trigger one now in the background so IPS is
+        # actually protecting traffic from the moment it's turned on,
+        # rather than running rule-less until the next cron cycle
+        if not os.path.isfile('/var/ns-snort/rules/snort.rules') or \
+          os.path.getsize('/var/ns-snort/rules/snort.rules') == 0:
+            subprocess.Popen(['/usr/bin/ns-snort-rules', '--download', '--restart'],
+              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         uci.set('snort', 'snort', 'enabled', '0')
         remove_download_cron_job()
