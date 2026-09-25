@@ -64,6 +64,7 @@ define Package/ns-threat_shield/install
 	$(INSTALL_BIN) ./files/banip-extra-defaults $(1)/etc/uci-defaults/96-nethsec-banip-extra
 	$(INSTALL_BIN) ./files/35_ns-threat_shield $(1)/etc/uci-defaults/35_ns-threat_shield
 	$(INSTALL_BIN) ./files/96_ns-threat_shield $(1)/etc/uci-defaults/96_ns-threat_shield
+	$(INSTALL_BIN) ./files/banip-community-feeds-default $(1)/etc/uci-defaults/99-nexwall-banip-feeds
 	gzip -9n $(1)/usr/share/threat_shield/nexwall-dns.sources
 	gzip -9n $(1)/usr/share/threat_shield/community-dns.sources
 endef
