@@ -101,6 +101,7 @@ server {
 	}
 
 	include $NSUI_API_LOCATIONS_FILE;
+$([ -f /etc/nginx/conf.d/logs-viewer.inc ] && echo "	include /etc/nginx/conf.d/logs-viewer.inc;")
 }
 EOF
 else
