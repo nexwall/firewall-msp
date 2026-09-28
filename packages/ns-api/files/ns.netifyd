@@ -38,15 +38,26 @@ def status():
     # (the earlier "enable_sink" key checked here was never a real netifyd.conf
     # key in any version of the agent - found live, see FORK-CHANGES.md). A
     # config this engine does not understand at all (for example restored from
-    # a backup taken with a different netifyd package) is repaired by
-    # netifyd-selfheal on the next service start; until then, report the sink
-    # as disabled instead of failing the whole status card.
+    # a backup taken with a different netifyd package) has no automatic
+    # repair today - report the sink as disabled instead of failing the whole
+    # status card, but this case is not otherwise handled.
     if not config.has_section('netifyd') or not config.has_option('netifyd', 'auto_informatics'):
         return {"enabled": False, "uuid": uuid}
     auto_informatics = config.get('netifyd', 'auto_informatics')
     return {"enabled": auto_informatics == "yes", "uuid": uuid}
 
 def enable():
+    # --enable-sink turns on auto_informatics, which makes the agent load the
+    # vendor's own proc-core-auto/sink-http-auto plugin pair
+    # (libnetify-sink-http.so.*). We do not build or ship those (Nexwall's own
+    # nx-proc-flows/nx-sink-http cover flows/stats without any vendor
+    # telemetry) - found live: enabling this with no plugin installed makes
+    # netifyd hit a fatal exception on every single startup attempt and
+    # respawn in a sub-6-second loop, which reads as "100% CPU" with no
+    # obvious cause in the process list. Refuse here rather than let the UI
+    # toggle silently wedge the whole DPI engine.
+    if not os.path.exists("/usr/lib/libnetify-sink-http.so.0.0.0"):
+        return utils.generic_error("sink_not_available")
     try:
         subprocess.run(["/usr/sbin/netifyd", "--enable-sink"], check=True, capture_output=True)
     except:
