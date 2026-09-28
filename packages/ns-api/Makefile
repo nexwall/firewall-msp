@@ -25,6 +25,7 @@ define Package/ns-api
 		+adblock \
 		+coreutils-date \
 		+coreutils-stty \
+		+nexwall-license \
 		+python3-idna \
 		+python3-nethsec \
 		+python3-openssl \

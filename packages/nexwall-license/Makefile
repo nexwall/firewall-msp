@@ -45,6 +45,12 @@ define Package/nexwall-license/install
 	$(INSTALL_DIR) $(1)/etc/nexwall-license
 	$(INSTALL_DATA) ./files/pubkey.pem $(1)/etc/nexwall-license/pubkey.pem
 
+	# kept across image upgrades: without hwid the unit would re-register as a NEW device on
+	# every upgrade and slowly exhaust the customer's firewall_limit; pubkey.pem is deliberately
+	# NOT kept so a new image can rotate the trusted server key
+	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
+	$(INSTALL_CONF) ./files/nexwall-license.keep $(1)/lib/upgrade/keep.d/nexwall-license
+
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/nexwall-license-cron $(1)/etc/uci-defaults/99-nexwall-license-cron
 endef

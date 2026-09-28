@@ -5,63 +5,96 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 
-# Manage the subscription to the Nexwall services portal
+# Manage the unit's license, validated against the Nexwall license server
 
 import sys
 import json
+import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from nethsec import utils
-from euci import EUci
+
+LICENSE_FILE = '/etc/nexwall-license/license.json'
+LICENSE_CLIENT = '/usr/sbin/nexwall-license-register'
+
+
+def log(message):
+    subprocess.run(['logger', '-t', 'ns.subscription', message], check=False)
+
+
+def parse_license_key(secret):
+    # The UI has a single field, the license server needs two credentials: the
+    # license key is "<partner_id>:<unlock_key>". Unlock keys are URL-safe base64
+    # (never contain ':'), partner ids are chosen by an admin, so split on the last ':'.
+    partner_id, sep, unlock_key = secret.strip().rpartition(':')
+    if not sep or not partner_id or not unlock_key:
+        return None
+    return partner_id, unlock_key
+
+
+def load_license():
+    try:
+        with open(LICENSE_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return None
 
 def register(args):
     if "secret" not in args or not args["secret"]:
         return utils.validation_error("secret", "required")
 
-    secret = args["secret"]
+    parsed = parse_license_key(args["secret"])
+    if parsed is None:
+        return utils.validation_error("secret", "invalid_license_key_format")
 
     try:
-        subprocess.run(["/usr/sbin/register", "enterprise", secret, '5'], check=True, capture_output=True)
+        subprocess.run([LICENSE_CLIENT, *parsed], check=True, capture_output=True, text=True, timeout=60)
         return {"result": "success"}
-    except:
-        pass
+    except subprocess.CalledProcessError as e:
+        # the client's message says why (expired, suspended, device limit, revoked,
+        # unreachable, bad signature) - keep it for support, the UI shows a generic error
+        log((e.stderr or '').strip() or 'registration failed')
+    except Exception as e:
+        log(f'registration failed: {e}')
+    return utils.generic_error("invalid_secret_or_server_not_found")
 
-    try:
-        subprocess.run(["/usr/sbin/register", "community", secret, '5'], check=True, capture_output=True)
-        return {"result": "success"}
-    except:
-        return utils.generic_error("invalid_secret_or_server_not_found")
 
 def unregister():
     try:
-        subprocess.run(["/usr/sbin/unregister"], check=True, capture_output=True)
+        if os.path.exists(LICENSE_FILE):
+            os.remove(LICENSE_FILE)
+        subprocess.run(['uci', '-q', 'set', 'nexwall-license.main.partner_id='], check=True)
+        subprocess.run(['uci', '-q', 'set', 'nexwall-license.main.unlock_key='], check=True)
+        subprocess.run(['uci', 'commit', 'nexwall-license'], check=True)
         return {"result": "success"}
-    except:
+    except Exception as e:
+        log(f'unregister failed: {e}')
         return utils.generic_error("unregister_failure")
 
-def info():
-    u = EUci()
-    try:
-        ret = {}
-        p = subprocess.run(["/usr/sbin/subscription-info", "1"], check=True, capture_output=True)
-        data = json.loads(p.stdout)
-    except:
-        sid = u.get('ns-plug', 'config', 'system_id', default=None)
-        data = {"subscription": {"valid_until": None, "status": None, "subscription_plan": {"name": '-'}}, 'id': None, "uuid": sid}
 
-    if not data["uuid"]:
+def info():
+    lic = load_license()
+    if not lic or not lic.get("hwid"):
         return {"systemd_id": ""}
 
-    active = data["subscription"]["status"] == "valid"
+    # expiry is evaluated now, not when the license was last refreshed, so a unit that
+    # is offline past its subscription end stops reporting active
     try:
-        date =  datetime.strptime(data["subscription"]["valid_until"], '%Y-%m-%dT%H:%M:%S.%fZ')
-        expiration = int(datetime.timestamp(date))*1000
-    except:
+        end = datetime.fromisoformat(lic["subscription_end"])
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        expiration = int(end.timestamp()) * 1000
+        not_expired = end > datetime.now(timezone.utc)
+    except (KeyError, ValueError, TypeError):
         expiration = 0
-    type = u.get('ns-plug', 'config', 'type', default='')
+        not_expired = False
 
-    ret = {"server_id": data["id"], "systemd_id": data["uuid"], "plan": data["subscription"]["subscription_plan"]["name"], "expiration": expiration, "active": active, "type": type}
-    return ret
+    return {
+        "systemd_id": lic["hwid"],
+        "plan": lic.get("partner_name", "-"),
+        "expiration": expiration,
+        "active": lic.get("status") == "active" and not_expired,
+    }
 
 
 def inventory_status():
@@ -75,10 +108,9 @@ def inventory_status():
 
 
 def send_inventory():
-    # there are no ways to know if the operation has been resolved successfully not
-    # the resolution can be retrieved through the inventory-status command
-    subprocess.run(["/usr/sbin/send-inventory"], capture_output=True)
-    subprocess.run(["/usr/sbin/send-heartbeat"], capture_output=True)
+    # refresh the license now: it re-validates with the server, which also records the
+    # unit's last check-in (the heartbeat)
+    subprocess.run([LICENSE_CLIENT], capture_output=True)
     return {"status": "success"}
 
 
@@ -86,7 +118,7 @@ cmd = sys.argv[1]
 
 if cmd == 'list':
     print(json.dumps({
-        "register": {"secret": "xxxx"},
+        "register": {"secret": "<partner_id>:<unlock_key>"},
         "unregister": {},
         "info": {},
         "inventory-status": {},
