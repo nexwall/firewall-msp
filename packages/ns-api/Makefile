@@ -26,6 +26,7 @@ define Package/ns-api
 		+coreutils-date \
 		+coreutils-stty \
 		+nexwall-license \
+		+ns-log-viewer \
 		+python3-idna \
 		+python3-nethsec \
 		+python3-openssl \
@@ -176,6 +177,8 @@ define Package/ns-api/install
 	$(INSTALL_DATA) ./files/ns.nathelpers.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.wizard $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./files/ns.wizard.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_BIN) ./files/ns.log-viewer $(1)/usr/libexec/rpcd/
+	$(INSTALL_DATA) ./files/ns.log-viewer.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.ha $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./files/ns.ha.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.flows $(1)/usr/libexec/rpcd/
