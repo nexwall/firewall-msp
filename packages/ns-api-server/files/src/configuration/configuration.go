@@ -33,6 +33,7 @@ type Configuration struct {
 
 	VictoriaMetricsURL string `json:"victoria_metrics_url"`
 	VMAlertURL         string `json:"vmalert_url"`
+	VictoriaLogsURL    string `json:"victoria_logs_url"`
 
 	// Generous global per-IP rate limit applied to every API route as a coarse
 	// safety net; 0 disables it
@@ -104,6 +105,12 @@ func Init() {
 		Config.VictoriaMetricsURL = os.Getenv("VICTORIA_METRICS_URL")
 	} else {
 		Config.VictoriaMetricsURL = "http://127.0.0.1:8428"
+	}
+
+	if os.Getenv("VICTORIA_LOGS_URL") != "" {
+		Config.VictoriaLogsURL = os.Getenv("VICTORIA_LOGS_URL")
+	} else {
+		Config.VictoriaLogsURL = "http://127.0.0.1:9428"
 	}
 
 	if os.Getenv("VMALERT_URL") != "" {

@@ -37,6 +37,33 @@ func TestInitVictoriaMetricsURLFromEnv(t *testing.T) {
 	}
 }
 
+func TestInitVictoriaLogsURLDefault(t *testing.T) {
+	os.Unsetenv("VICTORIA_LOGS_URL")
+	os.Setenv("SECRET_JWT", "test-secret")
+	os.Setenv("SECRETS_DIR", "/tmp/secrets")
+	os.Setenv("TOKENS_DIR", "/tmp/tokens")
+
+	Init()
+
+	if Config.VictoriaLogsURL != "http://127.0.0.1:9428" {
+		t.Fatalf("VictoriaLogsURL = %q, want %q", Config.VictoriaLogsURL, "http://127.0.0.1:9428")
+	}
+}
+
+func TestInitVictoriaLogsURLFromEnv(t *testing.T) {
+	os.Setenv("SECRET_JWT", "test-secret")
+	os.Setenv("SECRETS_DIR", "/tmp/secrets")
+	os.Setenv("TOKENS_DIR", "/tmp/tokens")
+	os.Setenv("VICTORIA_LOGS_URL", "http://127.0.0.1:9429")
+	defer os.Unsetenv("VICTORIA_LOGS_URL")
+
+	Init()
+
+	if Config.VictoriaLogsURL != "http://127.0.0.1:9429" {
+		t.Fatalf("VictoriaLogsURL = %q, want %q", Config.VictoriaLogsURL, "http://127.0.0.1:9429")
+	}
+}
+
 func TestInitVMAlertURLDefault(t *testing.T) {
 	os.Unsetenv("VMALERT_URL")
 	os.Setenv("SECRET_JWT", "test-secret")

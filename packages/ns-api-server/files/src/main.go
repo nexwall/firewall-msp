@@ -124,6 +124,12 @@ func main() {
 	authGroup.Any("/metrics/query_range", methods.ProxyTo(victoriaMetricsProxy, "/api/v1/query_range"))
 	authGroup.Any("/alerts/alerts", methods.ProxyTo(methods.NewReverseProxy(configuration.Config.VMAlertURL), "/api/v1/alerts"))
 
+	// reverse proxy to VictoriaLogs, behind the same JWT auth as everything
+	// else in authGroup - the Nexwall Log Viewer's own frontend calls this
+	// instead of talking to VictoriaLogs' port 9428 directly (which is not
+	// reachable from outside localhost - see packages/victoria-logs)
+	authGroup.Any("/logs/query", methods.ProxyTo(methods.NewReverseProxy(configuration.Config.VictoriaLogsURL), "/select/logsql/query"))
+
 	// handle missing endpoint
 	router.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, structs.Map(response.StatusNotFound{
