@@ -1413,7 +1413,7 @@ Response example:
 
 Configure SMTP options to send mail using a NS7 machine:
 ```
-echo '{"host": "mail.nethserver.org", "port": 587, "auth": "on", "user": "myuser", "password": "Nexwall,1234", "tls": "on", "tls_starttls": "on", "from": "no-reply@nethserver.org", "syslog": "LOG_MAIL"}' | api-cli ns.smtp set --data -
+echo '{"host": "mail.nethserver.org", "port": 587, "auth": "on", "user": "myuser", "password": "nexwall", "tls": "on", "tls_starttls": "on", "from": "no-reply@nethserver.org", "syslog": "LOG_MAIL"}' | api-cli ns.smtp set --data -
 
 ```
 
@@ -8790,7 +8790,7 @@ Request example:
 ```bash
 api-cli ns.ha call check-remote --data '{
   "backup_node_ip": "100.100.100.2",
-  "ssh_password": "Nexwall,1234",
+  "ssh_password": "nexwall",
   "lan_interface": "lan",
   "wan_interface": "wan"
 }'

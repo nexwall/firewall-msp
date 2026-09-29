@@ -850,7 +850,7 @@ def fact_ha(uci: EUci):
 def fact_default_password(uci: EUci):
     data = {
         'username': 'root',
-        'password': 'Nexwall,1234',
+        'password': 'nexwall',
         'timeout': 1
     }
     result = subprocess.run(['/bin/ubus', 'call', 'session', 'login', json.dumps(data)], capture_output=True)

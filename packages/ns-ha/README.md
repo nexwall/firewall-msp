@@ -153,7 +153,7 @@ ns-ha-config check-backup-node 192.168.100.239 lan
 
 Example with password on standard input:
 ```
-echo Nexwall,1234 | ns-ha-config check-backup-node 192.168.100.239 lan
+echo nexwall | ns-ha-config check-backup-node 192.168.100.239 lan
 ```
 
 ### Initlialize the primary node
@@ -192,7 +192,7 @@ echo "password" | ns-ha-config init-backup-node lan
 
 Example with password on standard input:
 ```
-echo Nexwall,1234 | ns-ha-config init-backup-node lan
+echo nexwall | ns-ha-config init-backup-node lan
 ```
 
 At this point, the primary node and the backup node are configured to talk to each other

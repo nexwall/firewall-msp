@@ -25,7 +25,7 @@ Where:
 
      {
        "username": "root",
-       "password": "Nexwall,1234"
+       "password": "nexwall"
      }
     ```
 
