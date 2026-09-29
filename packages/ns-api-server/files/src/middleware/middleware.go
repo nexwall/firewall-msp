@@ -64,6 +64,12 @@ func InitJWT() *jwt.GinJWTMiddleware {
 			username := loginVals.Username
 			password := loginVals.Password
 
+			// "admin" is the vendor-style login name and an alias of the root account:
+			// everything downstream (JWT claims, password change, ACLs) keeps seeing "root".
+			if strings.EqualFold(username, "admin") {
+				username = "root"
+			}
+
 			// check login
 			err := methods.CheckAuthentication(username, password)
 			if err != nil {
