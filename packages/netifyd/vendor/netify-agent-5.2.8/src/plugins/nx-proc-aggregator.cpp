@@ -45,7 +45,8 @@ public:
             {
                 unique_lock<mutex> l(batch_lock);
                 batch_cond.wait_until(l, next_flush, [this] {
-                    return batch.size() >= batched_rows || ShouldTerminate();
+                    return (batched_rows > 0 && batch.size() >= batched_rows) ||
+                           ShouldTerminate();
                 });
             }
             next_flush = chrono::steady_clock::now() +
@@ -136,7 +137,7 @@ private:
 
         lock_guard<mutex> l(batch_lock);
         batch.push_back(std::move(entry));
-        if (batch.size() >= batched_rows) batch_cond.notify_one();
+        if (batched_rows > 0 && batch.size() >= batched_rows) batch_cond.notify_one();
     }
 
     void Flush(void) {
