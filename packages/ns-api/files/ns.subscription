@@ -86,35 +86,61 @@ def get_serial():
         return ''
 
 
+def _ts(value):
+    """ISO timestamp -> aware datetime or None."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def evaluate(lic, now=None):
+    """Effective license state right now. Evaluated locally, so a unit that is offline past its
+    trial or subscription end stops being licensed without needing the server to say so."""
+    now = now or datetime.now(timezone.utc)
+    if not lic or not lic.get("hwid"):
+        return "not_registered"
+    state = lic.get("license_state")
+    if state is None:  # license issued before the trial model existed
+        state = "subscribed" if lic.get("status") == "active" else "unlicensed"
+    if state == "subscribed":
+        end = _ts(lic.get("subscription_end"))
+        return "subscribed" if end and end > now and lic.get("status") == "active" else "unlicensed"
+    if state == "trial":
+        end = _ts(lic.get("trial_end"))
+        return "trial" if end and end > now else "unlicensed"
+    return "unlicensed"
+
+
 def info():
     serial = get_serial()
     lic = load_license()
-    # systemd_id stays empty until a partner license is active: the UI treats it as "subscribed"
-    if not lic or not lic.get("hwid"):
-        return {"systemd_id": "", "serial": serial, "state": "not_registered"}
-    if lic.get("status") == "unassigned":
-        return {"systemd_id": "", "serial": serial, "state": "unassigned"}
+    state = evaluate(lic)
+    if state == "not_registered":
+        return {"systemd_id": "", "serial": serial, "state": state, "assigned": False,
+                "active": False, "trial_days_left": None, "expiration": 0}
 
-    # expiry is evaluated now, not when the license was last refreshed, so a unit that
-    # is offline past its subscription end stops reporting active
-    try:
-        end = datetime.fromisoformat(lic["subscription_end"])
-        if end.tzinfo is None:
-            end = end.replace(tzinfo=timezone.utc)
-        expiration = int(end.timestamp()) * 1000
-        not_expired = end > datetime.now(timezone.utc)
-    except (KeyError, ValueError, TypeError):
-        expiration = 0
-        not_expired = False
-
-    active = lic.get("status") == "active" and not_expired
+    now = datetime.now(timezone.utc)
+    trial_end = _ts(lic.get("trial_end"))
+    sub_end = _ts(lic.get("subscription_end"))
+    assigned = lic.get("status") != "unassigned"
     return {
-        "systemd_id": lic["hwid"],
+        # non-empty only while a partner subscription is active: the UI reads it as "subscribed"
+        "systemd_id": lic["hwid"] if state == "subscribed" else "",
         "serial": serial,
-        "state": "active" if active else "expired",
+        "state": state,
+        "assigned": assigned,
         "plan": lic.get("partner_name", "-"),
-        "expiration": expiration,
-        "active": active,
+        "expiration": int(sub_end.timestamp()) * 1000 if sub_end else 0,
+        "trial_end": int(trial_end.timestamp()) * 1000 if trial_end else 0,
+        "trial_days_left": max(0, (trial_end - now).days) if trial_end and state == "trial" else None,
+        "active": state == "subscribed",
+        "entitlements": lic.get("entitlements") if state in ("subscribed", "trial") else {
+            "security_services": False, "reverse_proxy": False, "ha": False,
+            "limits": {"ipsec_s2s": 1, "wireguard": 1, "sslvpn_users": 3}},
     }
 
 

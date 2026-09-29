@@ -43,7 +43,8 @@ echo "$SERIAL" | grep -Eq '^NXW-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$'
 
 echo "--- first check-in (unassigned):"
 nexwall-license-register
-grep -q '"status": "unassigned"' /etc/nexwall-license/license.json
+grep -q "\"status\": \"unassigned\"" /etc/nexwall-license/license.json
+grep -q "\"license_state\": \"trial\"" /etc/nexwall-license/license.json
 [ -s /etc/nexwall-license/device_token ]
 [ "$(stat -c %a /etc/nexwall-license/device_token)" = "600" ]
 

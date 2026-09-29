@@ -179,8 +179,17 @@ def auto_checkin():
 
 
 def report(payload):
+    state = payload.get("license_state")
     if payload.get("status") == "unassigned":
-        print(f"Registered as {payload.get('serial_number')} - waiting to be assigned to a partner")
+        print(f"Registered as {payload.get('serial_number')} - not assigned to a partner yet")
+        if state == "trial":
+            print(f"Trial until {payload.get('trial_end')}: all features enabled")
+        else:
+            print("No active trial or subscription: limited features")
+        return
+    if payload.get("status") in ("expired", "suspended"):
+        print(f"Subscription {payload.get('status')} ({payload.get('partner_name') or 'unknown partner'}) - "
+              + ("trial active" if state == "trial" else "limited features"))
         return
     print(f"Licensed to {payload.get('partner_name')}")
     print(f"Subscription valid until {payload.get('subscription_end')}")
