@@ -6,6 +6,7 @@
 #
 
 import json
+import subprocess
 import sys
 
 from euci import EUci
@@ -20,7 +21,11 @@ if cmd == "list":
         "set": {
             "complete": False,
             "password_changed": False,
-        }
+        },
+        "set-password-unauth": {
+            "password": "str",
+            "password_confirm": "str",
+        },
     }, sys.stdout)
 elif cmd == "call":
     action = sys.argv[2]
@@ -45,3 +50,33 @@ elif cmd == "call":
             json.dump({"message": "successful"}, sys.stdout)
         except ValidationError as ex:
             json.dump(utils.validation_error(ex.parameter, ex.message, ex.value), sys.stdout)
+    elif action == "set-password-unauth":
+        # Reachable without a session, deliberately - see nexwall-ui's StandaloneApp.vue and
+        # ns-api-server's UnauthWizardSetPassword. The ONLY thing that makes this safe is the
+        # check immediately below: once complete is true, this whole branch refuses every call,
+        # forever, regardless of what the caller sends. There is no other gate on this action.
+        try:
+            if e_uci.get("ns-wizard", "config", "complete", dtype=bool, default=False):
+                raise ValidationError("password", "wizard_already_complete")
+
+            data = json.loads(sys.stdin.read())
+            password = data.get("password", "")
+            password_confirm = data.get("password_confirm", "")
+            if not password:
+                raise ValidationError("password", "required")
+            if password != password_confirm:
+                raise ValidationError("password_confirm", "password_mismatch")
+
+            # same mechanism ns.account set-password already uses for the root user
+            subprocess.run(["ubus", "call", "luci", "setPassword", json.dumps({
+                "username": "root",
+                "password": password,
+            })], capture_output=True, check=True)
+
+            e_uci.set("ns-wizard", "config", "password_changed", True)
+            e_uci.save("ns-wizard")
+            json.dump({"message": "successful"}, sys.stdout)
+        except ValidationError as ex:
+            json.dump(utils.validation_error(ex.parameter, ex.message, ex.value), sys.stdout)
+        except subprocess.CalledProcessError:
+            json.dump(utils.generic_error("failed_to_set_password"), sys.stdout)
