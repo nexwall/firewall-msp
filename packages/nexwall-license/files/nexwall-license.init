@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+
+START=99
+
+start() {
+	# joins the license server in the background: the network may not be up yet, and boot
+	# must never wait for it
+	/usr/sbin/nexwall-license-register --boot >/dev/null 2>&1 &
+}
+
+stop() {
+	:
+}

@@ -72,10 +72,28 @@ def unregister():
         return utils.generic_error("unregister_failure")
 
 
+def get_serial():
+    try:
+        with open('/etc/nexwall-license/serial') as f:
+            serial = f.read().strip()
+            if serial:
+                return serial
+    except OSError:
+        pass
+    try:
+        return subprocess.run(['/usr/sbin/nexwall-serial'], capture_output=True, text=True, timeout=10).stdout.strip()
+    except Exception:
+        return ''
+
+
 def info():
+    serial = get_serial()
     lic = load_license()
+    # systemd_id stays empty until a partner license is active: the UI treats it as "subscribed"
     if not lic or not lic.get("hwid"):
-        return {"systemd_id": ""}
+        return {"systemd_id": "", "serial": serial, "state": "not_registered"}
+    if lic.get("status") == "unassigned":
+        return {"systemd_id": "", "serial": serial, "state": "unassigned"}
 
     # expiry is evaluated now, not when the license was last refreshed, so a unit that
     # is offline past its subscription end stops reporting active
@@ -89,11 +107,14 @@ def info():
         expiration = 0
         not_expired = False
 
+    active = lic.get("status") == "active" and not_expired
     return {
         "systemd_id": lic["hwid"],
+        "serial": serial,
+        "state": "active" if active else "expired",
         "plan": lic.get("partner_name", "-"),
         "expiration": expiration,
-        "active": lic.get("status") == "active" and not_expired,
+        "active": active,
     }
 
 

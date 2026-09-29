@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-license
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -38,6 +38,10 @@ endef
 define Package/nexwall-license/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/nexwall-license-register $(1)/usr/sbin/nexwall-license-register
+	$(INSTALL_BIN) ./files/nexwall-serial $(1)/usr/sbin/nexwall-serial
+
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/nexwall-license.init $(1)/etc/init.d/nexwall-license
 
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/nexwall-license.config $(1)/etc/config/nexwall-license
@@ -45,7 +49,7 @@ define Package/nexwall-license/install
 	$(INSTALL_DIR) $(1)/etc/nexwall-license
 	$(INSTALL_DATA) ./files/pubkey.pem $(1)/etc/nexwall-license/pubkey.pem
 
-	# kept across image upgrades: without hwid the unit would re-register as a NEW device on
+	# kept across image upgrades: without hwid/serial/device_token the unit would re-register as a NEW device on
 	# every upgrade and slowly exhaust the customer's firewall_limit; pubkey.pem is deliberately
 	# NOT kept so a new image can rotate the trusted server key
 	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d

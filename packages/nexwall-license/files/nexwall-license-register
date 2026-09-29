@@ -3,35 +3,41 @@
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Registers this firewall against the Nexwall license server (or refreshes
-# an existing registration) and stores a verified, signed license locally
-# for other parts of the system to read when deciding which features to
-# enable.
+# Registers this firewall against the Nexwall license server and keeps a verified, signed
+# license stored locally for other parts of the system to read.
 #
-# Usage:
-#   nexwall-license-register <partner_id> <unlock_key>   - first registration
-#   nexwall-license-register                             - refresh, using the
-#                                                           partner_id/unlock_key
-#                                                           already stored from
-#                                                           a previous run
+#   nexwall-license-register <partner_id> <unlock_key>   manual activation with a license key
+#   nexwall-license-register                             refresh: with stored license-key
+#                                                        credentials if any, otherwise automatic
+#                                                        registration (see below)
+#   nexwall-license-register --boot                      as above, retrying until the server
+#                                                        answers (network may not be up yet)
+#   nexwall-license-register --scheduled                 cron entry point: skips the call while
+#                                                        an active license is still fresh
 #
+# Automatic registration: with no license key the unit announces itself (device id + serial
+# number) to /api/v1/checkin. The server records it as *unassigned* and hands back a secret
+# device token, kept in /etc/nexwall-license/device_token. Once an administrator assigns the
+# unit to a partner, the next check-in returns that partner's signed license - no key typed.
 import base64
 import json
 import os
+import random
 import subprocess
 import sys
-import uuid
+import time
 
 import requests
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 
-SERVER = "https://license.nexwall.com.br"
+DEFAULT_SERVER = "https://license.nexwall.com.br"
 STATE_DIR = "/etc/nexwall-license"
 PUBKEY_PATH = f"{STATE_DIR}/pubkey.pem"
-HWID_PATH = f"{STATE_DIR}/hwid"
 LICENSE_PATH = f"{STATE_DIR}/license.json"
+TOKEN_PATH = f"{STATE_DIR}/device_token"
+FRESH_SECONDS = 20 * 3600  # an active license is re-fetched about daily
 
 
 def get_uci(key):
@@ -43,31 +49,49 @@ def set_uci(key, value):
     subprocess.run(["uci", "set", f"{key}={value}"], check=True)
 
 
+def server_url():
+    return (get_uci("nexwall-license.main.server") or DEFAULT_SERVER).rstrip("/")
+
+
+def _serial_module():
+    import importlib.machinery
+    import importlib.util
+
+    for path in ("/usr/sbin/nexwall-serial", os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexwall-serial")):
+        if os.path.exists(path):
+            loader = importlib.machinery.SourceFileLoader("nexwall_serial", path)
+            spec = importlib.util.spec_from_loader("nexwall_serial", loader)
+            mod = importlib.util.module_from_spec(spec)
+            loader.exec_module(mod)
+            return mod
+    raise RuntimeError("nexwall-serial not found")
+
+
 def get_hwid():
-    if os.path.exists(HWID_PATH):
-        with open(HWID_PATH) as f:
-            hwid = f.read().strip()
-            if hwid:
-                return hwid
-    hwid = str(uuid.uuid4())
-    os.makedirs(STATE_DIR, exist_ok=True)
-    with open(HWID_PATH, "w") as f:
-        f.write(hwid)
-    return hwid
+    return _serial_module().get_hwid()
 
 
 def get_serial():
-    # best-effort hardware serial where available (x86 DMI); falls back to
-    # a placeholder on hardware that doesn't expose one
-    for path in ("/sys/class/dmi/id/product_serial", "/sys/class/dmi/id/board_serial"):
-        try:
-            with open(path) as f:
-                s = f.read().strip()
-                if s and s.lower() not in ("none", "to be filled by o.e.m."):
-                    return s
-        except Exception:
-            continue
-    return "unknown"
+    return _serial_module().get_serial()
+
+
+def _read(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def describe_device():
+    vendor = _read("/sys/class/dmi/id/sys_vendor")
+    product = _read("/sys/class/dmi/id/product_name")
+    model = " ".join(x for x in (vendor, product) if x) or "unknown"
+    firmware = ""
+    for line in _read("/etc/os-release").splitlines():
+        if line.startswith("PRETTY_NAME="):
+            firmware = line.split("=", 1)[1].strip('"')
+    return {"model": model, "firmware": firmware, "hostname": get_uci("system.@system[0].hostname")}
 
 
 def verify_and_decode(payload_b64, signature_b64):
@@ -75,11 +99,9 @@ def verify_and_decode(payload_b64, signature_b64):
         pubkey = RSA.import_key(f.read())
     payload_bytes = base64.b64decode(payload_b64)
     signature_bytes = base64.b64decode(signature_b64)
-    # raises ValueError if the response was tampered with or wasn't
-    # actually signed by the license server - never trust an unverified
-    # payload, regardless of HTTP status
-    h = SHA256.new(payload_bytes)
-    pkcs1_15.new(pubkey).verify(h, signature_bytes)
+    # raises ValueError if the response was tampered with or wasn't actually signed by the
+    # license server - never trust an unverified payload, regardless of HTTP status
+    pkcs1_15.new(pubkey).verify(SHA256.new(payload_bytes), signature_bytes)
     return json.loads(payload_bytes)
 
 
@@ -90,71 +112,126 @@ def save_license(payload):
     os.chmod(LICENSE_PATH, 0o644)
 
 
-def main():
-    if len(sys.argv) == 3:
-        partner_id, unlock_key = sys.argv[1], sys.argv[2]
-    elif len(sys.argv) == 1:
-        partner_id = get_uci("nexwall-license.main.partner_id")
-        unlock_key = get_uci("nexwall-license.main.unlock_key")
-        if not partner_id or not unlock_key:
-            # not registered yet - nothing to refresh, not an error
-            sys.exit(0)
-    else:
-        print("Usage: nexwall-license-register [<partner_id> <unlock_key>]", file=sys.stderr)
-        sys.exit(1)
+def save_token(token):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    fd = os.open(TOKEN_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(token + "\n")
 
-    hwid = get_hwid()
-    serial = get_serial()
 
+def fail(msg):
+    print(msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def explain(resp):
+    try:
+        err = resp.json()
+        return f"{err.get('message', resp.text)} ({err.get('code', resp.status_code)})"
+    except Exception:
+        return f"HTTP {resp.status_code}"
+
+
+def load_verified(resp):
+    data = resp.json()
+    try:
+        return data, verify_and_decode(data["payload"], data["signature"])
+    except ValueError:
+        fail("Registration failed: server response signature is invalid - refusing to trust it")
+    except Exception as e:
+        fail(f"Registration failed: could not verify response: {e}")
+
+
+def manual_register(partner_id, unlock_key):
     try:
         resp = requests.post(
-            f"{SERVER}/api/v1/validate",
-            json={
-                "hwid": hwid,
-                "unlock_key": unlock_key,
-                "partner_id": partner_id,
-                "serial": serial,
-            },
+            f"{server_url()}/api/v1/validate",
+            json={"hwid": get_hwid(), "unlock_key": unlock_key, "partner_id": partner_id, "serial": get_serial()},
             timeout=30,
         )
     except requests.RequestException as e:
-        print(f"Registration failed: could not reach {SERVER}: {e}", file=sys.stderr)
-        sys.exit(1)
-
+        fail(f"Registration failed: could not reach {server_url()}: {e}")
     if resp.status_code != 200:
-        try:
-            err = resp.json()
-            print(
-                f"Registration failed: {err.get('message', resp.text)} "
-                f"({err.get('code', resp.status_code)})",
-                file=sys.stderr,
-            )
-        except Exception:
-            print(f"Registration failed: HTTP {resp.status_code}", file=sys.stderr)
-        sys.exit(1)
+        fail(f"Registration failed: {explain(resp)}")
 
-    data = resp.json()
-    try:
-        payload = verify_and_decode(data["payload"], data["signature"])
-    except ValueError:
-        print(
-            "Registration failed: server response signature is invalid - "
-            "refusing to trust it",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    except Exception as e:
-        print(f"Registration failed: could not verify response: {e}", file=sys.stderr)
-        sys.exit(1)
-
+    _, payload = load_verified(resp)
     save_license(payload)
     set_uci("nexwall-license.main.partner_id", partner_id)
     set_uci("nexwall-license.main.unlock_key", unlock_key)
     subprocess.run(["uci", "commit", "nexwall-license"], check=True)
+    report(payload)
 
-    print(f"Registered with {payload.get('partner_name')}")
+
+def auto_checkin():
+    body = {"hwid": get_hwid(), "serial": get_serial(), "device_token": _read(TOKEN_PATH), **describe_device()}
+    try:
+        resp = requests.post(f"{server_url()}/api/v1/checkin", json=body, timeout=30)
+    except requests.RequestException as e:
+        fail(f"Check-in failed: could not reach {server_url()}: {e}")
+    if resp.status_code != 200:
+        fail(f"Check-in failed: {explain(resp)}")
+
+    data, payload = load_verified(resp)
+    if data.get("device_token"):
+        save_token(data["device_token"])
+    save_license(payload)
+    report(payload)
+
+
+def report(payload):
+    if payload.get("status") == "unassigned":
+        print(f"Registered as {payload.get('serial_number')} - waiting to be assigned to a partner")
+        return
+    print(f"Licensed to {payload.get('partner_name')}")
     print(f"Subscription valid until {payload.get('subscription_end')}")
     print(f"Enabled modules: {', '.join(payload.get('modules', [])) or '(none)'}")
+
+
+def refresh():
+    partner_id = get_uci("nexwall-license.main.partner_id")
+    unlock_key = get_uci("nexwall-license.main.unlock_key")
+    if partner_id and unlock_key:
+        manual_register(partner_id, unlock_key)
+    else:
+        auto_checkin()
+
+
+def license_is_fresh():
+    try:
+        with open(LICENSE_PATH) as f:
+            if json.load(f).get("status") != "active":
+                return False
+        return time.time() - os.path.getmtime(LICENSE_PATH) < FRESH_SECONDS
+    except (OSError, ValueError):
+        return False
+
+
+def main():
+    args = sys.argv[1:]
+    if len(args) == 2 and not args[0].startswith("--"):
+        manual_register(args[0], args[1])
+    elif args == []:
+        refresh()
+    elif args == ["--scheduled"]:
+        # cron runs this every 15 minutes: unregistered/unassigned units poll quickly so an
+        # assignment takes effect soon, licensed units only about once a day
+        if not os.environ.get("NEXWALL_LICENSE_NO_JITTER"):
+            time.sleep(random.uniform(0, 90))
+        if not license_is_fresh():
+            refresh()
+    elif args == ["--boot"]:
+        # the network is often not up yet when this starts
+        for wait in (20, 40, 80, 160, 320, 640, 1280):
+            try:
+                refresh()
+                return
+            except SystemExit as e:
+                if e.code in (0, None):
+                    return
+                time.sleep(wait)
+        sys.exit(1)
+    else:
+        fail("Usage: nexwall-license-register [<partner_id> <unlock_key> | --boot | --scheduled]")
 
 
 if __name__ == "__main__":

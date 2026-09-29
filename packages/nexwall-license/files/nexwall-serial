@@ -1,0 +1,81 @@
+#!/usr/bin/python3
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Prints this firewall's serial number, NXW-XXXX-XXXX-XXXX.
+#
+# Derived from the machine's own identity, so it is stable across reinstalls and upgrades and
+# needs no factory provisioning: the DMI system UUID (unique per VMware/Hyper-V/KVM guest and per
+# physical board), else the MAC of the first physical NIC, else the random id generated on first
+# run. The result is cached in /etc/nexwall-license/serial and never recomputed, so adding or
+# reordering NICs later cannot change a serial that has already been shown to the customer.
+#
+#   nexwall-serial          print the serial
+#   nexwall-serial --hwid   print the device id used against the license server
+import hashlib
+import os
+import sys
+import uuid
+
+STATE_DIR = "/etc/nexwall-license"
+SERIAL_PATH = f"{STATE_DIR}/serial"
+HWID_PATH = f"{STATE_DIR}/hwid"
+BAD_UUIDS = {"", "none", "unknown", "0" * 32, "f" * 32, "03000200-0400-0500-0006-000700080009"}
+
+
+def _read(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def machine_id():
+    dmi = _read("/sys/class/dmi/id/product_uuid").lower()
+    if dmi.replace("-", "") not in BAD_UUIDS and dmi not in BAD_UUIDS and len(dmi) >= 16:
+        return "dmi:" + dmi
+    try:
+        for nic in sorted(os.listdir("/sys/class/net")):
+            if not os.path.exists(f"/sys/class/net/{nic}/device"):
+                continue  # virtual interface (bridge, vlan, tunnel...)
+            mac = _read(f"/sys/class/net/{nic}/address").lower()
+            if mac and mac != "00:00:00:00:00:00":
+                return "mac:" + mac
+    except OSError:
+        pass
+    stored = _read(HWID_PATH)
+    if stored:
+        return "hwid:" + stored
+    return "rand:" + uuid.uuid4().hex
+
+
+def _write(path, value):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(path, "w") as f:
+        f.write(value + "\n")
+
+
+def get_serial():
+    cached = _read(SERIAL_PATH)
+    if cached:
+        return cached
+    digest = hashlib.sha256(("nexwall-serial-v1:" + machine_id()).encode()).hexdigest()[:12].upper()
+    serial = "NXW-" + "-".join(digest[i:i + 4] for i in range(0, 12, 4))
+    _write(SERIAL_PATH, serial)
+    return serial
+
+
+def get_hwid():
+    # a unit that already registered keeps its id: changing it would create a second device row
+    stored = _read(HWID_PATH)
+    if stored:
+        return stored
+    hwid = hashlib.sha256(("nexwall-hwid-v1:" + machine_id()).encode()).hexdigest()[:32]
+    _write(HWID_PATH, hwid)
+    return hwid
+
+
+if __name__ == "__main__":
+    print(get_hwid() if "--hwid" in sys.argv[1:] else get_serial())

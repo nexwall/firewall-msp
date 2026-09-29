@@ -3,12 +3,15 @@
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Refresh the license daily (in addition to whatever an admin triggers
-# manually via nexwall-license-register) so a subscription change,
-# expiry, or revocation on the server is reflected here within a day,
-# not only at next reboot.
+# Every 15 minutes: an unregistered or unassigned unit checks in (so an assignment made on the
+# license server takes effect quickly); a licensed unit is refreshed about once a day. The
+# script itself decides, see nexwall-license-register --scheduled. Replaces the older daily
+# entry on upgraded units.
 
-crontab -l 2>/dev/null | grep -q 'nexwall-license-register' || \
-  echo '41 5 * * * sleep $(( RANDOM % 1800 )); /usr/sbin/nexwall-license-register' >> /etc/crontabs/root
+touch /etc/crontabs/root
+sed -i '/nexwall-license-register/d' /etc/crontabs/root
+echo '*/15 * * * * /usr/sbin/nexwall-license-register --scheduled >/dev/null 2>&1' >> /etc/crontabs/root
+
+/etc/init.d/nexwall-license enable 2>/dev/null
 
 exit 0

@@ -73,6 +73,19 @@ def _read_dmi_field(name):
     except OSError:
         return None
 
+def get_serial():
+    try:
+        with open('/etc/nexwall-license/serial') as f:
+            serial = f.read().strip()
+            if serial:
+                return serial
+    except OSError:
+        pass
+    try:
+        return subprocess.run(['/usr/sbin/nexwall-serial'], capture_output=True, text=True, timeout=10).stdout.strip() or None
+    except Exception:
+        return None
+
 def get_hardware():
     # read info for x86_64
     if os.path.isdir('/sys/devices/virtual/dmi/id'):
@@ -326,6 +339,7 @@ def system_info():
     ret['version'] = get_version()
     ret['hostname'] = get_hostname()
     ret['hardware'] = get_hardware()
+    ret['serial'] = get_serial()
     ret['memory'] = get_memory()
     ret['storage'] = get_storage()
     return ret
