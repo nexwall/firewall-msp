@@ -273,8 +273,13 @@ private:
         up.l3proto = (flow->ip_version == 6) ? AF_INET6 : AF_INET;
         up.l4proto = flow->ip_protocol;
 
-        const ndAddr &src = flow->lower_addr;
-        const ndAddr &dst = flow->upper_addr;
+        // conntrack's original tuple is client->server. lower/upper are just the
+        // numerically ordered endpoints, so when the client is the upper address
+        // (flow->origin == UPPER) using lower as source builds a tuple that does
+        // not exist and the label update silently misses - the flow is never blocked.
+        const bool upper_first = (flow->origin == ndFlow::Origin::UPPER);
+        const ndAddr &src = upper_first ? flow->upper_addr : flow->lower_addr;
+        const ndAddr &dst = upper_first ? flow->lower_addr : flow->upper_addr;
         if (! src.IsValid() || ! dst.IsValid()) return false;
 
         if (up.l3proto == AF_INET6) {
