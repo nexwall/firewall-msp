@@ -97,6 +97,13 @@ func main() {
 	// 2FA APIs
 	api.POST("/2fa/otp-verify", middleware.BodyLimit(32<<10), methods.OTPVerify)
 
+	// First-run wizard, reachable with no session - see ns.wizard's set-password-unauth
+	// (the actual safety boundary: refuses once the wizard is already complete) and
+	// WizardStatus/WizardSetPassword's own comments (methods/wizard.go). Covered by the
+	// same global per-IP rate limiter as every other route, including /login above.
+	api.GET("/wizard/status", methods.WizardStatus)
+	api.POST("/wizard/set-password", middleware.BodyLimit(4<<10), methods.WizardSetPassword)
+
 	// define JWT middleware
 	authGroup := api.Group("/", middleware.InstanceJWT().MiddlewareFunc())
 	// allow user to request sudo mode
