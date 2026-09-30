@@ -87,6 +87,35 @@ public:
         return nullptr;
     }
 
+    // dpi-config rewrites the actions file and signals a reload: re-read it
+    // so rule changes apply without restarting the whole engine. The plugin
+    // manager holds the same lock for this broadcast and for
+    // DispatchProcessorEvent, so the rule set is never swapped mid-evaluation.
+    // An unreadable or invalid file keeps the rules already loaded.
+    virtual void DispatchEvent(ndPlugin::Event event, void *param = nullptr) {
+        if (event != ndPlugin::Event::RELOAD || GetConfiguration().empty()) return;
+
+        auto old_targets = targets;
+        auto old_actions = actions;
+        auto old_exemptions = global_exemptions;
+        auto old_bits = managed_bits;
+
+        targets.clear();
+        actions.clear();
+        global_exemptions.clear();
+        managed_bits.clear();
+
+        if (! LoadConfig(GetConfiguration())) {
+            targets = old_targets;
+            actions = old_actions;
+            global_exemptions = old_exemptions;
+            managed_bits = old_bits;
+            nd_printf("nx-proc-flow-actions: reload failed, keeping the current rules\n");
+            return;
+        }
+        nd_printf("nx-proc-flow-actions: reloaded %zu action(s)\n", actions.size());
+    }
+
     virtual void DispatchProcessorEvent(Event event, ndFlow::Ptr &flow) {
         if (! flow || ! ct_handle) return;
         if (event != Event::DPI_COMPLETE && event != Event::DPI_UPDATE) return;
@@ -165,12 +194,12 @@ private:
         bytes[bit / 8] |= (1 << (bit % 8));
     }
 
-    void LoadConfig(const string &conf_filename) {
+    bool LoadConfig(const string &conf_filename) {
         ifstream f(conf_filename);
         if (! f.is_open()) {
             nd_printf("nx-proc-flow-actions: could not open %s\n",
               conf_filename.c_str());
-            return;
+            return false;
         }
         ordered_json j;
         try {
@@ -179,7 +208,7 @@ private:
         catch (exception &e) {
             nd_printf("nx-proc-flow-actions: %s: %s\n",
               conf_filename.c_str(), e.what());
-            return;
+            return false;
         }
 
         string connlabel_conf = "/etc/connlabel.conf";
@@ -225,6 +254,7 @@ private:
         }
 
         global_exemptions = j.value("exemptions", vector<string>{});
+        return true;
     }
 
     // <bit> <name> per line, standard xt_connlabel/nfct format
