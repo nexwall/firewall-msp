@@ -388,6 +388,13 @@ ndCaptureNFQueue::ndCaptureNFQueue(int16_t cpu,
     mnl_attr_put_u32(nlh, NFQA_CFG_FLAGS, htonl(flags));
     mnl_attr_put_u32(nlh, NFQA_CFG_MASK, htonl(flags));
 
+    // Bound the kernel queue: when it is full the fail-open flag above makes
+    // the kernel accept new packets uninspected (see nd_config_nfq).
+    if (iface->config_nfq.queue_maxlen > 0) {
+        mnl_attr_put_u32(nlh, NFQA_CFG_QUEUE_MAXLEN,
+          htonl(iface->config_nfq.queue_maxlen));
+    }
+
     if (mnl_socket_sendto(nl, nlh, nlh->nlmsg_len) < 0) {
         throw ndExceptionSystemError(__PRETTY_FUNCTION__,
           "mnl_socket_sendto");

@@ -19,6 +19,7 @@ from euci import EUci
 from jinja2 import Environment, BaseLoader
 
 NFQ_TABLE_FILE = '/tmp/netifyd-nfq-table-definition.nft'
+DEFAULT_MGMT_PORTS = ['22', '443', '9090']
 
 
 NFQ_TABLE = """
@@ -58,6 +59,13 @@ table inet netifyd {
         ip daddr @nfq_bypass_v4 accept
         ip6 saddr @nfq_bypass_v6 accept
         ip6 daddr @nfq_bypass_v6 accept
+{%- if mgmt_ports %}
+
+        # Management access to the firewall itself is never queued, so it stays reachable even if the
+        # analysis engine is slow or stuck. Only traffic addressed to the firewall passes this hook:
+        # forwarded traffic (e.g. LAN users on port 443) is unaffected and still analyzed.
+        tcp dport { {{ mgmt_ports | join(', ') }} } accept
+{%- endif %}
 
         # Netifyd only analyzes the first 32 packets
         ct packets > 32 accept
@@ -101,6 +109,11 @@ table inet netifyd {
         ip daddr @nfq_bypass_v4 accept
         ip6 saddr @nfq_bypass_v6 accept
         ip6 daddr @nfq_bypass_v6 accept
+{%- if mgmt_ports %}
+
+        # Replies of the management services on this firewall
+        tcp sport { {{ mgmt_ports | join(', ') }} } accept
+{%- endif %}
 
         # Netifyd only analyzes the first 32 packets
         ct packets > 32 accept
@@ -166,11 +179,24 @@ def generate_nfq_table():
         print("Warning: no valid firewall_traffic chains configured, defaulting to all chains.", file=sys.stderr)
         firewall_chains = list(valid_chains)
 
+    # TCP ports of the management services of the firewall itself (SSH, web interface) that are never sent to
+    # the analysis engine, only for traffic addressed to or sent by the firewall. Set "mgmt_ports" (list) in
+    # /etc/config/netifyd to change it, or to an empty value to analyze them too.
+    mgmt_ports = []
+    for value in e_uci.get('netifyd', 'config', 'mgmt_ports', dtype=str, list=True, default=DEFAULT_MGMT_PORTS):
+        value = str(value).strip()
+        if value.isdigit() and 0 < int(value) < 65536:
+            if value not in mgmt_ports:
+                mgmt_ports.append(value)
+        elif value and value != 'none':
+            print(f"Warning: invalid mgmt_ports value '{value}', ignoring.", file=sys.stderr)
+
     template = Environment(loader=BaseLoader()).from_string(NFQ_TABLE)
     render = template.render(
         v4_elements=v4_elements,
         v6_elements=v6_elements,
         firewall_chains=firewall_chains,
+        mgmt_ports=mgmt_ports,
     )
 
     # Apply nftables

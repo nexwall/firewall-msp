@@ -280,6 +280,11 @@ typedef struct nd_config_nfq_t {
     ndNFQVerdict verdict = { ndNFQVerdict::ACCEPT };
     uint32_t mark = { 0 };
     uint32_t mask = { 0 };
+    // Maximum packets waiting in each kernel queue (0 = kernel default).
+    // With the fail-open flag set on the queue, packets that arrive while it
+    // is full are accepted uninspected instead of waiting, so a slow or stuck
+    // reader degrades to "not inspected" and never blocks traffic.
+    unsigned queue_maxlen{ 0 };
 
     inline bool operator==(const struct nd_config_nfq_t &i) const {
         return (
@@ -287,7 +292,8 @@ typedef struct nd_config_nfq_t {
             instances == i.instances &&
             conntrack_counters == i.conntrack_counters &&
             verdict == i.verdict &&
-            mark == i.mark && mask == i.mask
+            mark == i.mark && mask == i.mask &&
+            queue_maxlen == i.queue_maxlen
         );
     }
 } nd_config_nfq;
