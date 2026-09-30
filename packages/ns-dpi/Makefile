@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ns-dpi
 PKG_VERSION:=0.3.4
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/ns-dpi-$(PKG_VERSION)
 
@@ -27,7 +27,9 @@ define Package/ns-dpi
 		+netifyd \
 		+nftables \
 		+python3 \
-		+python3-jinja2
+		+python3-jinja2 \
+		+python3-requests \
+		+python3-pycryptodome
 	PKGARCH:=all
 endef
 
@@ -78,6 +80,8 @@ define Package/ns-dpi/install
 	$(INSTALL_BIN) ./files/dpi-nft $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/dpi-config $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/dpi-license-update.py $(1)/usr/sbin/dpi-license-update
+	$(INSTALL_BIN) ./files/nexwall-dpi-catalog $(1)/usr/sbin/nexwall-dpi-catalog
+	$(INSTALL_BIN) ./files/99-dpi-catalog-cron.uci-defaults $(1)/etc/uci-defaults/99-dpi-catalog-cron
 	$(INSTALL_BIN) ./files/dpi-data-update.py $(1)/usr/sbin/dpi-data-update
 	$(INSTALL_BIN) ./files/dpi-update.py $(1)/usr/sbin/dpi-update
 	$(INSTALL_CONF) ./files/20_dpi $(1)/etc/uci-defaults

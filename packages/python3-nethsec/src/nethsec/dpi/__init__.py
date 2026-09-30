@@ -601,3 +601,72 @@ def edit_exemption(e_uci: EUci, config_name: str, criteria: str, description: st
 
     __save_exemption_data(e_uci, config_name, criteria, description, enabled)
     e_uci.save('dpi')
+
+
+# --- application catalog (see nexwall-dpi-catalog) -----------------------------------------------------------------
+
+CATALOG_CLIENT = '/usr/sbin/nexwall-dpi-catalog'
+CATALOG_INTERVAL_RANGE = (1, 168)
+
+
+def get_catalog_settings(e_uci: EUci) -> dict:
+    """
+    Settings of the automatic catalog update.
+
+    Returns:
+        dict with "auto_update" (bool) and "interval" (hours between checks)
+    """
+    try:
+        interval = int(e_uci.get('dpi', 'catalog', 'interval', default='24'))
+    except ValueError:
+        interval = 24
+    low, high = CATALOG_INTERVAL_RANGE
+    return {
+        'auto_update': e_uci.get('dpi', 'catalog', 'auto_update', default='1') != '0',
+        'interval': min(max(interval, low), high),
+    }
+
+
+def set_catalog_settings(e_uci: EUci, auto_update: bool, interval: int):
+    """
+    Store the settings of the automatic catalog update.
+
+    Raises:
+        - ValidationError: if the interval is not a whole number of hours between 1 and 168
+    """
+    low, high = CATALOG_INTERVAL_RANGE
+    if isinstance(interval, bool) or not isinstance(interval, int) or not low <= interval <= high:
+        raise ValidationError('interval', 'invalid', str(interval))
+    if e_uci.get('dpi', 'catalog', default=None) is None:
+        e_uci.set('dpi', 'catalog', 'catalog')
+    e_uci.set('dpi', 'catalog', 'auto_update', '1' if auto_update else '0')
+    e_uci.set('dpi', 'catalog', 'interval', str(interval))
+    e_uci.save('dpi')
+
+
+def _run_catalog_client(args: list[str], timeout: int) -> dict:
+    try:
+        proc = subprocess.run([CATALOG_CLIENT] + args, capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise ValueError(f'catalog client failed: {e}')
+    try:
+        return json.loads(proc.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        raise ValueError(proc.stderr.strip() or proc.stdout.strip() or 'catalog client returned no data')
+
+
+def get_catalog_status() -> dict:
+    """
+    State of the application catalog: license state, where the catalog in use comes from ("nexwall" or "open"),
+    version, number of applications/domains, last check and result, next check.
+    """
+    return _run_catalog_client(['status', '--json'], 30)
+
+
+def update_catalog() -> dict:
+    """
+    Fetch and install the current catalog now (only possible while the unit is licensed, otherwise the open list
+    stays in use). Returns the status afterwards.
+    """
+    subprocess.run([CATALOG_CLIENT, 'update'], capture_output=True, text=True, timeout=180, check=False)
+    return get_catalog_status()

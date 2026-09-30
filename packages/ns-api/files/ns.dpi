@@ -55,6 +55,13 @@ if cmd == 'list':
             'enabled': False
         },
         'list-exemptions': {},
+        'get-catalog-status': {},
+        'get-catalog-settings': {},
+        'set-catalog-settings': {
+            'auto_update': True,
+            'interval': 24
+        },
+        'update-catalog': {},
         'list-devices': {},
         'list-popular': {
             'limit': 32,
@@ -135,6 +142,16 @@ elif cmd == 'call':
             print(json.dumps({'message': 'success'}))
         elif action == 'list-exemptions':
             print(json.dumps({'values': dpi.list_exemptions(e_uci)}))
+        elif action == 'get-catalog-status':
+            print(json.dumps(dpi.get_catalog_status()))
+        elif action == 'get-catalog-settings':
+            print(json.dumps(dpi.get_catalog_settings(e_uci)))
+        elif action == 'set-catalog-settings':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            dpi.set_catalog_settings(e_uci, bool(data['auto_update']), data['interval'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'update-catalog':
+            print(json.dumps(dpi.update_catalog()))
         elif action == 'list-devices':
             print(json.dumps({'values': dpi.list_devices(e_uci)}))
         elif action == 'list-popular':

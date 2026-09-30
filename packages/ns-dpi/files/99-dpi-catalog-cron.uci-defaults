@@ -1,0 +1,20 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+#
+# Application catalog: check every 10 minutes what is due (license change, update interval), and default settings
+#
+
+grep -q '/usr/sbin/nexwall-dpi-catalog' /etc/crontabs/root 2>/dev/null || \
+  echo '*/10 * * * * /usr/sbin/nexwall-dpi-catalog sync >/dev/null 2>&1' >> /etc/crontabs/root
+
+if ! uci -q get dpi.catalog > /dev/null; then
+  uci -q set dpi.catalog=catalog
+  uci -q set dpi.catalog.auto_update='1'
+  uci -q set dpi.catalog.interval='24'
+  uci -q commit dpi
+fi

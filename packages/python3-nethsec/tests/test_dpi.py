@@ -1162,3 +1162,36 @@ def test_object_used_by_rule_source(e_uci_objects, mock_load):
     name = dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [], ['objects/h1'])
     used, matches = objects.is_used_object(e_uci_objects, 'objects/h1')
     assert used and f'dpi/{name}' in matches
+
+
+def test_catalog_settings_defaults(e_uci):
+    assert dpi.get_catalog_settings(e_uci) == {'auto_update': True, 'interval': 24}
+
+
+def test_catalog_settings_are_stored_and_read_back(e_uci):
+    dpi.set_catalog_settings(e_uci, False, 12)
+    assert dpi.get_catalog_settings(e_uci) == {'auto_update': False, 'interval': 12}
+    dpi.set_catalog_settings(e_uci, True, 168)
+    assert dpi.get_catalog_settings(e_uci) == {'auto_update': True, 'interval': 168}
+
+
+@pytest.mark.parametrize('interval', [0, 169, -1, 12.5, '24', None, True])
+def test_catalog_settings_reject_a_bad_interval(e_uci, interval):
+    with pytest.raises(ValidationError) as exc:
+        dpi.set_catalog_settings(e_uci, True, interval)
+    assert exc.value.parameter == 'interval'
+
+
+def test_catalog_status_reads_the_client_output(mocker):
+    run = mocker.patch('nethsec.dpi.subprocess.run')
+    run.return_value.stdout = '{"source": "nexwall", "installed_version": "2026.09.30.1"}\n'
+    assert dpi.get_catalog_status()['installed_version'] == '2026.09.30.1'
+    assert run.call_args[0][0] == ['/usr/sbin/nexwall-dpi-catalog', 'status', '--json']
+
+
+def test_catalog_status_reports_a_failing_client(mocker):
+    run = mocker.patch('nethsec.dpi.subprocess.run')
+    run.return_value.stdout = ''
+    run.return_value.stderr = 'boom'
+    with pytest.raises(ValueError, match='boom'):
+        dpi.get_catalog_status()
