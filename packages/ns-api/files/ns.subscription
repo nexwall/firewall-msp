@@ -122,7 +122,7 @@ def info():
     state = evaluate(lic)
     if state == "not_registered":
         return {"systemd_id": "", "serial": serial, "state": state, "assigned": False,
-                "active": False, "trial_days_left": None, "expiration": 0,
+                "active": False, "trial_days_left": None, "expiration": 0, "company": "",
                 "entitlements": nx_license.entitlements()}
 
     now = datetime.now(timezone.utc)
@@ -136,6 +136,7 @@ def info():
         "state": state,
         "assigned": assigned,
         "plan": lic.get("partner_name", "-"),
+        "company": (lic.get("partner_name") or "") if assigned else "",
         "expiration": int(sub_end.timestamp()) * 1000 if sub_end else 0,
         "trial_end": int(trial_end.timestamp()) * 1000 if trial_end else 0,
         "trial_days_left": max(0, (trial_end - now).days) if trial_end and state == "trial" else None,
