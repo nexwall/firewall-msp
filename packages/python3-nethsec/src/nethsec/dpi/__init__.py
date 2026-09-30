@@ -739,3 +739,47 @@ def update_catalog() -> dict:
     """
     subprocess.run([CATALOG_CLIENT, 'update'], capture_output=True, text=True, timeout=180, check=False)
     return get_catalog_status()
+
+
+# --- inspection engine: what happens to traffic when the engine is overloaded or stopped ------------------------------
+
+ENGINE_ACTIONS = ('allow', 'block')
+ENGINE_QUEUE_LIMITS = (128, 256, 512, 1024)
+
+
+def get_engine_settings(e_uci: EUci) -> dict:
+    """
+    What happens to forwarded traffic when the inspection engine cannot keep up (its packet queue is full) or is not
+    running.
+
+    Returns:
+        dict with "overload_action" ("allow": traffic passes uninspected, default; "block": new connections are
+        dropped until the engine is back) and "queue_limit" (packets that may wait per queue)
+    """
+    action = str(e_uci.get('dpi', 'engine', 'overload_action', default='allow')).lower()
+    try:
+        limit = int(e_uci.get('dpi', 'engine', 'queue_limit', default='256'))
+    except ValueError:
+        limit = 256
+    return {
+        'overload_action': action if action in ENGINE_ACTIONS else 'allow',
+        'queue_limit': limit if limit in ENGINE_QUEUE_LIMITS else 256,
+    }
+
+
+def set_engine_settings(e_uci: EUci, overload_action: str, queue_limit: int):
+    """
+    Store the overload action and the queue limit (applied by ns-netifyd-configure when the DPI service reloads).
+
+    Raises:
+        - ValidationError: if the action is not "allow" or "block", or the limit is not one of 128, 256, 512, 1024
+    """
+    if overload_action not in ENGINE_ACTIONS:
+        raise ValidationError('overload_action', 'invalid', str(overload_action))
+    if isinstance(queue_limit, bool) or queue_limit not in ENGINE_QUEUE_LIMITS:
+        raise ValidationError('queue_limit', 'invalid', str(queue_limit))
+    if e_uci.get('dpi', 'engine', default=None) is None:
+        e_uci.set('dpi', 'engine', 'engine')
+    e_uci.set('dpi', 'engine', 'overload_action', overload_action)
+    e_uci.set('dpi', 'engine', 'queue_limit', str(queue_limit))
+    e_uci.save('dpi')

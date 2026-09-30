@@ -70,6 +70,11 @@ if cmd == 'list':
             'interval': 24
         },
         'update-catalog': {},
+        'get-engine-settings': {},
+        'set-engine-settings': {
+            'overload_action': 'allow',
+            'queue_limit': 256
+        },
         'list-devices': {},
         'list-popular': {
             'limit': 32,
@@ -167,6 +172,12 @@ elif cmd == 'call':
             print(json.dumps({'message': 'success'}))
         elif action == 'update-catalog':
             print(json.dumps(dpi.update_catalog()))
+        elif action == 'get-engine-settings':
+            print(json.dumps(dpi.get_engine_settings(e_uci)))
+        elif action == 'set-engine-settings':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            dpi.set_engine_settings(e_uci, data['overload_action'], data['queue_limit'])
+            print(json.dumps({'message': 'success'}))
         elif action == 'list-devices':
             print(json.dumps({'values': dpi.list_devices(e_uci)}))
         elif action == 'list-popular':

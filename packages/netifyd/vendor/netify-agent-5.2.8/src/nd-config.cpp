@@ -1226,6 +1226,7 @@ bool ndGlobalConfig::LoadCaptureSettings(void *config_reader,
           "queue_instances", 1);
         nfq->queue_maxlen = (unsigned)r->GetInteger(section,
           "queue_maxlen", 0);
+        nfq->fail_open = r->GetBoolean(section, "queue_fail_open", true);
 #ifdef _ND_ENABLE_CONNTRACK_COUNTERS
         nfq->conntrack_counters = conntrack_counters;
 #endif

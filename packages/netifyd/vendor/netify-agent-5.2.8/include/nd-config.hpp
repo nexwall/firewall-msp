@@ -285,6 +285,11 @@ typedef struct nd_config_nfq_t {
     // is full are accepted uninspected instead of waiting, so a slow or stuck
     // reader degrades to "not inspected" and never blocks traffic.
     unsigned queue_maxlen{ 0 };
+    // What the kernel does with a packet that arrives while the queue is full:
+    // true = accept it uninspected (fail open, default), false = drop it (fail
+    // closed: new connections wait for a retransmission until the engine
+    // catches up). The firewall rule decides the same for "no engine bound".
+    bool fail_open{ true };
 
     inline bool operator==(const struct nd_config_nfq_t &i) const {
         return (
@@ -293,7 +298,8 @@ typedef struct nd_config_nfq_t {
             conntrack_counters == i.conntrack_counters &&
             verdict == i.verdict &&
             mark == i.mark && mask == i.mask &&
-            queue_maxlen == i.queue_maxlen
+            queue_maxlen == i.queue_maxlen &&
+            fail_open == i.fail_open
         );
     }
 } nd_config_nfq;

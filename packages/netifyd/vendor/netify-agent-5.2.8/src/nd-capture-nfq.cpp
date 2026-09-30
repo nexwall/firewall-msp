@@ -383,10 +383,13 @@ ndCaptureNFQueue::ndCaptureNFQueue(int16_t cpu,
     nlh = nfq_nlmsg_put((char *)buffer, NFQNL_MSG_CONFIG, queue_id);
     nfq_nlmsg_cfg_put_params(nlh, NFQNL_COPY_PACKET, ndGC.max_capture_length);
 
-    long flags = NFQA_CFG_F_FAIL_OPEN |
-        NFQA_CFG_F_CONNTRACK | NFQA_CFG_F_GSO;
+    // The mask always names the fail-open flag so that "closed" actually
+    // clears it on a queue that was configured open before.
+    long flags = NFQA_CFG_F_CONNTRACK | NFQA_CFG_F_GSO;
+    if (iface->config_nfq.fail_open) flags |= NFQA_CFG_F_FAIL_OPEN;
+    long mask = NFQA_CFG_F_FAIL_OPEN | NFQA_CFG_F_CONNTRACK | NFQA_CFG_F_GSO;
     mnl_attr_put_u32(nlh, NFQA_CFG_FLAGS, htonl(flags));
-    mnl_attr_put_u32(nlh, NFQA_CFG_MASK, htonl(flags));
+    mnl_attr_put_u32(nlh, NFQA_CFG_MASK, htonl(mask));
 
     // Bound the kernel queue: when it is full the fail-open flag above makes
     // the kernel accept new packets uninspected (see nd_config_nfq).
@@ -407,12 +410,13 @@ ndCaptureNFQueue::ndCaptureNFQueue(int16_t cpu,
     nd_dprintf(
       "%s: NFQ capture thread created on queue #%u, thread #%u, "
       "counters: %s, buffer size: %lu, verdict: %s, mark: 0x%08x/0x%08x, "
-      "queue max length: %u\n",
+      "queue max length: %u, when full: %s\n",
       tag.c_str(),
       iface->config_nfq.queue_id, instance_id,
       (iface->config_nfq.conntrack_counters) ? "enabled" : "disabled",
       buffer_size, verdict_tag, mark_verdict, mark_mask,
-      iface->config_nfq.queue_maxlen);
+      iface->config_nfq.queue_maxlen,
+      iface->config_nfq.fail_open ? "accept" : "drop");
 }
 
 ndCaptureNFQueue::~ndCaptureNFQueue() {

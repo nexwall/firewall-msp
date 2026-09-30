@@ -1282,3 +1282,25 @@ def test_hits_tolerate_a_missing_or_broken_stats_file(tmp_path, mocker):
     broken = tmp_path / 'broken.json'
     broken.write_text('{ not json')
     assert dpi.load_hits(str(broken)) == {}
+
+
+def test_engine_settings_default_to_allow_and_256(e_uci):
+    assert dpi.get_engine_settings(e_uci) == {'overload_action': 'allow', 'queue_limit': 256}
+
+
+def test_engine_settings_are_stored_and_read_back(e_uci):
+    dpi.set_engine_settings(e_uci, 'block', 512)
+    assert dpi.get_engine_settings(e_uci) == {'overload_action': 'block', 'queue_limit': 512}
+    dpi.set_engine_settings(e_uci, 'allow', 128)
+    assert dpi.get_engine_settings(e_uci) == {'overload_action': 'allow', 'queue_limit': 128}
+
+
+@pytest.mark.parametrize('action,limit,parameter', [
+    ('drop', 256, 'overload_action'), ('', 256, 'overload_action'), (None, 256, 'overload_action'),
+    ('allow', 100, 'queue_limit'), ('allow', '256', 'queue_limit'), ('block', True, 'queue_limit'), ('allow', 2048, 'queue_limit'),
+])
+def test_engine_settings_reject_bad_values(e_uci, action, limit, parameter):
+    with pytest.raises(ValidationError) as exc:
+        dpi.set_engine_settings(e_uci, action, limit)
+    assert exc.value.parameter == parameter
+    assert dpi.get_engine_settings(e_uci) == {'overload_action': 'allow', 'queue_limit': 256}
