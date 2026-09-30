@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=netifyd
 PKG_VERSION:=5.2.8
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_MAINTAINER:=Nexwall <dev@nexwall.com.br>
 PKG_LICENSE:=GPL-3.0-or-later
 
@@ -136,9 +136,11 @@ define Package/netifyd/install
 	$(INSTALL_BIN) ./files/uci-defaults/99-netify-enable-nfqueue $(1)/etc/uci-defaults/99-netify-enable-nfqueue
 	$(INSTALL_BIN) ./files/uci-defaults/99-netify-disable-autoconfig $(1)/etc/uci-defaults/99-netify-disable-autoconfig
 	$(INSTALL_BIN) ./files/uci-defaults/99-netify-disable-coredumps $(1)/etc/uci-defaults/99-netify-disable-coredumps
+	$(INSTALL_BIN) ./files/uci-defaults/99-netify-watchdog $(1)/etc/uci-defaults/99-netify-watchdog
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/netifyd $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/ns-netifyd-configure $(1)/usr/sbin/ns-netifyd-configure
+	$(INSTALL_BIN) ./files/nexwall-nfq-watchdog $(1)/usr/sbin/nexwall-nfq-watchdog
 	# libnetifyd.so itself (built shared - see --enable-shared above), needed
 	# at runtime for the two plugins below to resolve their symbols against;
 	# and our own nx-proc-flows/nx-sink-http plugins (src/plugins/ in the

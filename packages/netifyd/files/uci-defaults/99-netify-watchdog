@@ -1,0 +1,10 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# stuck DPI/IPS packet queue watchdog, every minute
+grep -q nexwall-nfq-watchdog /etc/crontabs/root 2>/dev/null || \
+    echo '* * * * * /usr/sbin/nexwall-nfq-watchdog' >> /etc/crontabs/root
