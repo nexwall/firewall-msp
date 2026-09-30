@@ -137,6 +137,12 @@ func main() {
 	// reachable from outside localhost - see packages/victoria-logs)
 	authGroup.Any("/logs/query", methods.ProxyTo(methods.NewReverseProxy(configuration.Config.VictoriaLogsURL), "/select/logsql/query"))
 
+	// live rule/NAT tracing for the log viewer (fwtrace / drppkt): strictly validated, one session
+	// at a time, hard time limit - see methods/trace.go
+	authGroup.POST("/trace/start", middleware.BodyLimit(2<<10), methods.TraceStart)
+	authGroup.GET("/trace/:id", methods.TraceGet)
+	authGroup.POST("/trace/:id/stop", methods.TraceStop)
+
 	// handle missing endpoint
 	router.NoRoute(func(c *gin.Context) {
 		c.JSON(http.StatusNotFound, structs.Map(response.StatusNotFound{
