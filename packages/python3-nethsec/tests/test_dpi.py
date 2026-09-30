@@ -1,3 +1,4 @@
+import json
 import pathlib
 
 import pytest
@@ -687,6 +688,9 @@ def test_list_rules(e_uci_with_data, mock_load):
             'interface': 'GREEN_1',
             'device': 'eth0',
             'source': ['192.168.100.1', '192.168.100.2', 'user:giacomo', 'group:g1'],
+            'description': '',
+            'log': False,
+            'hits': {'matches': 0, 'last_match': 0},
             'action': 'block',
             'criteria': [
                 {
@@ -721,6 +725,9 @@ def test_list_rules(e_uci_with_data, mock_load):
             'interface': 'GREEN_2',
             'device': 'eth4',
             'source': [],
+            'description': '',
+            'log': False,
+            'hits': {'matches': 0, 'last_match': 0},
             'action': 'block',
             'criteria': [
                 {
@@ -739,6 +746,9 @@ def test_list_rules(e_uci_with_data, mock_load):
             'interface': 'RED_1',
             'device': 'eth1',
             'source': [],
+            'description': '',
+            'log': False,
+            'hits': {'matches': 0, 'last_match': 0},
             'action': 'video',
             'criteria': [
                 {
@@ -764,6 +774,9 @@ def test_store_rule(e_uci, mock_load):
             'interface': 'GREEN_1',
             'device': 'eth0',
             'source': [],
+            'description': '',
+            'log': False,
+            'hits': {'matches': 0, 'last_match': 0},
             'action': 'best_effort',
             'criteria': [
                 {
@@ -819,6 +832,9 @@ def test_delete_rule(e_uci_with_data, mock_load):
             'interface': 'RED_1',
             'device': 'eth1',
             'source': [],
+            'description': '',
+            'log': False,
+            'hits': {'matches': 0, 'last_match': 0},
             'action': 'video',
             'criteria': [
                 {
@@ -847,6 +863,9 @@ def test_edit_rule(e_uci_with_data, mock_load):
             'interface': 'GREEN_1',
             'device': 'eth0',
             'source': [],
+            'description': '',
+            'log': False,
+            'hits': {'matches': 0, 'last_match': 0},
             'action': 'voice',
             'criteria': [
                 {
@@ -870,6 +889,9 @@ def test_edit_rule(e_uci_with_data, mock_load):
             'interface': 'GREEN_2',
             'device': 'eth4',
             'source': [],
+            'description': '',
+            'log': False,
+            'hits': {'matches': 0, 'last_match': 0},
             'action': 'block',
             'criteria': [
                 {
@@ -888,6 +910,9 @@ def test_edit_rule(e_uci_with_data, mock_load):
             'interface': 'RED_1',
             'device': 'eth1',
             'source': [],
+            'description': '',
+            'log': False,
+            'hits': {'matches': 0, 'last_match': 0},
             'action': 'video',
             'criteria': [
                 {
@@ -1195,3 +1220,65 @@ def test_catalog_status_reports_a_failing_client(mocker):
     run.return_value.stderr = 'boom'
     with pytest.raises(ValueError, match='boom'):
         dpi.get_catalog_status()
+
+
+def test_rule_name_and_log_are_stored_and_listed(e_uci_objects, mock_load):
+    name = dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [], None, '  Block social  ', True)
+    rule = [r for r in dpi.list_rules(e_uci_objects) if r['config-name'] == name][0]
+    assert rule['description'] == 'Block social' and rule['log'] is True
+
+
+def test_edit_keeps_name_and_log_when_not_sent_and_changes_them_when_sent(e_uci_objects, mock_load):
+    name = dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [], None, 'Keep me', True)
+    dpi.edit_rule(e_uci_objects, name, False, 'eth0', 'block', ['netify.linkedin'], [])  # older caller
+    rule = [r for r in dpi.list_rules(e_uci_objects) if r['config-name'] == name][0]
+    assert rule['description'] == 'Keep me' and rule['log'] is True and rule['enabled'] is False
+    dpi.edit_rule(e_uci_objects, name, True, 'eth0', 'block', ['netify.linkedin'], [], None, '', False)
+    rule = [r for r in dpi.list_rules(e_uci_objects) if r['config-name'] == name][0]
+    assert rule['description'] == '' and rule['log'] is False
+
+
+@pytest.mark.parametrize('description', ['x' * 81, 'two\nlines', 5])
+def test_rule_name_is_validated(e_uci_objects, mock_load, description):
+    with pytest.raises(ValidationError) as exc:
+        dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [], None, description)
+    assert exc.value.parameter == 'description'
+
+
+def test_set_rules_enabled_changes_several_rules_and_the_engine_flag(e_uci_objects, mock_load):
+    a = dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [])
+    b = dpi.add_rule(e_uci_objects, True, 'eth1', 'block', ['netify.linkedin'], [])
+    dpi.set_rules_enabled(e_uci_objects, [a, b], False)
+    assert [r['enabled'] for r in dpi.list_rules(e_uci_objects) if r['config-name'] in (a, b)] == [False, False]
+    assert e_uci_objects.get('dpi', 'config', 'enabled') == '0'
+    dpi.set_rules_enabled(e_uci_objects, [a], True)
+    assert e_uci_objects.get('dpi', 'config', 'enabled') == '1'
+
+
+def test_set_rules_enabled_changes_nothing_when_a_name_is_wrong(e_uci_objects, mock_load):
+    a = dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [])
+    for names in ([], [a, 'nope'], [a, 'config']):
+        with pytest.raises(ValidationError) as exc:
+            dpi.set_rules_enabled(e_uci_objects, names, False)
+        assert exc.value.parameter == 'config-names'
+    assert [r['enabled'] for r in dpi.list_rules(e_uci_objects) if r['config-name'] == a] == [True]
+
+
+def test_hits_are_read_from_the_engine_stats_and_merged(tmp_path, mocker, e_uci_objects, mock_load):
+    name = dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [])
+    stats = tmp_path / 'stats.json'
+    stats.write_text(json.dumps({'updated': 1, 'actions': {name: {'matches': 7, 'last_match': 1790000000},
+                                                           'analyzed': {'matches': 99, 'last_match': 1}, 'bad': 5}}))
+    mocker.patch.object(dpi, 'DPI_STATS_FILE', str(stats))
+    assert dpi.load_hits() == {name: {'matches': 7, 'last_match': 1790000000},
+                               'analyzed': {'matches': 99, 'last_match': 1}}
+    rule = [r for r in dpi.list_rules(e_uci_objects) if r['config-name'] == name][0]
+    assert rule['hits'] == {'matches': 7, 'last_match': 1790000000}
+
+
+def test_hits_tolerate_a_missing_or_broken_stats_file(tmp_path, mocker):
+    mocker.patch.object(dpi, 'DPI_STATS_FILE', str(tmp_path / 'none.json'))
+    assert dpi.load_hits() == {}
+    broken = tmp_path / 'broken.json'
+    broken.write_text('{ not json')
+    assert dpi.load_hits(str(broken)) == {}

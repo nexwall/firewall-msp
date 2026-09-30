@@ -267,6 +267,38 @@ def list_popular(e_uci: EUci, limit: int = None, page: int = 1) -> dict:
     }
 
 
+DPI_STATS_FILE = '/var/run/netifyd/dpi-actions-stats.json'
+DESCRIPTION_MAX = 80
+
+
+def load_hits(path: str = None) -> dict:
+    """
+    Per-rule match counters written by the flow-actions plugin.
+
+    Returns:
+        dict rule config name -> {"matches": flows matched since the counter started, "last_match": unix time}; empty
+        when the engine has not written any yet
+    """
+    try:
+        with open(path or DPI_STATS_FILE) as f:
+            actions = json.load(f).get('actions', {})
+    except (OSError, ValueError):
+        return {}
+    return {name: {'matches': int(v.get('matches', 0)), 'last_match': int(v.get('last_match', 0))}
+            for name, v in actions.items() if isinstance(v, dict)}
+
+
+def _clean_description(description) -> str:
+    if description is None:
+        return ''
+    if not isinstance(description, str):
+        raise ValidationError('description', 'invalid', str(description))
+    description = description.strip()
+    if len(description) > DESCRIPTION_MAX or any(ord(c) < 32 for c in description):
+        raise ValidationError('description', 'invalid', description[:DESCRIPTION_MAX])
+    return description
+
+
 def list_rules(e_uci: EUci) -> list[dict[str]]:
     """
     Index all rules
@@ -275,13 +307,15 @@ def list_rules(e_uci: EUci) -> list[dict[str]]:
       - e_uci: euci instance
 
     Returns:
-        list of dicts, each dict contains the property "config-name", "description", "enabled", "interface" and "blocks"
+        list of dicts, each dict contains the properties "config-name", "description", "enabled", "device", "interface",
+        "source", "log", "hits" ("matches" and "last_match"), "action" and "criteria"
     """
     rules = list[dict[str]]()
     fetch_rules = utils.get_all_by_type(e_uci, 'dpi', 'rule')
 
     if not fetch_rules:
         return rules
+    hits = load_hits()
 
     for rule_name in fetch_rules.keys():
         # skipping rules with criteria, must be custom entries
@@ -301,6 +335,9 @@ def list_rules(e_uci: EUci) -> list[dict[str]]:
             if interface is not None:
                 data_rule['interface'] = interface
             data_rule['source'] = list(rule.get('source', []))
+            data_rule['description'] = rule.get('description', '')
+            data_rule['log'] = rule.get('log', '0') == '1'
+            data_rule['hits'] = hits.get(rule_name, {'matches': 0, 'last_match': 0})
             data_rule['action'] = rule.get('action')
             # get the blocked applications/protocols
             data_rule['criteria'] = list[dict[str]]()
@@ -412,8 +449,10 @@ def build_criteria(device, matches: list[str], matchers: list[str], vlan_id=None
 
 
 def __save_rule_data(e_uci: EUci, config_name: str, enabled: bool, device: str, action: str, applications: list[str],
-                     protocols: list[str], sources: list[str] = None):
+                     protocols: list[str], sources: list[str] = None, description: str = None, log: bool = None):
     sources = [validate_source(e_uci, x) for x in (sources or [])]
+    if description is not None:
+        description = _clean_description(description)
     if is_any_device(device) and not sources:
         # a rule bound to nothing would apply to every host on every interface
         raise ValidationError('device', 'required', device or '')
@@ -429,6 +468,14 @@ def __save_rule_data(e_uci: EUci, config_name: str, enabled: bool, device: str, 
         e_uci.set('dpi', config_name, 'source', sources)
     else:
         e_uci.delete('dpi', config_name, 'source')
+    # None = keep what is stored (older callers do not send these)
+    if description is not None:
+        if description:
+            e_uci.set('dpi', config_name, 'description', description)
+        else:
+            e_uci.delete('dpi', config_name, 'description')
+    if log is not None:
+        e_uci.set('dpi', config_name, 'log', '1' if log else '0')
 
 def __save_exemption_data(e_uci: EUci, config_name: str, criteria: str, description: str, enabled: bool):
     e_uci.set('dpi', config_name, 'enabled', enabled)
@@ -447,7 +494,7 @@ def __toggle_engine(e_uci: EUci):
         e_uci.set('dpi', 'config', 'enabled', '0')
 
 def add_rule(e_uci: EUci, enabled: bool, device: str, action: str, applications: list[str],
-             protocols: list[str], sources: list[str] = None) -> str:
+             protocols: list[str], sources: list[str] = None, description: str = '', log: bool = False) -> str:
     """
     Store a new rule
 
@@ -460,16 +507,18 @@ def add_rule(e_uci: EUci, enabled: bool, device: str, action: str, applications:
       - applications: list of applications to block
       - protocols: list of protocols to block
       - sources: optional networks/hosts/objects the rule applies to, every host when empty
+      - description: optional name of the rule (up to 80 characters)
+      - log: log blocked connections of this rule
 
     Raises:
-        - ValidationError: if a source is invalid or neither device nor sources are given
+        - ValidationError: if a source or the description is invalid, or neither device nor sources are given
 
     Returns:
         config name of the rule created
     """
     rule_name = utils.get_random_id()
     e_uci.set('dpi', rule_name, 'rule')
-    __save_rule_data(e_uci, rule_name, enabled, device, action, applications, protocols, sources)
+    __save_rule_data(e_uci, rule_name, enabled, device, action, applications, protocols, sources, description, log)
     __toggle_engine(e_uci)
     e_uci.save('dpi')
     return rule_name
@@ -489,7 +538,7 @@ def delete_rule(e_uci: EUci, config_name: str):
 
 
 def edit_rule(e_uci: EUci, config_name: str, enabled: bool, device: str, action: str, applications: list[str],
-              protocols: list[str], sources: list[str] = None):
+              protocols: list[str], sources: list[str] = None, description: str = None, log: bool = None):
     """
     Edit a rule
 
@@ -502,6 +551,8 @@ def edit_rule(e_uci: EUci, config_name: str, enabled: bool, device: str, action:
       - applications: array of applications to block
       - protocols: array of protocols to block
       - sources: optional networks/hosts/objects the rule applies to, every host when empty
+      - description: name of the rule; None keeps the stored one
+      - log: log blocked connections; None keeps the stored setting
 
     Raises
         - ValidationError: if the config name is invalid
@@ -509,10 +560,28 @@ def edit_rule(e_uci: EUci, config_name: str, enabled: bool, device: str, action:
     if e_uci.get('dpi', config_name, default=None) is None:
         raise ValidationError('config-name', 'invalid', config_name)
 
-    __save_rule_data(e_uci, config_name, enabled, device, action, applications, protocols, sources)
+    __save_rule_data(e_uci, config_name, enabled, device, action, applications, protocols, sources, description, log)
     __toggle_engine(e_uci)
 
     e_uci.save('dpi')
+
+def set_rules_enabled(e_uci: EUci, config_names: list[str], enabled: bool):
+    """
+    Enable or disable several rules at once.
+
+    Raises:
+        - ValidationError: if the list is empty or a name is not a DPI rule (nothing is changed then)
+    """
+    if not isinstance(config_names, list) or not config_names:
+        raise ValidationError('config-names', 'required', '')
+    for name in config_names:
+        if not isinstance(name, str) or e_uci.get('dpi', name, default=None) != 'rule':
+            raise ValidationError('config-names', 'invalid', str(name))
+    for name in config_names:
+        e_uci.set('dpi', name, 'enabled', enabled)
+    __toggle_engine(e_uci)
+    e_uci.save('dpi')
+
 
 def list_exemptions(e_uci: EUci) -> list[dict[str]]:
     """

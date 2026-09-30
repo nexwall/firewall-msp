@@ -85,7 +85,6 @@ for ex_name in exemptions:
         else:
             config["exemptions"].append(criteria)
 
-rcount = 0
 valid_actions = ['block', 'bulk', 'best_effort', 'video', 'voice']
 for section in u.get_all('dpi'):
     if u.get('dpi', section) != 'rule':
@@ -136,13 +135,13 @@ for section in u.get_all('dpi'):
     targets = [rule['action']]
     if 'log' in rule and rule['log'] == '1':
         targets.append('log')
-    config["actions"][f"rule{rcount}"] = {
+    # the action is named after the rule, so the plugin's per-rule hit counters map back to it
+    config["actions"][section] = {
         "enabled": rule['enabled'] == '1',
         "criteria": criteria,
         "targets": targets,
         "exemptions": rule.get('exemption', [])
     }
-    rcount = rcount + 1
 
 # add global analyzed for all flows that are not blocked
 config["actions"]["analyzed"] = {

@@ -28,6 +28,8 @@
 
 #include <arpa/inet.h>
 #include <condition_variable>
+#include <cstdio>
+#include <ctime>
 #include <fstream>
 #include <libnetfilter_conntrack/libnetfilter_conntrack.h>
 #include <map>
@@ -66,6 +68,8 @@ public:
     ndPluginNxFlowActions(const string &tag, const ndPlugin::Params &params)
       : ndPluginProcessor(tag, params) {
         if (! GetConfiguration().empty()) LoadConfig(GetConfiguration());
+        stats_started = time(nullptr);
+        SyncStats(vector<Action>());
         ct_handle = nfct_open(CONNTRACK, 0);
         if (ct_handle == nullptr)
             nd_printf("nx-proc-flow-actions: nfct_open failed: %s\n", strerror(errno));
@@ -80,6 +84,7 @@ public:
 
     virtual void *Entry(void) {
         while (! ShouldTerminate()) {
+            WriteStatsIfDue();
             PendingUpdate up;
             if (! PopQueue(up)) continue;
             ApplyUpdate(up);
@@ -113,6 +118,7 @@ public:
             nd_printf("nx-proc-flow-actions: reload failed, keeping the current rules\n");
             return;
         }
+        SyncStats(old_actions);
         nd_printf("nx-proc-flow-actions: reloaded %zu action(s)\n", actions.size());
     }
 
@@ -143,6 +149,9 @@ public:
                 continue;
             }
             if (! matched) continue;
+
+            // once per flow: DPI_COMPLETE fires once, DPI_UPDATE can repeat
+            if (event == Event::DPI_COMPLETE) CountMatch(action.name);
 
             for (auto &target_name : action.targets) {
                 auto it = targets.find(target_name);
@@ -177,6 +186,73 @@ private:
     vector<int> managed_bits;  // every bit any enabled ctlabel target can set
 
     struct nfct_handle *ct_handle = nullptr;
+
+    // Per-rule match counters for the web interface ("hits"): flows whose
+    // detection completed while the rule matched, since the plugin started or
+    // the rule last changed. Written to STATS_FILE every STATS_INTERVAL seconds.
+    struct ActionStat {
+        uint64_t matches = 0;
+        int64_t last_match = 0;
+    };
+    static constexpr int STATS_INTERVAL = 10;
+    static constexpr const char *STATS_FILE = "/var/run/netifyd/dpi-actions-stats.json";
+    map<string, ActionStat> stats;
+    mutex stats_lock;
+    int64_t stats_started = 0;
+    int64_t stats_written = 0;
+
+    // Keep the counter of a rule that did not change, start from zero for a
+    // new or changed one, drop the ones of removed rules.
+    void SyncStats(const vector<Action> &old_actions) {
+        lock_guard<mutex> l(stats_lock);
+        map<string, ActionStat> next;
+        for (auto &a : actions) {
+            bool same = false;
+            for (auto &o : old_actions) {
+                if (o.name == a.name && o.criteria == a.criteria &&
+                  o.targets == a.targets && o.exemptions == a.exemptions) {
+                    same = true;
+                    break;
+                }
+            }
+            auto it = stats.find(a.name);
+            next[a.name] = (same && it != stats.end()) ? it->second : ActionStat();
+        }
+        stats.swap(next);
+    }
+
+    void CountMatch(const string &name) {
+        lock_guard<mutex> l(stats_lock);
+        auto &st = stats[name];
+        st.matches++;
+        st.last_match = time(nullptr);
+    }
+
+    void WriteStatsIfDue() {
+        int64_t now = time(nullptr);
+        if (now - stats_written < STATS_INTERVAL) return;
+        stats_written = now;
+        ordered_json j;
+        j["updated"] = now;
+        j["since"] = stats_started;
+        j["actions"] = ordered_json::object();
+        {
+            lock_guard<mutex> l(stats_lock);
+            for (auto &it : stats) {
+                j["actions"][it.first] = {
+                    { "matches", it.second.matches },
+                    { "last_match", it.second.last_match }
+                };
+            }
+        }
+        string tmp = string(STATS_FILE) + ".tmp";
+        {
+            ofstream f(tmp);
+            if (! f.is_open()) return;
+            f << j.dump();
+        }
+        if (rename(tmp.c_str(), STATS_FILE) != 0) remove(tmp.c_str());
+    }
 
     mutex queue_lock;
     condition_variable queue_cond;

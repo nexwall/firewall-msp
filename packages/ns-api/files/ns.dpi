@@ -27,7 +27,9 @@ if cmd == 'list':
             'device': 'str',
             'applications': 'str',
             'protocols': 'str',
-            'source': 'str'
+            'source': 'str',
+            'description': 'str',
+            'log': False
         },
         'delete-rule': {
             'config-name': 'str'
@@ -38,7 +40,13 @@ if cmd == 'list':
             'device': 'str',
             'applications': 'str',
             'protocols': 'str',
-            'source': 'str'
+            'source': 'str',
+            'description': 'str',
+            'log': False
+        },
+        'set-rules-enabled': {
+            'config-names': 'str',
+            'enabled': False
         },
         'add-exemption': {
             'criteria': 'str',
@@ -115,7 +123,13 @@ elif cmd == 'call':
             if data['enabled']:
                 nx_license.require('security_services')
             dpi.add_rule(e_uci, data['enabled'], data.get('device', ''), 'block', data['applications'], data['protocols'],
-                         data.get('source', []))
+                         data.get('source', []), data.get('description', ''), bool(data.get('log', False)))
+            print(json.dumps({'message': 'success'}))
+        elif action == 'set-rules-enabled':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            if data['enabled']:
+                nx_license.require('security_services')
+            dpi.set_rules_enabled(e_uci, data['config-names'], bool(data['enabled']))
             print(json.dumps({'message': 'success'}))
         elif action == 'delete-rule':
             data = json.JSONDecoder().decode(sys.stdin.read())
@@ -126,7 +140,8 @@ elif cmd == 'call':
             if data['enabled']:
                 nx_license.require('security_services')
             dpi.edit_rule(e_uci, data['config-name'], data['enabled'], data.get('device', ''), 'block', data['applications'],
-                          data['protocols'], data.get('source', []))
+                          data['protocols'], data.get('source', []), data.get('description'),
+                          None if data.get('log') is None else bool(data['log']))
             print(json.dumps({'message': 'success'}))
         elif action == 'add-exemption':
             data = json.JSONDecoder().decode(sys.stdin.read())
