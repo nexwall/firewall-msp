@@ -23,5 +23,6 @@ reload_service()
 }
 
 service_triggers() {
-    procd_add_reload_trigger "dpi"
+    # objects, dhcp leases and users can be rule sources: resolve their addresses again when they change
+    procd_add_reload_trigger "dpi" "objects" "dhcp" "users"
 }

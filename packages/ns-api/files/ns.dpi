@@ -26,7 +26,8 @@ if cmd == 'list':
             'enabled': False,
             'device': 'str',
             'applications': 'str',
-            'protocols': 'str'
+            'protocols': 'str',
+            'source': 'str'
         },
         'delete-rule': {
             'config-name': 'str'
@@ -36,7 +37,8 @@ if cmd == 'list':
             'enabled': False,
             'device': 'str',
             'applications': 'str',
-            'protocols': 'str'
+            'protocols': 'str',
+            'source': 'str'
         },
         'add-exemption': {
             'criteria': 'str',
@@ -105,7 +107,8 @@ elif cmd == 'call':
             data = json.JSONDecoder().decode(sys.stdin.read())
             if data['enabled']:
                 nx_license.require('security_services')
-            dpi.add_rule(e_uci, data['enabled'], data['device'], 'block', data['applications'], data['protocols'])
+            dpi.add_rule(e_uci, data['enabled'], data.get('device', ''), 'block', data['applications'], data['protocols'],
+                         data.get('source', []))
             print(json.dumps({'message': 'success'}))
         elif action == 'delete-rule':
             data = json.JSONDecoder().decode(sys.stdin.read())
@@ -115,8 +118,8 @@ elif cmd == 'call':
             data = json.JSONDecoder().decode(sys.stdin.read())
             if data['enabled']:
                 nx_license.require('security_services')
-            dpi.edit_rule(e_uci, data['config-name'], data['enabled'], data['device'], 'block', data['applications'],
-                          data['protocols'])
+            dpi.edit_rule(e_uci, data['config-name'], data['enabled'], data.get('device', ''), 'block', data['applications'],
+                          data['protocols'], data.get('source', []))
             print(json.dumps({'message': 'success'}))
         elif action == 'add-exemption':
             data = json.JSONDecoder().decode(sys.stdin.read())

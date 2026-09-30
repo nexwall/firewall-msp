@@ -9,7 +9,8 @@ from euci import EUci
 import json
 import subprocess
 import os
-from nethsec import utils, objects
+import sys
+from nethsec import utils, objects, dpi
 
 def get_interface_ips(interface):
     ret = list()
@@ -95,18 +96,29 @@ for section in u.get_all('dpi'):
 
     device = rule.get('device', '*')
 
+    vlan_id = None
+    base_if = None
+    if not dpi.is_any_device(device):
+        for item in utils.get_all_by_type(u, 'network', 'device').values():
+            if item.get('vid', None) is not None and item.get('name', '') == device:
+                vlan_id = item.get('vid', None)
+                base_if = item.get('ifname', None)
+                break
+
     if 'criteria' in rule:
         # criteria has precedence over sources, protocol, category and application
-        criteria = rule['criteria'].replace('"',"'")
+        criteria = rule['criteria'].replace('"', "'")
+        if vlan_id is not None and base_if is not None:
+            criteria = f'vlan_id == {vlan_id} && {criteria}'
     else:
-        # generate criteria from source, protocol, category and application
+        # generate criteria from device, source, protocol, category and application
         sources = []
         for source in rule.get('source', []):
-            if objects.is_object_id(source):
-                for ip in objects.get_object_ips(u, source):
-                    sources.append(f'local_ip == {ip}')
-            else: # custom local IPs
-                sources.append(f'local_ip == {source}')
+            sources.extend(dpi.resolve_source(u, source))
+        if rule.get('source', []) and not sources:
+            # sources given but none resolves (e.g. an empty object): never widen the rule to every host
+            print(f"dpi-config: rule {section} skipped, its sources have no addresses", file=sys.stderr)
+            continue
 
         applications = []
         for app in rule.get('application', []):
@@ -116,27 +128,10 @@ for section in u.get_all('dpi'):
         for cat in rule.get('category', []):
             applications.append(f"category == '{cat.lower()}'")
 
-        sources_s = ' or '.join(sources)
-        applications_s = ' or '.join(applications)
-        criteria = f'(iface_nfq_src == \'{device}\' or iface_nfq_dst == \'{device}\') && '
-        if len(sources) < 1:
-            criteria += f'({applications_s}) ;'
-        elif len(applications) < 1:
-            criteria += f'({sources_s}) ;'
-        else:
-            criteria += f'({sources_s}) && ({applications_s}) ;'
-
-    vlan_id = None
-    base_if = None
-    for item in utils.get_all_by_type(u, 'network', 'device').values():
-        if item.get('vid', None) is not None and item.get('name', '') == device:
-            vlan_id = item.get('vid', None)
-            base_if = item.get('ifname', None)
-            break
-
-    if vlan_id is not None and base_if is not None:
-        criteria = f'vlan_id == {vlan_id} && {criteria}'
-        device = base_if
+        criteria = dpi.build_criteria(device, sources, applications, vlan_id if base_if is not None else None)
+        if criteria is None:
+            print(f"dpi-config: rule {section} skipped, no interface and no source", file=sys.stderr)
+            continue
 
     targets = [rule['action']]
     if 'log' in rule and rule['log'] == '1':

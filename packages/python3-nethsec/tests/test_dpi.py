@@ -686,6 +686,7 @@ def test_list_rules(e_uci_with_data, mock_load):
             'enabled': True,
             'interface': 'GREEN_1',
             'device': 'eth0',
+            'source': ['192.168.100.1', '192.168.100.2', 'user:giacomo', 'group:g1'],
             'action': 'block',
             'criteria': [
                 {
@@ -719,6 +720,7 @@ def test_list_rules(e_uci_with_data, mock_load):
             'enabled': False,
             'interface': 'GREEN_2',
             'device': 'eth4',
+            'source': [],
             'action': 'block',
             'criteria': [
                 {
@@ -736,6 +738,7 @@ def test_list_rules(e_uci_with_data, mock_load):
             'enabled': True,
             'interface': 'RED_1',
             'device': 'eth1',
+            'source': [],
             'action': 'video',
             'criteria': [
                 {
@@ -760,6 +763,7 @@ def test_store_rule(e_uci, mock_load):
             'enabled': True,
             'interface': 'GREEN_1',
             'device': 'eth0',
+            'source': [],
             'action': 'best_effort',
             'criteria': [
                 {
@@ -814,6 +818,7 @@ def test_delete_rule(e_uci_with_data, mock_load):
             'enabled': True,
             'interface': 'RED_1',
             'device': 'eth1',
+            'source': [],
             'action': 'video',
             'criteria': [
                 {
@@ -841,6 +846,7 @@ def test_edit_rule(e_uci_with_data, mock_load):
             'enabled': False,
             'interface': 'GREEN_1',
             'device': 'eth0',
+            'source': [],
             'action': 'voice',
             'criteria': [
                 {
@@ -863,6 +869,7 @@ def test_edit_rule(e_uci_with_data, mock_load):
             'enabled': False,
             'interface': 'GREEN_2',
             'device': 'eth4',
+            'source': [],
             'action': 'block',
             'criteria': [
                 {
@@ -880,6 +887,7 @@ def test_edit_rule(e_uci_with_data, mock_load):
             'enabled': True,
             'interface': 'RED_1',
             'device': 'eth1',
+            'source': [],
             'action': 'video',
             'criteria': [
                 {
@@ -1065,3 +1073,92 @@ def test_edit_exemption(e_uci_with_data):
 def test_delete_exemption(e_uci):
     dpi.delete_exemption(e_uci, 'exemp1')
     assert dpi.list_exemptions(e_uci) == []
+
+
+objects_config = """
+config host 'h1'
+    option name 'servers'
+    option family 'ipv4'
+    list ipaddr '10.0.5.0/24'
+    list ipaddr '10.0.6.1-10.0.6.3'
+
+config host 'h2'
+    option name 'empty'
+    option family 'ipv4'
+"""
+
+
+@pytest.fixture
+def e_uci_objects(e_uci: EUci):
+    for name, content in (('objects', objects_config), ('mwan3', '')):
+        with pathlib.Path(e_uci.confdir()).joinpath(name).open('w') as fp:
+            fp.write(content)
+    return e_uci
+
+
+@pytest.mark.parametrize('source', ['10.0.0.0/24', '10.1.2.3', 'fd00::/64', 'objects/h1'])
+def test_validate_source_valid(e_uci_objects, source):
+    assert dpi.validate_source(e_uci_objects, source) == source
+
+
+@pytest.mark.parametrize('source', ['abc', '10.0.0.0/33', 'objects/nope', '', None])
+def test_validate_source_invalid(e_uci_objects, source):
+    with pytest.raises(ValidationError) as exc:
+        dpi.validate_source(e_uci_objects, source)
+    assert exc.value.parameter == 'source'
+
+
+def test_resolve_source(e_uci_objects):
+    resolved = dpi.resolve_source(e_uci_objects, 'objects/h1')
+    assert sorted(resolved) == ['10.0.5.0/24', '10.0.6.1/32', '10.0.6.2/31']
+    assert dpi.resolve_source(e_uci_objects, 'objects/h2') == []
+    assert dpi.resolve_source(e_uci_objects, '10.1.0.0/16') == ['10.1.0.0/16']
+
+
+@pytest.mark.parametrize('device,matches,vlan,expected', [
+    ('br-lan', [], None,
+     "(iface_nfq_src == 'br-lan' or iface_nfq_dst == 'br-lan') && (app == 'a') ;"),
+    ('', ['10.0.0.0/24'], None, "(local_ip == 10.0.0.0/24) && (app == 'a') ;"),
+    ('*', ['10.0.0.0/24', '10.0.1.5'], None,
+     "(local_ip == 10.0.0.0/24 or local_ip == 10.0.1.5) && (app == 'a') ;"),
+    ('br-lan', ['10.0.0.0/24'], None,
+     "(iface_nfq_src == 'br-lan' or iface_nfq_dst == 'br-lan') && (local_ip == 10.0.0.0/24) && (app == 'a') ;"),
+    ('br-lan.10', [], 10,
+     "vlan_id == 10 && (iface_nfq_src == 'br-lan.10' or iface_nfq_dst == 'br-lan.10') && (app == 'a') ;"),
+])
+def test_build_criteria(device, matches, vlan, expected):
+    assert dpi.build_criteria(device, matches, ["app == 'a'"], vlan) == expected
+
+
+def test_build_criteria_unrestricted_is_none():
+    assert dpi.build_criteria('', [], ["app == 'a'"]) is None
+
+
+def test_store_rule_requires_device_or_source(e_uci_objects, mock_load):
+    with pytest.raises(ValidationError) as exc:
+        dpi.add_rule(e_uci_objects, True, '', 'block', ['netify.linkedin'], [])
+    assert exc.value.parameter == 'device'
+
+
+def test_store_rule_with_source_only(e_uci_objects, mock_load):
+    name = dpi.add_rule(e_uci_objects, True, '', 'block', ['netify.linkedin'], [], ['objects/h1', '192.168.9.0/24'])
+    rule = [r for r in dpi.list_rules(e_uci_objects) if r['config-name'] == name][0]
+    assert rule['source'] == ['objects/h1', '192.168.9.0/24']
+    assert 'interface' not in rule
+    assert e_uci_objects.get('dpi', name, 'device', default=None) is None
+
+
+def test_edit_rule_changes_and_clears_source(e_uci_objects, mock_load):
+    name = dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [], ['10.0.0.0/24'])
+    dpi.edit_rule(e_uci_objects, name, True, 'eth0', 'block', ['netify.linkedin'], [], [])
+    rule = [r for r in dpi.list_rules(e_uci_objects) if r['config-name'] == name][0]
+    assert rule['source'] == []
+    with pytest.raises(ValidationError):
+        dpi.edit_rule(e_uci_objects, name, True, '', 'block', ['netify.linkedin'], [], [])
+
+
+def test_object_used_by_rule_source(e_uci_objects, mock_load):
+    from nethsec import objects
+    name = dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [], ['objects/h1'])
+    used, matches = objects.is_used_object(e_uci_objects, 'objects/h1')
+    assert used and f'dpi/{name}' in matches

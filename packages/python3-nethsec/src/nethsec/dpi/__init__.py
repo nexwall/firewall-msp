@@ -9,6 +9,7 @@
 Library that handles the DPI rules.
 """
 
+import ipaddress
 import json
 import subprocess
 from fnmatch import fnmatch
@@ -16,7 +17,7 @@ from fnmatch import fnmatch
 import math
 from euci import EUci
 
-from nethsec import utils, firewall
+from nethsec import utils, firewall, objects
 from nethsec.utils import ValidationError
 
 
@@ -295,9 +296,11 @@ def list_rules(e_uci: EUci) -> list[dict[str]]:
             data_rule['enabled'] = rule.get('enabled', '1') == '1'
             data_rule['device'] = rule.get('device', '*')
             # from device, get the interface
-            interface = utils.get_interface_from_device(e_uci, data_rule['device'])
+            interface = None if is_any_device(data_rule['device']) else \
+                utils.get_interface_from_device(e_uci, data_rule['device'])
             if interface is not None:
                 data_rule['interface'] = interface
+            data_rule['source'] = list(rule.get('source', []))
             data_rule['action'] = rule.get('action')
             # get the blocked applications/protocols
             data_rule['criteria'] = list[dict[str]]()
@@ -324,13 +327,108 @@ def list_rules(e_uci: EUci) -> list[dict[str]]:
     return rules
 
 
+ANY_DEVICE = ('', '*')
+
+
+def is_any_device(device) -> bool:
+    """True when a rule is not bound to a specific interface."""
+    return device is None or device in ANY_DEVICE
+
+
+def validate_source(e_uci: EUci, item: str) -> str:
+    """
+    Validate one rule source: an object id (objects/, dhcp/, users/) that exists, or an IP address / CIDR network.
+
+    Returns:
+        the source, normalized (CIDR as network address form is kept as typed, stripped)
+
+    Raises:
+        - ValidationError: if the source is neither an existing object nor a valid IP/CIDR
+    """
+    if not isinstance(item, str) or not item.strip():
+        raise ValidationError('source', 'invalid', str(item))
+    item = item.strip()
+    if objects.is_object_id(item):
+        if not objects.object_exists(e_uci, item):
+            raise ValidationError('source', 'object_not_found', item)
+        return item
+    try:
+        ipaddress.ip_network(item, strict=False)
+    except ValueError:
+        raise ValidationError('source', 'invalid', item)
+    return item
+
+
+def resolve_source(e_uci: EUci, item: str) -> list[str]:
+    """
+    Resolve one source to the IP/CIDR strings the DPI engine matches on. IP ranges (a-b) found in objects are
+    converted to CIDR blocks. Entries that are not understood are dropped.
+    """
+    raw = objects.get_object_ips(e_uci, item) if objects.is_object_id(item) else [item]
+    result = []
+    for entry in raw:
+        entry = str(entry).strip()
+        if '-' in entry:
+            try:
+                first, last = (ipaddress.ip_address(x.strip()) for x in entry.split('-', 1))
+                result.extend(str(n) for n in ipaddress.summarize_address_range(first, last))
+            except ValueError:
+                continue
+            continue
+        try:
+            ipaddress.ip_network(entry, strict=False)
+        except ValueError:
+            continue
+        result.append(entry)
+    return result
+
+
+def build_criteria(device, matches: list[str], matchers: list[str], vlan_id=None):
+    """
+    Build the flow-actions criteria of a rule.
+
+    Args:
+      - device: device the rule is bound to, empty or '*' for any device
+      - matches: resolved IP/CIDR source list, empty for every host
+      - matchers: expressions like "app == 'x'", "proto == 'y'" joined by 'or'
+      - vlan_id: VLAN id when the device is a VLAN, the caller passes the base device
+
+    Returns:
+        the criteria string, or None when it would not restrict anything at all
+    """
+    parts = []
+    if not is_any_device(device):
+        parts.append(f"(iface_nfq_src == '{device}' or iface_nfq_dst == '{device}')")
+    if matches:
+        parts.append('(' + ' or '.join(f'local_ip == {m}' for m in matches) + ')')
+    if not parts:
+        return None
+    if matchers:
+        parts.append('(' + ' or '.join(matchers) + ')')
+    criteria = ' && '.join(parts)
+    if vlan_id is not None:
+        criteria = f'vlan_id == {vlan_id} && {criteria}'
+    return criteria + ' ;'
+
+
 def __save_rule_data(e_uci: EUci, config_name: str, enabled: bool, device: str, action: str, applications: list[str],
-                     protocols: list[str]):
+                     protocols: list[str], sources: list[str] = None):
+    sources = [validate_source(e_uci, x) for x in (sources or [])]
+    if is_any_device(device) and not sources:
+        # a rule bound to nothing would apply to every host on every interface
+        raise ValidationError('device', 'required', device or '')
     e_uci.set('dpi', config_name, 'enabled', enabled)
-    e_uci.set('dpi', config_name, 'device', device)
+    if is_any_device(device):
+        e_uci.delete('dpi', config_name, 'device')
+    else:
+        e_uci.set('dpi', config_name, 'device', device)
     e_uci.set('dpi', config_name, 'action', action)
     e_uci.set('dpi', config_name, 'application', applications)
     e_uci.set('dpi', config_name, 'protocol', protocols)
+    if sources:
+        e_uci.set('dpi', config_name, 'source', sources)
+    else:
+        e_uci.delete('dpi', config_name, 'source')
 
 def __save_exemption_data(e_uci: EUci, config_name: str, criteria: str, description: str, enabled: bool):
     e_uci.set('dpi', config_name, 'enabled', enabled)
@@ -349,7 +447,7 @@ def __toggle_engine(e_uci: EUci):
         e_uci.set('dpi', 'config', 'enabled', '0')
 
 def add_rule(e_uci: EUci, enabled: bool, device: str, action: str, applications: list[str],
-             protocols: list[str]) -> str:
+             protocols: list[str], sources: list[str] = None) -> str:
     """
     Store a new rule
 
@@ -361,13 +459,17 @@ def add_rule(e_uci: EUci, enabled: bool, device: str, action: str, applications:
       - device: device to listen and apply the rule on
       - applications: list of applications to block
       - protocols: list of protocols to block
+      - sources: optional networks/hosts/objects the rule applies to, every host when empty
+
+    Raises:
+        - ValidationError: if a source is invalid or neither device nor sources are given
 
     Returns:
         config name of the rule created
     """
     rule_name = utils.get_random_id()
     e_uci.set('dpi', rule_name, 'rule')
-    __save_rule_data(e_uci, rule_name, enabled, device, action, applications, protocols)
+    __save_rule_data(e_uci, rule_name, enabled, device, action, applications, protocols, sources)
     __toggle_engine(e_uci)
     e_uci.save('dpi')
     return rule_name
@@ -387,7 +489,7 @@ def delete_rule(e_uci: EUci, config_name: str):
 
 
 def edit_rule(e_uci: EUci, config_name: str, enabled: bool, device: str, action: str, applications: list[str],
-              protocols: list[str]):
+              protocols: list[str], sources: list[str] = None):
     """
     Edit a rule
 
@@ -399,6 +501,7 @@ def edit_rule(e_uci: EUci, config_name: str, enabled: bool, device: str, action:
       - action: apply specific action to rule, can be 'block', 'bulk', 'best_effort', 'video' or 'voice'
       - applications: array of applications to block
       - protocols: array of protocols to block
+      - sources: optional networks/hosts/objects the rule applies to, every host when empty
 
     Raises
         - ValidationError: if the config name is invalid
@@ -406,7 +509,7 @@ def edit_rule(e_uci: EUci, config_name: str, enabled: bool, device: str, action:
     if e_uci.get('dpi', config_name, default=None) is None:
         raise ValidationError('config-name', 'invalid', config_name)
 
-    __save_rule_data(e_uci, config_name, enabled, device, action, applications, protocols)
+    __save_rule_data(e_uci, config_name, enabled, device, action, applications, protocols, sources)
     __toggle_engine(e_uci)
 
     e_uci.save('dpi')
