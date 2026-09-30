@@ -406,11 +406,13 @@ ndCaptureNFQueue::ndCaptureNFQueue(int16_t cpu,
 
     nd_dprintf(
       "%s: NFQ capture thread created on queue #%u, thread #%u, "
-      "counters: %s, buffer size: %lu, verdict: %s, mark: 0x%08x/0x%08x\n",
+      "counters: %s, buffer size: %lu, verdict: %s, mark: 0x%08x/0x%08x, "
+      "queue max length: %u\n",
       tag.c_str(),
       iface->config_nfq.queue_id, instance_id,
       (iface->config_nfq.conntrack_counters) ? "enabled" : "disabled",
-      buffer_size, verdict_tag, mark_verdict, mark_mask);
+      buffer_size, verdict_tag, mark_verdict, mark_mask,
+      iface->config_nfq.queue_maxlen);
 }
 
 ndCaptureNFQueue::~ndCaptureNFQueue() {
