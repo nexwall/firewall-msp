@@ -17,6 +17,7 @@ import ipaddress
 import subprocess
 from euci import EUci
 from nethsec import utils, ovpn, firewall, users, objects, ipconf
+from nethsec import license as nx_license
 from datetime import datetime, timezone
 import tarfile
 import io
@@ -724,6 +725,19 @@ def disable_user(ovpninstance, username):
     u.commit("users")
     return {"result": "success"}
 
+def sslvpn_accounts(u, only_enabled=False, exclude=None):
+    # an account is a user with the openvpn_enabled option set (certificate issued)
+    count = 0
+    for uid, user in utils.get_all_by_type(u, 'users', 'user').items():
+        value = user.get('openvpn_enabled')
+        if value is None or uid == exclude:
+            continue
+        if only_enabled and value != '1':
+            continue
+        count += 1
+    return count
+
+
 def enable_user(ovpninstance, username):
     u = EUci()
     try:
@@ -736,6 +750,9 @@ def enable_user(ovpninstance, username):
     if user_id == None:
         return utils.validation_error("username", "user_not_found", username)
 
+    err = nx_license.limit_error('sslvpn_users', sslvpn_accounts(u, only_enabled=True, exclude=user_id))
+    if err:
+        return err
     u.set("users", user_id, "openvpn_enabled", "1")
     u.commit("users")
     return {"result": "success"}
@@ -752,6 +769,10 @@ def add_user(args):
     user_id = get_user_id(args["username"], db_users)
     if user_id == None:
         return utils.validation_error("username", "user_not_in_db", args["username"])
+    # license: number of SSL VPN accounts (an existing account being re-created does not count twice)
+    err = nx_license.limit_error('sslvpn_users', sslvpn_accounts(u, exclude=user_id))
+    if err:
+        return err
 
     crt_path = user_pki_path(ovpninstance, "issued", f"{args['username']}.crt")
     if not crt_path:

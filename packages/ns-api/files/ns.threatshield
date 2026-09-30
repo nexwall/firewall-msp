@@ -17,6 +17,7 @@ import ipaddress
 from euci import EUci
 from nethsec.utils import ValidationError, validation_error, generic_error
 from nethsec import utils, firewall
+from nethsec import license as nx_license
 import base64
 import time
 import subprocess
@@ -533,6 +534,8 @@ def edit_settings(e_uci, payload):
         raise ValidationError('enabled', 'required')
     if not isinstance(payload['enabled'], bool):
         raise ValidationError('enabled', 'invalid', payload['enabled'])
+    if payload['enabled']:
+        nx_license.require('security_services')
 
     if payload['enabled']:
         # validate all other payload options
@@ -769,6 +772,7 @@ def dns_list_settings(e_uci):
 
 def dns_edit_settings(e_uci, payload):
     if payload['enabled']:
+        nx_license.require('security_services')
         zones = payload.get('zones', ['lan'])
         if 'wan' in zones:
             raise ValidationError('zones', 'wan_zone_not_allowed', zones)
@@ -1047,6 +1051,8 @@ def set_geoblocking_configuration(e_uci, payload):
         raise ValidationError('enabled', 'required')
     if not isinstance(payload['enabled'], bool):
         raise ValidationError('enabled', 'invalid', payload['enabled'])
+    if payload['enabled']:
+        nx_license.require('security_services')
     
     if 'countries' not in payload:
         raise ValidationError('countries', 'required')

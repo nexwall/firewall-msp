@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 import nethsec.firewall
+from nethsec import license as nx_license
 from euci import EUci
 from nethsec.utils import ValidationError, validation_error
 import ipaddress
@@ -77,6 +78,7 @@ elif cmd == 'call':
             if not isinstance(data['enabled'], bool):
                 raise ValidationError('enabled', 'invalid')
             if data['enabled']:
+                nx_license.require('security_services')
                 validation = {
                     'proplus': bool,
                     'username': str,

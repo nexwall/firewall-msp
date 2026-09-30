@@ -13,6 +13,7 @@ import os
 import subprocess
 from datetime import datetime, timezone
 from nethsec import utils
+from nethsec import license as nx_license
 
 LICENSE_FILE = '/etc/nexwall-license/license.json'
 LICENSE_CLIENT = '/usr/sbin/nexwall-license-register'
@@ -121,7 +122,8 @@ def info():
     state = evaluate(lic)
     if state == "not_registered":
         return {"systemd_id": "", "serial": serial, "state": state, "assigned": False,
-                "active": False, "trial_days_left": None, "expiration": 0}
+                "active": False, "trial_days_left": None, "expiration": 0,
+                "entitlements": nx_license.entitlements()}
 
     now = datetime.now(timezone.utc)
     trial_end = _ts(lic.get("trial_end"))
@@ -138,9 +140,7 @@ def info():
         "trial_end": int(trial_end.timestamp()) * 1000 if trial_end else 0,
         "trial_days_left": max(0, (trial_end - now).days) if trial_end and state == "trial" else None,
         "active": state == "subscribed",
-        "entitlements": lic.get("entitlements") if state in ("subscribed", "trial") else {
-            "security_services": False, "reverse_proxy": False, "ha": False,
-            "limits": {"ipsec_s2s": 1, "wireguard": 1, "sslvpn_users": 3}},
+        "entitlements": nx_license.entitlements(),
     }
 
 

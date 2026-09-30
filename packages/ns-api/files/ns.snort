@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from glob import glob
 
 from nethsec import utils
+from nethsec import license as nx_license
 from euci import EUci
 from nethsec.utils import ValidationError
 
@@ -171,6 +172,8 @@ def __save_settings():
         raise ValidationError('enabled', 'required')
     if not isinstance(data['enabled'], bool):
         raise ValidationError('enabled', 'invalid')
+    if data['enabled']:
+        nx_license.require('security_services')
     if 'ns_policy' not in data:
         raise ValidationError('ns_policy', 'required')
     if data['ns_policy'] not in ['connectivity', 'balanced', 'security']:

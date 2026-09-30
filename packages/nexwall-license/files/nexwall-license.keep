@@ -3,3 +3,4 @@
 /etc/nexwall-license/serial
 /etc/nexwall-license/device_token
 /etc/nexwall-license/license.json
+/etc/nexwall-license/first_seen

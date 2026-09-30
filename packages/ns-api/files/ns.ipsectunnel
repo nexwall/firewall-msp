@@ -12,6 +12,7 @@ import json
 import subprocess
 from euci import EUci
 from nethsec import utils, firewall, ipsec, ovpn
+from nethsec import license as nx_license
 
 sas_list = None
 
@@ -212,8 +213,18 @@ def list_tunnels():
 
     return {"tunnels": ret}
 
+def enabled_tunnels(u, exclude=None):
+    # a tunnel without the option is enabled, see list_tunnels
+    return [r for r in utils.get_all_by_type(u, 'ipsec', 'remote')
+            if r != exclude and u.get('ipsec', r, 'enabled', default='1') == '1']
+
+
 def add_tunnel(args):
     u = EUci()
+    # license: number of site-to-site tunnels
+    err = nx_license.limit_error('ipsec_s2s', len(utils.get_all_by_type(u, 'ipsec', 'remote')))
+    if err:
+        return err
     iname = utils.get_random_id()
     return setup_tunnel(u, iname, args)
 
@@ -303,6 +314,11 @@ def setup_tunnel(u, iname, args):
 def edit_tunnel(args):
     u = EUci()
     id = args['id']
+    # license: editing must not be a way to switch on a tunnel beyond the limit
+    if str(args.get('enabled', '1')) == '1' and u.get('ipsec', id, 'enabled', default='1') != '1':
+        err = nx_license.limit_error('ipsec_s2s', len(enabled_tunnels(u, exclude=id)))
+        if err:
+            return err
     
     # Verify tunnel exists
     try:
@@ -525,6 +541,9 @@ def enable_tunnel(id):
         u.get("ipsec", id)
     except:
         return utils.validation_error("tunnel_not_found")
+    err = nx_license.limit_error('ipsec_s2s', len(enabled_tunnels(u, exclude=id)))
+    if err:
+        return err
     try:
         u.set('ipsec', id, 'enabled', '1')
         u.save('ipsec')

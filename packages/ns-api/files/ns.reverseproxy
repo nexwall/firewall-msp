@@ -16,6 +16,7 @@ from datetime import datetime
 from euci import EUci
 from nethsec import reverse_proxy
 from nethsec import utils
+from nethsec import license as nx_license
 from nethsec.utils import ValidationError
 
 
@@ -241,6 +242,9 @@ elif cmd == 'call':
     action = sys.argv[2]
     try:
         e_uci = EUci()
+        # license: creating or changing published services needs the reverse proxy entitlement
+        if action in ('add-path', 'add-domain', 'edit-path', 'edit-domain'):
+            nx_license.require('reverse_proxy')
         if action == 'list-certificates':
             print(json.dumps({
                 'values': reverse_proxy.certificate_list(e_uci)

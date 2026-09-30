@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-license
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -22,7 +22,8 @@ define Package/nexwall-license
 	DEPENDS:= \
 		+python3 \
 		+python3-requests \
-		+python3-cryptodome
+		+python3-cryptodome \
+		+python3-nethsec
 	PKGARCH:=all
 endef
 
@@ -39,6 +40,7 @@ define Package/nexwall-license/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/nexwall-license-register $(1)/usr/sbin/nexwall-license-register
 	$(INSTALL_BIN) ./files/nexwall-serial $(1)/usr/sbin/nexwall-serial
+	$(INSTALL_BIN) ./files/nexwall-license-enforce $(1)/usr/sbin/nexwall-license-enforce
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/nexwall-license.init $(1)/etc/init.d/nexwall-license

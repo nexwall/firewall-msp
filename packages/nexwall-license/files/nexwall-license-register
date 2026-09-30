@@ -119,6 +119,14 @@ def save_token(token):
         f.write(token + "\n")
 
 
+def run_enforce():
+    # apply the (possibly changed) entitlements to the running configuration; never blocks registration
+    try:
+        subprocess.run(["/usr/sbin/nexwall-license-enforce"], capture_output=True, timeout=300)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def fail(msg):
     print(msg, file=sys.stderr)
     sys.exit(1)
@@ -160,6 +168,7 @@ def manual_register(partner_id, unlock_key):
     set_uci("nexwall-license.main.unlock_key", unlock_key)
     subprocess.run(["uci", "commit", "nexwall-license"], check=True)
     report(payload)
+    run_enforce()
 
 
 def auto_checkin():
@@ -176,6 +185,7 @@ def auto_checkin():
         save_token(data["device_token"])
     save_license(payload)
     report(payload)
+    run_enforce()
 
 
 def report(payload):

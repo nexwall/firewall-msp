@@ -16,6 +16,7 @@ import subprocess
 import hashlib
 import time
 from nethsec import utils
+from nethsec import license as nx_license
 from jinja2 import Template
 import ipaddress
 import shlex
@@ -1298,7 +1299,10 @@ else:
         else:
             # Paramaters:
             args = json.loads(sys.stdin.read())
-            if action == "init-local":
+            license_error = nx_license.feature_error('ha') if action in ("init-local", "init-remote", "enable") else None
+            if license_error:
+                ret = license_error
+            elif action == "init-local":
                 ret = init_local(args.get('role'), args.get('primary_node_ip'), args.get('backup_node_ip'), args.get('virtual_ip'), args.get('lan_interface'), args.get('pubkey'), args.get('password'))
             elif action == "init-remote":
                 ret = init_remote(args.get('ssh_password'), args.get('lan_interface'))
