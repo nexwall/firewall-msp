@@ -258,7 +258,7 @@ cmd = sys.argv[1]
 
 if cmd == 'list':
     print(json.dumps({
-        "login": {"host": "my.nethspot.com", "username": "myuser", "password": "mypassword"},
+        "login": {"host": "portal-manager.example.com", "username": "myuser", "password": "mypassword"},
         "list-sessions": {},
         "list-parents": {},
         "list-devices": {},

@@ -2062,7 +2062,7 @@ Response example:
 
 Login to remote hotspot manager:
 ```
-api-cli ns.dedalo login --data '{"host": "my.nethspot.com", "username": "myuser", "password": "mypass"}'
+api-cli ns.dedalo login --data '{"host": "portal-manager.example.com", "username": "myuser", "password": "mypass"}'
 ```
 
 Successful response example:
