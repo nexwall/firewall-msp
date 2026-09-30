@@ -57,17 +57,37 @@ public:
         return nullptr;
     }
 
+    // Byte accounting. netifyd only shows its plugins the first packets of each flow for
+    // inspection, but keeps counting the rest of the flow (from conntrack) in per-interval
+    // counters that it resets after every update tick, right after broadcasting FLOW_MAP.
+    // Reading them at that moment gives exactly the bytes seen since the previous tick for
+    // EVERY active flow, including long transfers that skip inspection. Emitting at DPI events
+    // instead (as an earlier version did) counted only the first packets of a flow - a 38 MB
+    // download showed up as 14 KB - and would double count what the next tick reports.
+    virtual void DispatchProcessorEvent(Event event, ndFlowMap *flow_map) {
+        if (event != Event::FLOW_MAP || sink_channels.empty() || ! flow_map) return;
+
+        const size_t buckets = flow_map->GetBuckets();
+        for (size_t b = 0; b < buckets; b++) {
+            auto &fm = flow_map->Acquire(b);
+            for (auto &it : fm.map) {
+                auto &flow = it.second;
+                // an expired flow's remainder is sent by FLOW_EXPIRE; netifyd never resets it
+                if (flow->flags.expired.load()) continue;
+                // counters of a flow that has not finished initial detection are not reset yet:
+                // they keep growing and are reported in full once it has
+                if (! flow->flags.detection_init.load()) continue;
+                if (! flow->stats.lower_packets.load() && ! flow->stats.upper_packets.load()) continue;
+                QueueEntry(flow);
+            }
+            flow_map->ReleaseBucket(b);
+        }
+    }
+
     virtual void DispatchProcessorEvent(Event event, ndFlow::Ptr &flow) {
         if (sink_channels.empty() || ! flow) return;
-
-        switch (event) {
-        case Event::DPI_COMPLETE:
-        case Event::DPI_UPDATE:
-        case Event::FLOW_EXPIRE:
-            QueueEntry(flow);
-            break;
-        default: break;
-        }
+        // whatever the flow moved since the last tick
+        if (event == Event::FLOW_EXPIRE) QueueEntry(flow);
     }
 
 private:
@@ -133,7 +153,8 @@ private:
         entry["other_ip"] = jflow.value("other_ip", "");
         entry["other_port"] = jflow.value("other_port", 0);
         entry["other_type"] = jflow.value("other_type", "");
-        entry["packets"] = jflow.value("total_packets", 0);
+        // packets in this interval, like the byte counters (not the flow's lifetime total)
+        entry["packets"] = (uint64_t)flow->stats.lower_packets.load() + (uint64_t)flow->stats.upper_packets.load();
 
         lock_guard<mutex> l(batch_lock);
         batch.push_back(std::move(entry));

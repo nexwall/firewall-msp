@@ -66,6 +66,29 @@ public:
         }
     }
 
+    // Live statistics for the flows view. netifyd shows plugins only the first packets of a flow
+    // for inspection but keeps counting the rest (from conntrack) in per-interval counters that it
+    // resets right after broadcasting FLOW_MAP each update tick. The flows service adds each
+    // "flow_stats" message's bytes to the flow and takes the lifetime total from it, so without
+    // this a flow only ever showed the bytes seen at DPI completion. Same reasoning as
+    // nx-proc-aggregator.cpp.
+    virtual void DispatchProcessorEvent(Event event, ndFlowMap *flow_map) {
+        if (event != Event::FLOW_MAP || sink_channels.empty() || ! flow_map) return;
+
+        const size_t buckets = flow_map->GetBuckets();
+        for (size_t b = 0; b < buckets; b++) {
+            auto &fm = flow_map->Acquire(b);
+            for (auto &it : fm.map) {
+                auto &flow = it.second;
+                if (flow->flags.expired.load()) continue;
+                if (! flow->flags.detection_init.load()) continue;
+                if (! flow->stats.lower_packets.load() && ! flow->stats.upper_packets.load()) continue;
+                Queue("flow_stats", flow);
+            }
+            flow_map->ReleaseBucket(b);
+        }
+    }
+
 private:
     ndPlugin::Channels sink_channels;
     mutex queue_lock;
