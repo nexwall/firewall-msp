@@ -228,23 +228,20 @@ def validate(rules_path):
     return p.returncode == 0, (p.stdout + p.stderr)[-1500:]
 
 
+def cached(version):
+    return bool(version) and os.path.exists(os.path.join(version_dir(version), 'rules-%s.rules' % policy()))
+
+
 def cmd_apply(download=False):
     state = load_state()
     version = state.get('version')
-    names_needed = None
-    if download or not version or not os.path.exists(os.path.join(version_dir(version), 'rules-%s.rules' % policy())):
+    if download or not cached(version):
         rc = cmd_update(force=True)
-        if rc != 0:
-            return rc
         state = load_state()
         version = state.get('version')
-    if not version or not os.path.exists(os.path.join(version_dir(version), 'rules-%s.rules' % policy())):
-        # the policy was changed since the last download: fetch the file for the new one
-        rc = cmd_update(force=True)
-        if rc != 0:
+        # not licensed (3) always means "use the Community rules"; any other failure keeps the verified bundle we already have
+        if rc == 3 or (rc != 0 and not cached(version)):
             return rc
-        state = load_state()
-        version = state.get('version')
     rules_dir = os.path.join(config_dir(), 'rules')
     os.makedirs(rules_dir, exist_ok=True)
     target = os.path.join(rules_dir, 'snort.rules')

@@ -160,3 +160,19 @@ def test_rules_that_snort_rejects_never_replace_the_running_ones(env):
     assert installed(env) == before
     assert 'rejected' in env.load_state()['last_result']
     assert not os.path.exists(os.path.join(str(env._env['tmp']), 'cfg', 'rules', 'snort.rules.new'))
+
+
+def test_server_unreachable_keeps_using_the_cached_bundle(env):
+    assert env.cmd_apply() == 0
+    env._env['state']['manifest'] = ({}, {})            # every request now fails
+    env._env['state']['calls'].clear()
+    monkey_fail = lambda path: (_ for _ in ()).throw(RuntimeError('network down'))
+    env.fetch = monkey_fail
+    assert env.cmd_apply(download=True) == 0             # the cached rules are still good
+    assert installed(env) is not None
+
+
+def test_unlicensed_unit_always_falls_back_even_with_a_cache(env):
+    env.cmd_apply()
+    env._env['state']['license'] = 'unlicensed'
+    assert env.cmd_apply(download=True) == 3
