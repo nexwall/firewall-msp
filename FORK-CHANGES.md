@@ -49,7 +49,7 @@ Record of modifications to files inherited from NethSecurity (upstream commit `9
 - **Branding** (`builder/configure-build.sh`): GRUB title, distribution name, product, manufacturer, home, support
   and bug URLs, package repository URL. Login banner link (`patches/package/base-files/100-base-files-banner.patch`).
   Image file name prefix `nethsecurity-` -> `nexwall-` (`packages/ns-plug/files/ns-download`).
-- **Build parallelism** (`builder/entrypoint.sh`, `build-nethsec.sh`): `make -j` uses `MAKE_JOBS` when set,
+- **Build parallelism** (`builder/entrypoint.sh`, `build-nexwall.sh`): `make -j` uses `MAKE_JOBS` when set,
   otherwise one job per CPU (previous behavior).
 - **Licensing files**: `LICENSES/`, `NOTICE.md`, `FORK-CHANGES.md`, `THIRD_PARTY_LICENSES.md`, `README.md`.
 

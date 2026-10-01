@@ -22,7 +22,7 @@ Source code of Nexwall Firewall, an OpenWrt-based firewall distribution for mana
 | `config/` | feature selection and per-target configuration |
 | `files/` | root filesystem overlay |
 | `patches/` | patches applied to upstream OpenWrt feeds |
-| `builder/`, `build-nethsec.sh`, `build.conf.defaults` | image definition and build scripts |
+| `builder/`, `build-nexwall.sh`, `build.conf.defaults` | image definition and build scripts |
 
 Every package Makefile records the exact revision of the source it uses.
 
