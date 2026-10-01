@@ -11,7 +11,7 @@ NOW = 1_790_000_000
 def paths(tmp_path):
     plugin = tmp_path / 'libnx-proc-flow-actions.so'
     plugin.write_text('x')
-    return {'stats_path': str(tmp_path / 'stats.json'), 'plugin_path': str(plugin), 'now': NOW}
+    return {'stats_path': str(tmp_path / 'stats.json'), 'plugin_path': str(plugin), 'now': NOW, 'core': 'up'}
 
 
 def stats(paths, **fields):
@@ -60,3 +60,17 @@ def test_garbage_stats_file_is_not_a_crash(paths):
     with open(paths['stats_path'], 'w') as f:
         f.write('not json')
     assert dpi_enforcement(state='subscribed', security_services=True, **paths)['cause'] == 'engine'
+
+
+def test_installed_license_service_that_does_not_answer_is_the_cause(paths):
+    stats(paths, license='no token')
+    paths['core'] = 'down'
+    # even though every license question would read "unlicensed" without the core
+    r = dpi_enforcement(state='unlicensed', security_services=False, **paths)
+    assert r['active'] is False and r['cause'] == 'service'
+
+
+def test_community_build_without_a_core_reads_the_license_normally(paths):
+    stats(paths, license='no token')
+    paths['core'] = 'absent'
+    assert dpi_enforcement(state='unlicensed', security_services=False, **paths)['cause'] == 'license'
