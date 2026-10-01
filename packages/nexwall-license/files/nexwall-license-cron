@@ -3,22 +3,12 @@
 # Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Every 15 minutes: an unregistered or unassigned unit checks in (so an assignment made on the
-# license server takes effect quickly); a licensed unit is refreshed about once a day. The
-# script itself decides, see nexwall-license-register --scheduled. Replaces the older daily
-# entry on upgraded units.
+# The license core (daemon) schedules its own check-ins, enforcement and updates. Older images ran them from
+# cron: remove those entries on upgrade, and make sure the service is enabled.
 
 touch /etc/crontabs/root
 sed -i '/nexwall-license-register/d' /etc/crontabs/root
-# with the compiled core installed its daemon does the scheduling; without it, cron does
-if [ ! -x /usr/sbin/nexwall-licensed ]; then
-	echo '*/15 * * * * /usr/sbin/nexwall-license-register --scheduled >/dev/null 2>&1' >> /etc/crontabs/root
-fi
-# a trial or subscription can also end while the unit is offline: re-apply the entitlements regularly
 sed -i '/nexwall-license-enforce/d' /etc/crontabs/root
-if [ ! -x /usr/sbin/nexwall-licensed ]; then
-	echo '*/5 * * * * /usr/sbin/nexwall-license-enforce >/dev/null 2>&1' >> /etc/crontabs/root
-fi
 
 /etc/init.d/nexwall-license enable 2>/dev/null
 

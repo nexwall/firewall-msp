@@ -1,173 +1,114 @@
-import base64
 import json
-from datetime import datetime, timedelta, timezone
+import socket
+import threading
 
 import pytest
-from Crypto.Hash import SHA256
-from Crypto.PublicKey import RSA
-from Crypto.Signature import pkcs1_15
 
 from nethsec import license as lic
 
-NOW = datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc)
+
+@pytest.fixture()
+def core(tmp_path, monkeypatch):
+    """A fake license core on a unix socket; `answers` maps command -> reply, `calls` records requests."""
+    path = str(tmp_path / 'lic.sock')
+    monkeypatch.setattr(lic, 'DAEMON_SOCKET', path)
+    monkeypatch.setattr(lic, 'CORE_BINARY', str(tmp_path / 'not-installed'))
+    state = {'answers': {}, 'calls': []}
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(path)
+    srv.listen(8)
+
+    def serve():
+        while True:
+            try:
+                conn, _ = srv.accept()
+            except OSError:
+                return
+            req = json.loads(conn.recv(4096))
+            state['calls'].append(req['cmd'])
+            conn.sendall(json.dumps(state['answers'].get(req['cmd'], {'ok': False})).encode())
+            conn.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    yield state
+    srv.close()
 
 
-KEY = RSA.generate(2048)
-OTHER_KEY = RSA.generate(2048)
-
-
-def envelope(fields, key=KEY):
-    payload = json.dumps(fields, sort_keys=True).encode()
-    sig = pkcs1_15.new(key).sign(SHA256.new(payload))
-    return {'payload': base64.b64encode(payload).decode(), 'signature': base64.b64encode(sig).decode(),
-            'algorithm': 'RSA-SHA256'}
-
-
-def write(tmp_path, signer=KEY, **fields):
-    fields = {'hwid': 'abc', 'valid_until': (NOW + timedelta(days=14)).isoformat(), **fields}
-    p = tmp_path / 'license.json'
-    p.write_text(json.dumps(envelope(fields, signer)))
-    return str(p)
-
-
-def kw(tmp_path, license_file=None):
-    pub = tmp_path / 'pubkey.pem'
-    pub.write_bytes(KEY.publickey().export_key())
-    return {'now': NOW, 'license_path': license_file or str(tmp_path / 'none.json'),
-            'first_seen_path': str(tmp_path / 'first_seen'), 'pubkey_path': str(pub)}
-
-
-def test_subscribed_is_full(tmp_path):
-    f = write(tmp_path, status='active', license_state='subscribed',
-              subscription_end=(NOW + timedelta(days=5)).isoformat())
-    assert lic.state(**kw(tmp_path, f)) == 'subscribed'
-    e = lic.entitlements(**kw(tmp_path, f))
+def test_answers_come_from_the_core(core):
+    core['answers'] = {
+        'state': {'ok': True, 'state': 'subscribed'},
+        'entitlements': {'ok': True, 'state': 'subscribed', 'entitlements': lic.FULL},
+        'payload': {'ok': True, 'payload': {'hwid': 'x', 'partner_name': 'Acme'}},
+    }
+    assert lic.state() == 'subscribed'
+    e = lic.entitlements()
     assert e['security_services'] and e['reverse_proxy'] and e['ha'] and e['limits']['ipsec_s2s'] is None
+    assert lic.load()['partner_name'] == 'Acme'
+    assert lic.feature_error('ha') is None and lic.limit_error('ipsec_s2s', 50) is None
 
 
-def test_subscription_ended_offline_drops_to_unlicensed(tmp_path):
-    f = write(tmp_path, status='active', license_state='subscribed',
-              subscription_end=(NOW - timedelta(days=1)).isoformat())
-    assert lic.state(**kw(tmp_path, f)) == 'unlicensed'
-
-
-def test_trial_is_full_until_it_ends(tmp_path):
-    f = write(tmp_path, status='unassigned', license_state='trial', trial_end=(NOW + timedelta(days=3)).isoformat())
-    assert lic.state(**kw(tmp_path, f)) == 'trial'
-    assert lic.entitlements(**kw(tmp_path, f))['security_services'] is True
-    f = write(tmp_path, status='unassigned', license_state='trial', trial_end=(NOW - timedelta(seconds=1)).isoformat())
-    assert lic.state(**kw(tmp_path, f)) == 'unlicensed'
-
-
-def test_unlicensed_limits(tmp_path):
-    f = write(tmp_path, status='expired', license_state='unlicensed')
-    e = lic.entitlements(**kw(tmp_path, f))
+def test_no_core_means_unlicensed_and_limited(tmp_path, monkeypatch):
+    monkeypatch.setattr(lic, 'DAEMON_SOCKET', str(tmp_path / 'missing.sock'))
+    monkeypatch.setattr(lic, 'CORE_BINARY', str(tmp_path / 'not-installed'))
+    assert lic.state() == 'unlicensed' and lic.load() is None
+    e = lic.entitlements()
     assert e['security_services'] is False and e['reverse_proxy'] is False and e['ha'] is False
     assert e['limits'] == {'ipsec_s2s': 1, 'wireguard': 1, 'sslvpn_users': 3}
 
 
-def test_never_registered_gets_a_short_bootstrap_window(tmp_path):
-    k = kw(tmp_path)
-    assert lic.state(**k) == 'trial'                       # first sight recorded now
-    assert lic.state(**dict(k, now=NOW + timedelta(hours=23))) == 'trial'
-    assert lic.state(**dict(k, now=NOW + timedelta(hours=25))) == 'unlicensed'
-
-
-def test_forged_license_is_rejected(tmp_path):
-    f = write(tmp_path, signer=OTHER_KEY, status='active', license_state='subscribed',
-              subscription_end=(NOW + timedelta(days=300)).isoformat())
-    k = kw(tmp_path, f)
-    assert lic.load(f, k['pubkey_path']) is None
-    assert lic.state(**k) == 'unlicensed'
-    assert lic.entitlements(**k)['security_services'] is False
-
-
-def test_hand_edited_payload_is_rejected(tmp_path):
-    f = write(tmp_path, status='expired', license_state='unlicensed')
-    env = json.loads(open(f).read())
-    forged = json.dumps({'hwid': 'abc', 'status': 'active', 'license_state': 'subscribed',
-                         'valid_until': (NOW + timedelta(days=9)).isoformat(),
-                         'subscription_end': (NOW + timedelta(days=99)).isoformat()}).encode()
-    env['payload'] = base64.b64encode(forged).decode()
-    open(f, 'w').write(json.dumps(env))
-    assert lic.state(**kw(tmp_path, f)) == 'unlicensed'
-
-
-def test_plain_json_and_garbage_are_unlicensed_not_bootstrap(tmp_path):
+def test_a_file_on_disk_is_never_consulted(tmp_path, monkeypatch):
+    # an edited or forged license file changes nothing: the module has no local evaluation at all
+    monkeypatch.setattr(lic, 'DAEMON_SOCKET', str(tmp_path / 'missing.sock'))
+    monkeypatch.setattr(lic, 'CORE_BINARY', str(tmp_path / 'not-installed'))
     f = tmp_path / 'license.json'
-    f.write_text(json.dumps({'hwid': 'abc', 'status': 'active', 'license_state': 'subscribed'}))
-    assert lic.state(**kw(tmp_path, str(f))) == 'unlicensed'
-    f.write_text('not json')
-    assert lic.state(**kw(tmp_path, str(f))) == 'unlicensed'
+    f.write_text(json.dumps({'hwid': 'x', 'status': 'active', 'license_state': 'subscribed'}))
+    assert lic.state(license_path=str(f)) == 'unlicensed'
+    assert lic.entitlements(license_path=str(f))['ha'] is False
 
 
-def test_missing_pubkey_fails_closed(tmp_path):
-    f = write(tmp_path, status='active', license_state='subscribed',
-              subscription_end=(NOW + timedelta(days=9)).isoformat())
-    k = dict(kw(tmp_path, f), pubkey_path=str(tmp_path / 'nope.pem'))
-    assert lic.state(**k) == 'unlicensed'
+def test_refused_answer_falls_back_to_limited(core):
+    core['answers'] = {'state': {'ok': False}, 'entitlements': {'ok': False}}
+    assert lic.state() == 'unlicensed'
+    assert lic.entitlements()['security_services'] is False
 
 
-def test_lease_expiry_drops_to_unlicensed_even_if_subscription_runs(tmp_path):
-    sub = (NOW + timedelta(days=200)).isoformat()
-    f = write(tmp_path, status='active', license_state='subscribed', subscription_end=sub)
-    assert lic.state(**kw(tmp_path, f)) == 'subscribed'
-    late = dict(kw(tmp_path, f), now=NOW + timedelta(days=15))
-    assert lic.state(**late) == 'unlicensed'
-
-
-def test_license_without_lease_is_unlicensed(tmp_path):
-    f = write(tmp_path, status='active', license_state='subscribed', valid_until=None,
-              subscription_end=(NOW + timedelta(days=9)).isoformat())
-    assert lic.state(**kw(tmp_path, f)) == 'unlicensed'
-
-
-def test_daemon_answers_are_used_when_no_paths_are_given(tmp_path, monkeypatch):
-    import socket as _socket
-    import threading
-
-    path = str(tmp_path / 'lic.sock')
-    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
-    srv.bind(path)
-    srv.listen(5)
-
-    def serve():
-        for _ in range(3):
-            conn, _addr = srv.accept()
-            req = json.loads(conn.recv(4096))
-            if req['cmd'] == 'state':
-                out = {'ok': True, 'state': 'subscribed'}
-            elif req['cmd'] == 'entitlements':
-                out = {'ok': True, 'state': 'subscribed', 'entitlements': lic.FULL}
-            else:
-                out = {'ok': True, 'payload': {'hwid': 'x', 'partner_name': 'Acme'}}
-            conn.sendall(json.dumps(out).encode())
-            conn.close()
-
-    threading.Thread(target=serve, daemon=True).start()
-    monkeypatch.setattr(lic, 'DAEMON_SOCKET', path)
-    assert lic.state() == 'subscribed'
-    assert lic.entitlements()['ha'] is True
-    assert lic.load()['partner_name'] == 'Acme'
-    srv.close()
-
-
-def test_feature_and_limit_errors(tmp_path):
-    f = write(tmp_path, status='expired', license_state='unlicensed')
-    k = kw(tmp_path, f)
-    assert lic.feature_error('ha', **k)['validation']['errors'][0]['message'] == 'license_required'
-    assert lic.limit_error('ipsec_s2s', 0, **k) is None
-    err = lic.limit_error('ipsec_s2s', 1, **k)
+def test_feature_and_limit_errors(core):
+    core['answers'] = {'entitlements': {'ok': True, 'entitlements': lic.LIMITED}}
+    assert lic.feature_error('ha')['validation']['errors'][0]['message'] == 'license_required'
+    assert lic.limit_error('ipsec_s2s', 0) is None
+    err = lic.limit_error('ipsec_s2s', 1)
     assert err['validation']['errors'][0]['message'] == 'license_limit_reached'
-    assert lic.limit_error('sslvpn_users', 2, **k) is None and lic.limit_error('sslvpn_users', 3, **k)
-    full = write(tmp_path, status='active', license_state='subscribed', subscription_end=(NOW + timedelta(days=9)).isoformat())
-    kf = kw(tmp_path, full)
-    assert lic.feature_error('ha', **kf) is None and lic.limit_error('ipsec_s2s', 50, **kf) is None
+    assert lic.limit_error('sslvpn_users', 2) is None and lic.limit_error('sslvpn_users', 3)
+    assert lic.limit('wireguard') == 1
 
 
-def test_server_can_tighten_a_subscription(tmp_path):
-    f = write(tmp_path, status='active', license_state='subscribed',
-              subscription_end=(NOW + timedelta(days=9)).isoformat(),
-              entitlements={'ha': False, 'limits': {'wireguard': 5}})
-    e = lic.entitlements(**kw(tmp_path, f))
+def test_server_can_tighten_a_subscription(core):
+    ent = json.loads(json.dumps(lic.FULL))
+    ent['ha'] = False
+    ent['limits']['wireguard'] = 5
+    core['answers'] = {'entitlements': {'ok': True, 'entitlements': ent}}
+    e = lic.entitlements()
     assert e['ha'] is False and e['limits']['wireguard'] == 5 and e['security_services'] is True
+
+
+def test_require_raises_the_api_error(core):
+    core['answers'] = {'entitlements': {'ok': True, 'entitlements': lic.LIMITED}}
+    with pytest.raises(lic.utils.ValidationError):
+        lic.require('reverse_proxy')
+
+
+def test_installed_core_that_is_restarting_is_waited_for(tmp_path, monkeypatch):
+    monkeypatch.setattr(lic, 'DAEMON_SOCKET', str(tmp_path / 'late.sock'))
+    binary = tmp_path / 'installed'
+    binary.write_text('x')
+    monkeypatch.setattr(lic, 'CORE_BINARY', str(binary))
+    monkeypatch.setattr(lic.time, 'sleep', lambda s: None)
+    tries = []
+    real = lic._ask_once
+
+    def flaky(req):
+        tries.append(1)
+        return real(req) if len(tries) < 3 else {'ok': True, 'state': 'trial'}
+
+    monkeypatch.setattr(lic, '_ask_once', flaky)
+    assert lic.state() == 'trial' and len(tries) == 3

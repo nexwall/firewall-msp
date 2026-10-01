@@ -6,32 +6,27 @@
 """
 Licensing state and entitlements of this unit.
 
-The license server signs the entitlements; the unit stores the signed envelope
-({payload, signature, algorithm, key_id}) in /etc/nexwall-license/license.json and this module verifies
-the RSA signature against /etc/nexwall-license/pubkey.pem on every read, so editing the file by hand
-(or dropping in a forged one) gives nothing. Each signed payload carries a short lease (``valid_until``)
-renewed at every check-in: a unit that cannot renew drops to unlicensed when the lease runs out, even
-if the subscription it last saw is still running. The state is always evaluated against the current time.
+This module holds no licensing logic. The decisions are made by the Nexwall license core
+(``nexwall-licensed``, a vendor binary delivered from the Nexwall vendor feed): it talks to the license
+server, verifies what the server signed, keeps the lease and evaluates the state against the clock. This
+module only asks it, over a local socket, and applies the answer.
+
+Without the core (a build that did not include the vendor package, or the core is not running) the unit is
+**unlicensed**: the limited feature set, no paid features. The answer never comes from a file that could be
+edited here.
 
 States: ``subscribed`` (active partner subscription) > ``trial`` > ``unlicensed``.
-A unit that has never reached the license server gets a short bootstrap window of ``BOOTSTRAP_HOURS`` from
-the first time it was seen, enough to register; after that it is limited until it checks in. A license file
-that fails verification is never treated as "not registered": it is unlicensed.
 """
 
-import base64
 import json
 import os
 import socket
-from datetime import datetime, timedelta, timezone
+import time
 
 from nethsec import utils
 
-LICENSE_FILE = '/etc/nexwall-license/license.json'
-FIRST_SEEN_FILE = '/etc/nexwall-license/first_seen'
-PUBKEY_FILE = '/etc/nexwall-license/pubkey.pem'
 DAEMON_SOCKET = '/var/run/nexwall-license.sock'
-BOOTSTRAP_HOURS = 24
+CORE_BINARY = '/usr/sbin/nexwall-licensed'
 
 FULL = {
     'security_services': True,
@@ -55,34 +50,7 @@ def _copy(entitlements):
     return json.loads(json.dumps(entitlements))
 
 
-def _ts(value):
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-    except ValueError:
-        return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-
-
-def verify_envelope(envelope, pubkey_path=None):
-    """Decoded payload of a signed envelope, or None when the signature does not verify."""
-    try:
-        from Crypto.Hash import SHA256
-        from Crypto.PublicKey import RSA
-        from Crypto.Signature import pkcs1_15
-        with open(pubkey_path or PUBKEY_FILE, 'rb') as f:
-            key = RSA.import_key(f.read())
-        payload = base64.b64decode(envelope['payload'], validate=True)
-        pkcs1_15.new(key).verify(SHA256.new(payload), base64.b64decode(envelope['signature'], validate=True))
-        data = json.loads(payload)
-        return data if isinstance(data, dict) else None
-    except Exception:  # any failure means "not trusted"
-        return None
-
-
-def _ask(request):
-    """Ask the compiled license core (nexwall-licensed) over its local socket; None when it is not running."""
+def _ask_once(request):
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
             s.settimeout(3)
@@ -100,106 +68,37 @@ def _ask(request):
         return None
 
 
-def _use_daemon(*overrides):
-    # explicit paths or clock mean a test or a tool that wants the local evaluation
-    return not any(o is not None for o in overrides) and os.path.exists(DAEMON_SOCKET)
-
-
-def load(path=None, pubkey_path=None):
-    """Verified license payload, or None when there is no file or it is not validly signed."""
-    if _use_daemon(path, pubkey_path):
-        answer = _ask({'cmd': 'payload'})
+def _ask(request):
+    """Ask the license core; None when it is not there. When the core is installed the answer is awaited for a few
+    seconds, so a restart of the core (an update) is not read as "unlicensed"."""
+    answer = _ask_once(request)
+    if answer is not None or not os.path.exists(CORE_BINARY):
+        return answer
+    for _ in range(5):
+        time.sleep(1)
+        answer = _ask_once(request)
         if answer is not None:
-            return answer.get('payload')
-    return _read(path, pubkey_path)[0]
+            return answer
+    return None
 
 
-def _read(path=None, pubkey_path=None):
-    """(payload, present): payload is None unless the stored envelope verifies; present tells whether
-    a file exists at all (an unverifiable file is a tamper, not a fresh install)."""
-    try:
-        with open(path or LICENSE_FILE) as f:
-            envelope = json.load(f)
-    except FileNotFoundError:
-        return None, False
-    except (OSError, ValueError):
-        return None, True
-    if not isinstance(envelope, dict):
-        return None, True
-    return verify_envelope(envelope, pubkey_path), True
+def load(*_args, **_kwargs):
+    """Verified license payload (plan, company, dates) as the core sees it, or None."""
+    answer = _ask({'cmd': 'payload'})
+    return answer.get('payload') if answer else None
 
 
-def _first_seen(now, path=None):
-    path = path or FIRST_SEEN_FILE
-    try:
-        with open(path) as f:
-            seen = _ts(f.read().strip())
-            if seen:
-                return seen
-    except OSError:
-        pass
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w') as f:
-            f.write(now.isoformat() + '\n')
-    except OSError:
-        pass
-    return now
-
-
-def state(now=None, license_path=None, first_seen_path=None, pubkey_path=None):
+def state(*_args, **_kwargs):
     """Effective state right now: 'subscribed', 'trial' or 'unlicensed'."""
-    if _use_daemon(now, license_path, first_seen_path, pubkey_path):
-        answer = _ask({'cmd': 'state'})
-        if answer is not None:
-            return answer['state']
-    now = now or datetime.now(timezone.utc)
-    lic, present = _read(license_path, pubkey_path)
-    if lic is None and present:
-        return 'unlicensed'  # file exists but is not signed by the license server
-    if lic is None or not lic.get('hwid'):
-        # never reached the license server: short bootstrap window from first sight
-        end = _first_seen(now, first_seen_path) + timedelta(hours=BOOTSTRAP_HOURS)
-        return 'trial' if now < end else 'unlicensed'
-
-    lease = _ts(lic.get('valid_until'))
-    if lease is None or now >= lease:
-        return 'unlicensed'  # lease missing or not renewed: the unit has not been able to check in
-
-    declared = lic.get('license_state')
-    if declared is None:  # license issued before the trial model existed
-        declared = 'subscribed' if lic.get('status') == 'active' else 'unlicensed'
-    if declared == 'subscribed':
-        end = _ts(lic.get('subscription_end'))
-        return 'subscribed' if lic.get('status') == 'active' and end and now < end else 'unlicensed'
-    if declared == 'trial':
-        end = _ts(lic.get('trial_end'))
-        return 'trial' if end and now < end else 'unlicensed'
-    return 'unlicensed'
+    answer = _ask({'cmd': 'state'})
+    return answer['state'] if answer and answer.get('state') else 'unlicensed'
 
 
-def entitlements(now=None, license_path=None, first_seen_path=None, pubkey_path=None):
+def entitlements(*_args, **_kwargs):
     """What this unit may use right now."""
-    if _use_daemon(now, license_path, first_seen_path, pubkey_path):
-        answer = _ask({'cmd': 'entitlements'})
-        if answer is not None and isinstance(answer.get('entitlements'), dict):
-            return answer['entitlements']
-    current = state(now, license_path, first_seen_path, pubkey_path)
-    if current == 'unlicensed':
-        return _copy(LIMITED)
-    lic = load(license_path, pubkey_path) or {}
-    ent = lic.get('entitlements')
-    if not isinstance(ent, dict):
-        return _copy(FULL)
-    merged = _copy(FULL)
-    for key in FEATURES:
-        if key in ent:
-            merged[key] = bool(ent[key])
-    if isinstance(ent.get('limits'), dict):
-        for key in LIMITS:
-            if key in ent['limits']:
-                merged['limits'][key] = ent['limits'][key]
-    return merged
+    answer = _ask({'cmd': 'entitlements'})
+    ent = answer.get('entitlements') if answer else None
+    return ent if isinstance(ent, dict) else _copy(LIMITED)
 
 
 def feature_error(feature, **kwargs):
