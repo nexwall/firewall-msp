@@ -37,14 +37,19 @@ cp /srv/fw/packages/nexwall-license/files/nexwall-serial /usr/sbin/nexwall-seria
 cp /srv/fw/packages/nexwall-license/files/nexwall-license-register /usr/sbin/nexwall-license-register
 chmod +x /usr/sbin/nexwall-serial /usr/sbin/nexwall-license-register
 
+
+# the stored license is a signed envelope; show its decoded payload
+lic_json() { python3 -c 'import base64,json;print(json.dumps(json.loads(base64.b64decode(json.load(open("/etc/nexwall-license/license.json"))["payload"])),indent=2))'; }
 echo "--- serial:"; SERIAL=$(nexwall-serial); echo "$SERIAL"
 echo "$SERIAL" | grep -Eq '^NXW-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$'
 [ "$(nexwall-serial)" = "$SERIAL" ] # stable
 
 echo "--- first check-in (unassigned):"
 nexwall-license-register
-grep -q "\"status\": \"unassigned\"" /etc/nexwall-license/license.json
-grep -q "\"license_state\": \"trial\"" /etc/nexwall-license/license.json
+lic_json | grep -q "\"status\": \"unassigned\""
+lic_json | grep -q "\"license_state\": \"trial\""
+lic_json | grep -q '"valid_until"'
+[ "$(stat -c %a /etc/nexwall-license/license.json)" = "600" ]
 [ -s /etc/nexwall-license/device_token ]
 [ "$(stat -c %a /etc/nexwall-license/device_token)" = "600" ]
 
@@ -62,9 +67,9 @@ c.execute("UPDATE firewalls SET partner_id='ACME', status='active'")
 c.commit()
 PY
 nexwall-license-register
-grep -q '"status": "active"' /etc/nexwall-license/license.json
-grep -q '"partner_id": "ACME"' /etc/nexwall-license/license.json
-grep -q "$SERIAL" /etc/nexwall-license/license.json
+lic_json | grep -q '"status": "active"'
+lic_json | grep -q '"partner_id": "ACME"'
+lic_json | grep -q "$SERIAL"
 
 echo "--- scheduled run skips while the active license is fresh:"
 M1=$(stat -c %Y /etc/nexwall-license/license.json); sleep 1; nexwall-license-register --scheduled; [ "$M1" = "$(stat -c %Y /etc/nexwall-license/license.json)" ]

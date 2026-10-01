@@ -34,11 +34,8 @@ def parse_license_key(secret):
 
 
 def load_license():
-    try:
-        with open(LICENSE_FILE) as f:
-            return json.load(f)
-    except (FileNotFoundError, ValueError):
-        return None
+    # signature-verified payload only; a hand-edited or forged file reads as nothing
+    return nx_license.load()
 
 def register(args):
     if "secret" not in args or not args["secret"]:
@@ -104,6 +101,9 @@ def evaluate(lic, now=None):
     now = now or datetime.now(timezone.utc)
     if not lic or not lic.get("hwid"):
         return "not_registered"
+    lease = _ts(lic.get("valid_until"))
+    if lease is None or lease <= now:
+        return "unlicensed"  # lease not renewed: same rule as nethsec.license
     state = lic.get("license_state")
     if state is None:  # license issued before the trial model existed
         state = "subscribed" if lic.get("status") == "active" else "unlicensed"

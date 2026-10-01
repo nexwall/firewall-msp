@@ -21,6 +21,7 @@
 # unit to a partner, the next check-in returns that partner's signed license - no key typed.
 import base64
 import json
+import secrets
 import os
 import random
 import subprocess
@@ -105,11 +106,15 @@ def verify_and_decode(payload_b64, signature_b64):
     return json.loads(payload_bytes)
 
 
-def save_license(payload):
+def save_license(envelope):
+    # keep the signed envelope as received: the unit re-verifies the signature on every read,
+    # so what is stored is only ever trusted if the license server really signed it
     os.makedirs(STATE_DIR, exist_ok=True)
-    with open(LICENSE_PATH, "w") as f:
-        json.dump(payload, f, indent=2)
-    os.chmod(LICENSE_PATH, 0o644)
+    tmp = LICENSE_PATH + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({k: envelope[k] for k in ("payload", "signature", "algorithm", "key_id") if k in envelope}, f)
+    os.replace(tmp, LICENSE_PATH)
 
 
 def save_token(token):
@@ -140,10 +145,13 @@ def explain(resp):
         return f"HTTP {resp.status_code}"
 
 
-def load_verified(resp):
+def load_verified(resp, nonce):
     data = resp.json()
     try:
-        return data, verify_and_decode(data["payload"], data["signature"])
+        payload = verify_and_decode(data["payload"], data["signature"])
+        if payload.get("nonce") != nonce:
+            fail("Registration failed: server response is not an answer to this request (replay?) - refusing to trust it")
+        return data, payload
     except ValueError:
         fail("Registration failed: server response signature is invalid - refusing to trust it")
     except Exception as e:
@@ -151,10 +159,12 @@ def load_verified(resp):
 
 
 def manual_register(partner_id, unlock_key):
+    nonce = secrets.token_hex(16)
     try:
         resp = requests.post(
             f"{server_url()}/api/v1/validate",
-            json={"hwid": get_hwid(), "unlock_key": unlock_key, "partner_id": partner_id, "serial": get_serial()},
+            json={"hwid": get_hwid(), "unlock_key": unlock_key, "partner_id": partner_id, "serial": get_serial(),
+                  "nonce": nonce},
             timeout=30,
         )
     except requests.RequestException as e:
@@ -162,8 +172,8 @@ def manual_register(partner_id, unlock_key):
     if resp.status_code != 200:
         fail(f"Registration failed: {explain(resp)}")
 
-    _, payload = load_verified(resp)
-    save_license(payload)
+    data, payload = load_verified(resp, nonce)
+    save_license(data)
     set_uci("nexwall-license.main.partner_id", partner_id)
     set_uci("nexwall-license.main.unlock_key", unlock_key)
     subprocess.run(["uci", "commit", "nexwall-license"], check=True)
@@ -172,7 +182,9 @@ def manual_register(partner_id, unlock_key):
 
 
 def auto_checkin():
-    body = {"hwid": get_hwid(), "serial": get_serial(), "device_token": _read(TOKEN_PATH), **describe_device()}
+    nonce = secrets.token_hex(16)
+    body = {"hwid": get_hwid(), "serial": get_serial(), "device_token": _read(TOKEN_PATH), "nonce": nonce,
+            **describe_device()}
     try:
         resp = requests.post(f"{server_url()}/api/v1/checkin", json=body, timeout=30)
     except requests.RequestException as e:
@@ -180,10 +192,10 @@ def auto_checkin():
     if resp.status_code != 200:
         fail(f"Check-in failed: {explain(resp)}")
 
-    data, payload = load_verified(resp)
+    data, payload = load_verified(resp, nonce)
     if data.get("device_token"):
         save_token(data["device_token"])
-    save_license(payload)
+    save_license(data)
     report(payload)
     run_enforce()
 
@@ -218,10 +230,11 @@ def refresh():
 def license_is_fresh():
     try:
         with open(LICENSE_PATH) as f:
-            if json.load(f).get("status") != "active":
-                return False
+            env = json.load(f)
+        if verify_and_decode(env["payload"], env["signature"]).get("status") != "active":
+            return False
         return time.time() - os.path.getmtime(LICENSE_PATH) < FRESH_SECONDS
-    except (OSError, ValueError):
+    except Exception:
         return False
 
 

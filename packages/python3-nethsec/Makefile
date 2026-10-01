@@ -29,7 +29,7 @@ define Package/python3-nethsec
 	CATEGORY:=Nexwall
 	TITLE:=Nexwall Firewall python libraries
 	URL:=https://github.com/NethServer/nethsecurity/tree/master/packages/python3-nethsec
-	DEPENDS:=+python3-uci +python3-libpass
+	DEPENDS:=+python3-uci +python3-libpass +python3-cryptodome
 	PKGARCH:=all
 endef
 
