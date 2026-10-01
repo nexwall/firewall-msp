@@ -19,6 +19,7 @@ combines it with the license state so the UI can say what is going on:
 
 import json
 import os
+import subprocess
 import time
 
 from nethsec import license as nx_license
@@ -71,4 +72,46 @@ def dpi_enforcement(stats_path=None, plugin_path=None, now=None, state=None, sec
         return out(False, 'engine', state)
     if reason != 'valid':
         return out(False, 'service', state)
+    return out(True, None, state)
+
+
+GATE_PLUGIN = '/usr/lib/snort_nexwall/nx_ips_gate.so'
+TOKEN_FILE = '/var/run/nexwall-license/token'
+
+
+def _snort_running():
+    return subprocess.run(['pidof', 'snort'], capture_output=True).returncode == 0
+
+
+def _snort_enabled():
+    p = subprocess.run(['uci', '-q', 'get', 'snort.snort.enabled'], capture_output=True, text=True)
+    return p.stdout.strip() == '1'
+
+
+def ips_enforcement(enabled=None, core=None, state=None, security_services=None, gate_path=None, token_path=None, running=None):
+    """Is the IPS inspecting traffic right now, and if not, why?
+    -> {'applicable': bool, 'active': bool, 'cause': None|'license'|'service'|'engine'|'plugin', 'license_state': str}
+    Not applicable while the IPS is switched off. The gate plugin inside snort decides with the token the license core writes;
+    the token file existing while the core answers is what this reports as active."""
+    enabled = _snort_enabled() if enabled is None else enabled
+    core = core_state() if core is None else core
+
+    def out(active, cause, license_state='unknown'):
+        return {'applicable': True, 'active': active, 'cause': cause, 'license_state': license_state}
+
+    if not enabled:
+        return {'applicable': False, 'active': False, 'cause': None, 'license_state': 'unknown'}
+    if core == 'down':
+        return out(False, 'service')
+    state = nx_license.state() if state is None else state
+    if security_services is None:
+        security_services = bool(nx_license.entitlements().get('security_services'))
+    if not security_services or state == 'unlicensed':
+        return out(False, 'license', state)
+    if not os.path.exists(gate_path or GATE_PLUGIN):
+        return out(False, 'plugin', state)
+    if not os.path.exists(token_path or TOKEN_FILE):
+        return out(False, 'service', state)
+    if not (_snort_running() if running is None else running):
+        return out(False, 'engine', state)
     return out(True, None, state)

@@ -17,6 +17,7 @@ from glob import glob
 
 from nethsec import utils
 from nethsec import license as nx_license
+from nethsec.license import enforcement
 from euci import EUci
 from nethsec.utils import ValidationError
 
@@ -90,25 +91,32 @@ def get_snort_homenet(uci, include_vpn=False):
 
     return list(snort_homenet)
 
+CRON_JOBS = [
+    # every night at 2:30 plus random 30 minutes: the full refresh (Talos path or Community fallback)
+    "30 2 * * * sleep $((RANDOM % 1800)) && /usr/bin/ns-snort-rules --download --restart",
+    # managed signatures: look for a new Nexwall signature bundle every 30 minutes (cheap; downloads only when there is one)
+    "*/30 * * * * sleep $((RANDOM % 120)) && [ -x /usr/sbin/nexwall-ips-rules ] && /usr/sbin/nexwall-ips-rules sync >/dev/null 2>&1",
+]
+
+
 def add_download_cron_job():
-    # add download rules cron job: every night at 2:30 plus random 30 minutes
-    cron_job = f"30 2 * * * sleep $((RANDOM % 1800)) && /usr/bin/ns-snort-rules --download --restart"
     with open('/etc/crontabs/root', 'r') as f:
         lines = f.readlines()
-    for line in lines:
-        if 'ns-snort-rules' in line:
-            return
     with open('/etc/crontabs/root', 'w') as f:
         for line in lines:
             f.write(line)
-        f.write(f'{cron_job}\n')
+        for job in CRON_JOBS:
+            key = 'nexwall-ips-rules' if 'nexwall-ips-rules' in job else 'ns-snort-rules'
+            if not any(key in line for line in lines):
+                f.write(f'{job}\n')
+
 
 def remove_download_cron_job():
     with open('/etc/crontabs/root', 'r') as f:
         lines = f.readlines()
     with open('/etc/crontabs/root', 'w') as f:
         for line in lines:
-            if 'ns-snort-rules' not in line:
+            if 'ns-snort-rules' not in line and 'nexwall-ips-rules' not in line:
                 f.write(line)
 
 
@@ -191,7 +199,12 @@ def __save_settings():
 
     __setup(data.get('enabled'), ns_policy=data.get('ns_policy'))
     e_uci = EUci()
-    e_uci.set('snort', 'snort', 'oinkcode', data.get('oinkcode', ''))
+    # the oinkcode is optional (a customer's own Talos subscription) and is never read back: only a non-empty value is
+    # stored, an empty one leaves what is there untouched, "remove_oinkcode" deletes it
+    if data.get('oinkcode'):
+        e_uci.set('snort', 'snort', 'oinkcode', data['oinkcode'])
+    elif data.get('remove_oinkcode'):
+        e_uci.set('snort', 'snort', 'oinkcode', '')
     e_uci.set('snort', 'snort', 'home_net', ' '.join(home_net))
     max_inspect_bytes = data.get('max_inspect_bytes', 1048576)
     if not isinstance(max_inspect_bytes, int) or max_inspect_bytes < 0:
@@ -212,7 +225,8 @@ def __settings():
     return {
         "enabled": e_uci.get('snort', 'snort', 'enabled', dtype=bool, default=False),
         "ns_policy": e_uci.get('snort', 'snort', 'ns_policy', default='connectivity'),
-        "oinkcode": e_uci.get('snort', 'snort', 'oinkcode', default=''),
+        "oinkcode": "",
+        "oinkcode_set": bool(e_uci.get('snort', 'snort', 'oinkcode', default='')),
         "home_net": home_net,
         "max_inspect_bytes": int(e_uci.get('snort', 'nfq', 'max_inspect_bytes', default='1048576')),
     }
@@ -222,17 +236,34 @@ def __check_oinkcode():
     data = json.load(sys.stdin)
     if 'oinkcode' not in data:
         raise ValidationError('oinkcode', 'required')
+    # the URL carries the oinkcode: give it to curl on stdin, not on the command line (visible in the process list)
     res = subprocess.run([
         "curl",
         "--fail",
         "--location",
         "--output",
         "/dev/null",
+        "--config",
+        "-"],
         # remember to change the URL even in the `ns-snort-rules` script
-        f"https://www.snort.org/rules/snortrules-snapshot-31470.tar.gz?oinkcode={data.get('oinkcode')}"],
+        input=f'url = "https://www.snort.org/rules/snortrules-snapshot-31470.tar.gz?oinkcode={data.get("oinkcode")}"\n'.encode(),
         capture_output=True)
     if res.returncode != 0:
         raise ValidationError('oinkcode', 'invalid')
+
+
+def __signatures_status():
+    """State of the managed signature bundle: version, counts, last check and result."""
+    if not os.path.exists('/usr/sbin/nexwall-ips-rules'):
+        return {"available": False}
+    try:
+        out = subprocess.run(['/usr/sbin/nexwall-ips-rules', 'status', '--json'], capture_output=True, text=True, timeout=20).stdout
+        status = json.loads(out)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        status = {}
+    status["available"] = True
+    status["own_subscription"] = bool(EUci().get('snort', 'snort', 'oinkcode', default=''))
+    return status
 
 
 def __list_bypasses():
@@ -492,7 +523,10 @@ if cmd == 'list':
         "suppress-alert": {"gid": 1, "sid": 100000, "direction": "by_src", "ip": "*.*.*.*", "description": "Description"},
         "delete-suppression": {"gid": 1, "sid": 100000, "direction": "by_src", "ip": "*.*.*.*"},
         "list-events": {},
-        "status": {}
+        "status": {},
+        "get-signatures-status": {},
+        "update-signatures": {},
+        "get-enforcement-status": {}
     }))
 else:
     try:
@@ -531,6 +565,15 @@ else:
             print(json.dumps({"status": "success"}))
         elif action == "list-events":
             print(json.dumps({"events": __list_events()}))
+        elif action == "get-signatures-status":
+            print(json.dumps(__signatures_status()))
+        elif action == "update-signatures":
+            # a sync can take a while (download, validation, restart): run it detached and return at once
+            subprocess.Popen(["/usr/sbin/nexwall-ips-rules", "sync"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+            print(json.dumps({"status": "started"}))
+        elif action == "get-enforcement-status":
+            print(json.dumps(enforcement.ips_enforcement()))
         elif action == "status":
             print(json.dumps({"status": __status()}))
 

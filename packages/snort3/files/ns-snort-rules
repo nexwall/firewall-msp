@@ -18,8 +18,13 @@ from nethsec import snort
 from euci import EUci
 
 # Use persistent storage when /mnt/data is available so rule archives survive reboots
+# archives and backups live in persistent storage when there is one ...
 DATA_DIR = "/mnt/data/ns-snort" if os.path.isdir("/mnt/data") else "/var/ns-snort"
-RULES_DIR = os.path.join(DATA_DIR, "rules")
+# ... but snort reads its rules from <config_dir>/rules, so that is where they must be written. (They used to be written
+# under DATA_DIR, which on a unit with persistent storage is a different directory: snort then started with no rules.)
+CONFIG_DIR = (EUci().get("snort", "snort", "config_dir", default="/var/ns-snort") or "/var/ns-snort")
+RULES_DIR = os.path.join(CONFIG_DIR, "rules")
+NEXWALL_RULES = "/usr/sbin/nexwall-ips-rules"
 BACKUP_DIR = os.path.join(DATA_DIR, "old.rules")
 TESTING_RULES_FILE = os.path.join(RULES_DIR, "testing.rules")
 OFFICIAL_RULES_DIR = os.path.join(DATA_DIR, "snort-rules")
@@ -56,7 +61,7 @@ def download_official_rules(oinkcode):
         log("Downloading subscriber rules...")
         # remember to change the URL even in the `ns.snort` script
         url = f"https://www.snort.org/rules/snortrules-snapshot-31470.tar.gz?oinkcode={oinkcode}"
-        archive_loc = f"snortrules-snapshot-{oinkcode}"
+        archive_loc = "snortrules-snapshot"  # never put the oinkcode in a file name
     else:
         log("Downloading community rules...")
         url = COMMUNITY_RULES_URL
@@ -78,7 +83,7 @@ def download_official_rules(oinkcode):
             tar.extractall(path=OFFICIAL_RULES_DIR)
         log(f"Extracted rules to {OFFICIAL_RULES_DIR}")
     except Exception as e:
-        log(f"Failed to download rules from {url}: {e}")
+        log(f"Failed to download rules from {url.split('?')[0]}: {e}")  # the query string carries the oinkcode
         sys.exit(1)
 
 def filter_official_rules(policy, alert_excluded, disabled_rules, oinkcode=None):
@@ -162,9 +167,25 @@ def main():
     parser.add_argument('--restart', action='store_true', help="Force Snort to restart after updating rules.")
     args = parser.parse_args()
 
+    # Managed signatures (default): the Nexwall signature bundle (Snort Community + Emerging Threats Open + Nexwall Labs rules,
+    # policy tiers, validated) is delivered by nexwall-ips-rules. A customer who sets their own Talos oinkcode keeps the
+    # Talos path below; when the bundle is not available (no license, no network, nothing published) the Snort Community
+    # rules are used, which need no subscription.
+    if os.path.exists(NEXWALL_RULES) and not uci.get("snort", "snort", "oinkcode", default=None) \
+            and not uci.get("snort", "snort", "ns_testing", default=False, dtype=bool):
+        rc = subprocess.run([NEXWALL_RULES, "apply"] + (["--download"] if args.download else [])).returncode
+        if rc == 0:
+            if args.restart:
+                log("Restarting snort...")
+                subprocess.run(["/etc/init.d/snort", "restart"], check=True)
+            return
+        log(f"Nexwall signature bundle not available (status {rc}), using the Snort Community rules")
+        community = os.path.join(OFFICIAL_RULES_DIR, "snort3-community-rules/snort3-community.rules")
+        args.download = args.download or not os.path.exists(community)
+
     backup_rules()
 
-    prepare_rule_file() # /etc/snort/rules/snort.rules
+    prepare_rule_file() # <config_dir>/rules/snort.rules
 
     try:
         disabled_rules = list(uci.get_all("snort", "snort", "ns_disabled_rules"))

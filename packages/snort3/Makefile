@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=snort3
 PKG_VERSION:=3.10.0.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/snort3/snort3/tar.gz/$(PKG_VERSION)?
@@ -27,7 +27,7 @@ define Package/snort3
   CATEGORY:=Network
   DEPENDS:=+libstdcpp +libdaq3 +libdnet +libopenssl +libpcap +libpcre2 \
     +libpthread +libuuid +zlib +libhwloc +USE_MUSL:libtirpc @HAS_LUAJIT_ARCH +luajit +libatomic \
-    +kmod-nft-queue +liblzma +ucode +ucode-mod-fs +ucode-mod-uci \
+    +kmod-nft-queue +liblzma +ucode +ucode-mod-fs +ucode-mod-uci +python3-cryptodome \
     +PACKAGE_gperftools:gperftools \
     +PACKAGE_vectorscan:vectorscan
   USERID:=snort=975:snort=975
@@ -85,6 +85,8 @@ define Package/snort3/install
 	$(INSTALL_BIN) ./files/snort-{mgr,rules} $(1)/usr/bin/
 
 	$(INSTALL_BIN) ./files/ns-snort-rules $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/usr/sbin
+	$(INSTALL_BIN) ./files/nexwall-ips-rules $(1)/usr/sbin/
 	$(INSTALL_DIR) $(1)/usr/libexec
 	$(INSTALL_BIN) ./files/ns-snort-bypass-config $(1)/usr/libexec/
 	$(INSTALL_DIR) $(1)/etc/uci-defaults

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from nethsec.license.enforcement import dpi_enforcement
+from nethsec.license.enforcement import dpi_enforcement, ips_enforcement
 
 NOW = 1_790_000_000
 
@@ -74,3 +74,32 @@ def test_community_build_without_a_core_reads_the_license_normally(paths):
     stats(paths, license='no token')
     paths['core'] = 'absent'
     assert dpi_enforcement(state='unlicensed', security_services=False, **paths)['cause'] == 'license'
+
+
+@pytest.fixture()
+def ips(tmp_path):
+    gate = tmp_path / 'nx_ips_gate.so'
+    gate.write_text('x')
+    token = tmp_path / 'token'
+    token.write_text('t')
+    return {'gate_path': str(gate), 'token_path': str(token), 'enabled': True, 'core': 'up', 'running': True,
+            'state': 'subscribed', 'security_services': True}
+
+
+def test_ips_active_when_licensed_gated_and_running(ips):
+    r = ips_enforcement(**ips)
+    assert r['applicable'] and r['active'] and r['cause'] is None
+
+
+def test_ips_not_applicable_while_switched_off(ips):
+    ips['enabled'] = False
+    r = ips_enforcement(**ips)
+    assert r['applicable'] is False and r['active'] is False
+
+
+def test_ips_causes(ips):
+    assert ips_enforcement(**dict(ips, core='down'))['cause'] == 'service'
+    assert ips_enforcement(**dict(ips, state='unlicensed', security_services=False))['cause'] == 'license'
+    assert ips_enforcement(**dict(ips, gate_path=ips['gate_path'] + '.gone'))['cause'] == 'plugin'
+    assert ips_enforcement(**dict(ips, token_path=ips['token_path'] + '.gone'))['cause'] == 'service'
+    assert ips_enforcement(**dict(ips, running=False))['cause'] == 'engine'

@@ -2,7 +2,10 @@
 // Copyright (c) 2023-2024 Eric Fahlgren <eric.fahlgren@gmail.com>
 // SPDX-License-Identifier: GPL-2.0
 
-import { lsdir } from 'fs';
+import { lsdir, access } from 'fs';
+
+// Nexwall license gate (vendor plugin): without the plugin file snort must not be told to load it
+let nx_gate = access('/usr/lib/snort_nexwall/nx_ips_gate.so');
 
 // Create some snort-format-specific items.
 
@@ -41,12 +44,20 @@ snort  = {
 {% if (snort.mode == 'ips'): %}
   ['-Q'] = true,
 {% endif %}
+{% if (nx_gate): %}
+  ['--plugin-path'] = '/usr/lib/snort_nexwall',
+{% endif %}
   ['--daq'] = '{{ snort.method }}',
 {% if (snort.method == 'nfq'): %}
   ['--max-packet-threads'] = {{ nfq.thread_count }},
 {% endif %}
 }
 
+{% if (nx_gate): %}
+-- Nexwall license gate: inspection happens only while the license core confirms the unit is licensed
+nx_ips_gate = { }
+
+{% endif %}
 ips = {
   -- View all options with "snort --help-module ips"
   mode            = '{{ line_mode }}',

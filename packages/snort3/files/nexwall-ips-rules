@@ -1,0 +1,329 @@
+#!/usr/bin/python3
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Keeps the IPS signatures of this firewall in line with the license.
+#
+#   licensed (subscription or trial)  the signed Nexwall signature bundle (Snort Community rules, Emerging Threats Open and
+#                                     Nexwall Labs rules, in three policy tiers) is downloaded from the license server,
+#                                     verified, validated with snort itself and installed; new versions follow automatically
+#   not licensed / bundle unavailable exit status 3 or 2: ns-snort-rules falls back to the Snort Community rules (no
+#                                     subscription needed), as before
+#
+#   nexwall-ips-rules update [--force]    check the server and download a newer bundle into the cache (no change to the IPS)
+#   nexwall-ips-rules apply [--download]  write the rules of the chosen policy to <config_dir>/rules/snort.rules, validate them
+#                                         with snort -T and roll back on error; prints "changed" when the rules changed
+#   nexwall-ips-rules sync                update, apply, restart snort when the rules changed (cron entry point)
+#   nexwall-ips-rules status [--json]
+#
+# The unit never trusts what the server sends: the manifest must carry the license server's signature, every file must
+# match the manifest hash, and the resulting rule set must load in snort before it replaces the running one.
+import argparse
+import base64
+import gzip
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+CORE_CTL = '/usr/sbin/licensectl'
+PUBKEY = '/etc/nexwall-license/pubkey.pem'
+SNORT = '/usr/bin/snort'
+MIN_INTERVAL = 25 * 60  # do not ask the server more often than this unless forced
+TIERS = ('connectivity', 'balanced', 'security')
+SID_RE = re.compile(r'\bsid:\s*(\d+)\s*;')
+
+
+def uci(key, default=''):
+    p = subprocess.run(['uci', '-q', 'get', key], capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 and p.stdout.strip() else default
+
+
+def config_dir():
+    return uci('snort.snort.config_dir', '/var/ns-snort')
+
+
+def cache_dir():
+    return ('/mnt/data/ns-snort' if os.path.isdir('/mnt/data') else '/var/ns-snort') + '/nexwall'
+
+
+def state_path():
+    return os.path.join(cache_dir(), 'state.json')
+
+
+def load_state():
+    try:
+        with open(state_path()) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state):
+    os.makedirs(cache_dir(), exist_ok=True)
+    tmp = state_path() + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(state, f, indent=2)
+    os.replace(tmp, state_path())
+
+
+def log(msg):
+    print(msg)
+    subprocess.run(['logger', '-t', 'nexwall-ips-rules', msg], check=False)
+
+
+def license_state():
+    try:
+        from nethsec import license as nx_license
+        return nx_license.state()
+    except Exception:
+        return 'unlicensed'
+
+
+def fetch(path):
+    """GET through the license core (pinned TLS, device token and signature). -> bytes, raises RuntimeError"""
+    p = subprocess.run([CORE_CTL, 'get', path], capture_output=True, timeout=300)
+    if p.returncode != 0:
+        raise RuntimeError('%s: %s' % (path, p.stderr.decode(errors='replace').strip() or 'request failed'))
+    return p.stdout
+
+
+def verify_manifest(resp):
+    from Crypto.Hash import SHA256
+    from Crypto.PublicKey import RSA
+    from Crypto.Signature import pkcs1_15
+    with open(PUBKEY, 'rb') as f:
+        key = RSA.import_key(f.read())
+    payload = base64.b64decode(resp['payload'])
+    pkcs1_15.new(key).verify(SHA256.new(payload), base64.b64decode(resp['signature']))
+    m = json.loads(payload)
+    if m.get('kind') != 'ips-signatures':
+        raise ValueError('not an IPS signature manifest')
+    return m
+
+
+def policy():
+    p = uci('snort.snort.ns_policy', 'balanced')
+    return p if p in TIERS else 'balanced'
+
+
+def wanted_files(manifest):
+    names = ['rules-%s.rules.gz' % policy()]
+    if uci('snort.snort.ns_alert_excluded', '0') in ('1', 'true', 'yes', 'on'):
+        names.append('alerts.rules.gz')
+    return [n for n in names if n in manifest['files']]
+
+
+def version_dir(version):
+    return os.path.join(cache_dir(), version)
+
+
+def download_files(manifest, names):
+    version = manifest['version']
+    dest = version_dir(version)
+    os.makedirs(dest, exist_ok=True)
+    for name in names:
+        want = manifest['files'][name]
+        out = os.path.join(dest, want['name'])
+        if os.path.exists(out) and hashlib.sha256(open(out, 'rb').read()).hexdigest() == want['raw_sha256']:
+            continue
+        data = fetch('/api/v1/ips/file/%s/%s' % (version, name))
+        if len(data) != want['size'] or hashlib.sha256(data).hexdigest() != want['sha256']:
+            raise ValueError('%s does not match the signed manifest' % name)
+        raw = gzip.decompress(data)
+        if hashlib.sha256(raw).hexdigest() != want['raw_sha256']:
+            raise ValueError('%s does not match the signed manifest after decompression' % name)
+        tmp = out + '.tmp'
+        with open(tmp, 'wb') as f:
+            f.write(raw)
+        os.replace(tmp, out)
+    # keep the two newest versions
+    others = sorted(d for d in os.listdir(cache_dir()) if re.match(r'^\d{4}\.\d{2}\.\d{2}\.\d+$', d))
+    for old in others[:-2]:
+        shutil.rmtree(os.path.join(cache_dir(), old), ignore_errors=True)
+
+
+def cmd_update(force=False):
+    state = load_state()
+    st = license_state()
+    if st not in ('subscribed', 'trial'):
+        state.update(last_check=int(time.time()), last_result='not licensed: Community rules are used')
+        save_state(state)
+        return 3
+    if not force and time.time() - state.get('last_check', 0) < MIN_INTERVAL and state.get('version'):
+        return 0
+    try:
+        resp = json.loads(fetch('/api/v1/ips/manifest'))
+        if not resp.get('entitled'):
+            state.update(last_check=int(time.time()), last_result='server: not entitled (%s)' % resp.get('license_state'))
+            save_state(state)
+            return 3
+        if not resp.get('payload'):
+            state.update(last_check=int(time.time()), last_result='no signature bundle published yet')
+            save_state(state)
+            return 2
+        manifest = verify_manifest(resp)
+        names = wanted_files(manifest)
+        download_files(manifest, names)
+        state.update(version=manifest['version'], counts=manifest.get('counts'), last_check=int(time.time()),
+                     last_result='downloaded %s' % manifest['version'], last_error=None, files=names)
+        save_state(state)
+        return 0
+    except Exception as e:  # network, signature, hash: keep what we have
+        state.update(last_check=int(time.time()), last_result='update failed', last_error=str(e)[:300])
+        save_state(state)
+        log('update failed: %s' % e)
+        return 1
+
+
+def read_rules(path):
+    with open(path, errors='replace') as f:
+        return [l.rstrip('\n') for l in f if l.strip() and not l.startswith('#')]
+
+
+def disabled_sids():
+    out = set()
+    p = subprocess.run(['uci', '-q', 'get', 'snort.snort.ns_disabled_rules'], capture_output=True, text=True)
+    for item in p.stdout.split():
+        parts = item.strip("'").split(',')
+        if len(parts) >= 2 and parts[0] == '1' and parts[1].isdigit():
+            out.add(int(parts[1]))
+    return out
+
+
+def compose(version):
+    d = version_dir(version)
+    tier = policy()
+    blocks = read_rules(os.path.join(d, 'rules-%s.rules' % tier))
+    block_sids = {int(m.group(1)) for l in blocks for m in [SID_RE.search(l)] if m}
+    lines = list(blocks)
+    alerts_path = os.path.join(d, 'alerts.rules')
+    if os.path.exists(alerts_path) and uci('snort.snort.ns_alert_excluded', '0') in ('1', 'true', 'yes', 'on'):
+        for l in read_rules(alerts_path):
+            m = SID_RE.search(l)
+            if m and int(m.group(1)) not in block_sids:
+                lines.append(l)
+    off = disabled_sids()
+    if off:
+        lines = [l for l in lines if not (SID_RE.search(l) and int(SID_RE.search(l).group(1)) in off)]
+    return lines
+
+
+def validate(rules_path):
+    """Load the rule set with snort itself (snort -T) the way the running configuration would."""
+    home_net = uci('snort.snort.home_net', '192.168.0.0/16').replace("'", '')
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = os.path.join(tmp, 'test.lua')
+        with open(conf, 'w') as f:
+            f.write("HOME_NET = [[ %s ]]\nEXTERNAL_NET = '!$HOME_NET'\ninclude('%s/snort.lua')\n"
+                    "daq = { module_dirs = { '/usr/lib/daq/' }, }\n"
+                    "ips = { variables = default_variables, rules = [[ include %s ]] }\n" % (home_net, config_dir(), rules_path))
+        p = subprocess.run([SNORT, '-c', conf, '-T'], capture_output=True, text=True, timeout=600)
+    return p.returncode == 0, (p.stdout + p.stderr)[-1500:]
+
+
+def cmd_apply(download=False):
+    state = load_state()
+    version = state.get('version')
+    names_needed = None
+    if download or not version or not os.path.exists(os.path.join(version_dir(version), 'rules-%s.rules' % policy())):
+        rc = cmd_update(force=True)
+        if rc != 0:
+            return rc
+        state = load_state()
+        version = state.get('version')
+    if not version or not os.path.exists(os.path.join(version_dir(version), 'rules-%s.rules' % policy())):
+        # the policy was changed since the last download: fetch the file for the new one
+        rc = cmd_update(force=True)
+        if rc != 0:
+            return rc
+        state = load_state()
+        version = state.get('version')
+    rules_dir = os.path.join(config_dir(), 'rules')
+    os.makedirs(rules_dir, exist_ok=True)
+    target = os.path.join(rules_dir, 'snort.rules')
+    header = '# Nexwall IPS signatures %s, policy %s - generated by nexwall-ips-rules\n' % (version, policy())
+    new = header + '\n'.join(compose(version)) + '\n'
+    try:
+        old = open(target).read()
+    except OSError:
+        old = None
+    if old == new:
+        return 0
+    staged = target + '.new'
+    with open(staged, 'w') as f:
+        f.write(new)
+    ok, out = validate(staged)
+    if not ok:
+        os.remove(staged)
+        state.update(last_result='rules rejected by snort, previous rules kept', last_error=out[-300:])
+        save_state(state)
+        log('the new rules do not load in snort, previous rules kept: %s' % out[-200:].replace('\n', ' '))
+        return 1
+    os.replace(staged, target)
+    state.update(installed_version=version, installed_policy=policy(), installed_at=int(time.time()),
+                 last_result='installed %s (%s)' % (version, policy()), last_error=None)
+    save_state(state)
+    log('installed signature bundle %s, policy %s' % (version, policy()))
+    print('changed')
+    return 0
+
+
+def snort_enabled():
+    return uci('snort.snort.enabled', '0') == '1'
+
+
+def cmd_sync():
+    rc = cmd_update()
+    if rc != 0:
+        return rc
+    p = subprocess.run([sys.argv[0], 'apply'], capture_output=True, text=True)
+    sys.stdout.write(p.stdout)
+    if p.returncode != 0:
+        return p.returncode
+    if 'changed' in p.stdout and snort_enabled():
+        subprocess.run(['/etc/init.d/snort', 'restart'], check=False, capture_output=True)
+        log('snort restarted with the new signatures')
+    return 0
+
+
+def cmd_status(as_json):
+    st = load_state()
+    st['license_state'] = license_state()
+    st['policy'] = policy()
+    if as_json:
+        print(json.dumps(st))
+    else:
+        for k in ('license_state', 'policy', 'version', 'installed_version', 'installed_policy', 'counts', 'last_check', 'last_result', 'last_error'):
+            print('%-18s %s' % (k, st.get(k)))
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest='cmd', required=True)
+    u = sub.add_parser('update')
+    u.add_argument('--force', action='store_true')
+    a = sub.add_parser('apply')
+    a.add_argument('--download', action='store_true')
+    sub.add_parser('sync')
+    s = sub.add_parser('status')
+    s.add_argument('--json', action='store_true')
+    args = ap.parse_args()
+    if args.cmd == 'update':
+        sys.exit(cmd_update(args.force))
+    if args.cmd == 'apply':
+        sys.exit(cmd_apply(args.download))
+    if args.cmd == 'sync':
+        sys.exit(cmd_sync())
+    sys.exit(cmd_status(args.json))
+
+
+if __name__ == '__main__':
+    main()
