@@ -19,8 +19,8 @@ PKG_LICENSE:=GPL-2.0-only
 # reproducible and a changed file on the feed is refused. Without it (option off, other architecture, feed not
 # reachable by the builder) the image is a community build: no licensing logic is shipped and the unit runs with
 # the limited feature set. See nexwall-internal/msp/LICENSE_PROTECTION_ARCHITECTURE.md.
-VENDOR_CORE_VERSION:=1.2.1
-VENDOR_CORE_SHA256:=aff8685907c7a05cbac5d78df2ad8b21ce2a4cb445a4968e0004d14a008219ae
+VENDOR_CORE_VERSION:=1.3.0
+VENDOR_CORE_SHA256:=12e07d2a1bdaa9ec2188202115447225b0c8901f1461f49f80ffc06213bfd5c6
 VENDOR_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 ifeq ($(CONFIG_NEXWALL_LICENSE_VENDOR_CORE),y)
