@@ -10,7 +10,10 @@
 
 touch /etc/crontabs/root
 sed -i '/nexwall-license-register/d' /etc/crontabs/root
-echo '*/15 * * * * /usr/sbin/nexwall-license-register --scheduled >/dev/null 2>&1' >> /etc/crontabs/root
+# with the compiled core installed its daemon does the scheduling; without it, cron does
+if [ ! -x /usr/sbin/nexwall-licensed ]; then
+	echo '*/15 * * * * /usr/sbin/nexwall-license-register --scheduled >/dev/null 2>&1' >> /etc/crontabs/root
+fi
 # a trial or subscription can also end while the unit is offline: re-apply the entitlements regularly
 sed -i '/nexwall-license-enforce/d' /etc/crontabs/root
 echo '*/5 * * * * /usr/sbin/nexwall-license-enforce >/dev/null 2>&1' >> /etc/crontabs/root

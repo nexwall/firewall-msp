@@ -3,13 +3,19 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 START=99
+USE_PROCD=1
 
-start() {
-	# joins the license server in the background: the network may not be up yet, and boot
-	# must never wait for it
-	/usr/sbin/nexwall-license-register --boot >/dev/null 2>&1 &
-}
-
-stop() {
-	:
+start_service() {
+	if [ -x /usr/sbin/nexwall-licensed ]; then
+		# the compiled license core: checks in on its own schedule (retrying until the network is up),
+		# answers the rest of the system over /var/run/nexwall-license.sock and applies the entitlements
+		procd_open_instance
+		procd_set_param command /usr/sbin/nexwall-licensed daemon
+		procd_set_param respawn
+		procd_set_param stderr 1
+		procd_close_instance
+	else
+		# community build: no vendor core installed, join the license server in the background
+		/usr/sbin/nexwall-license-register --boot >/dev/null 2>&1 &
+	fi
 }

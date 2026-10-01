@@ -22,6 +22,7 @@ that fails verification is never treated as "not registered": it is unlicensed.
 import base64
 import json
 import os
+import socket
 from datetime import datetime, timedelta, timezone
 
 from nethsec import utils
@@ -29,6 +30,7 @@ from nethsec import utils
 LICENSE_FILE = '/etc/nexwall-license/license.json'
 FIRST_SEEN_FILE = '/etc/nexwall-license/first_seen'
 PUBKEY_FILE = '/etc/nexwall-license/pubkey.pem'
+DAEMON_SOCKET = '/var/run/nexwall-license.sock'
 BOOTSTRAP_HOURS = 24
 
 FULL = {
@@ -79,8 +81,36 @@ def verify_envelope(envelope, pubkey_path=None):
         return None
 
 
+def _ask(request):
+    """Ask the compiled license core (nexwall-licensed) over its local socket; None when it is not running."""
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(3)
+            s.connect(DAEMON_SOCKET)
+            s.sendall(json.dumps(request).encode() + b'\n')
+            data = b''
+            while True:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+        answer = json.loads(data)
+        return answer if isinstance(answer, dict) and answer.get('ok') else None
+    except (OSError, ValueError):
+        return None
+
+
+def _use_daemon(*overrides):
+    # explicit paths or clock mean a test or a tool that wants the local evaluation
+    return not any(o is not None for o in overrides) and os.path.exists(DAEMON_SOCKET)
+
+
 def load(path=None, pubkey_path=None):
     """Verified license payload, or None when there is no file or it is not validly signed."""
+    if _use_daemon(path, pubkey_path):
+        answer = _ask({'cmd': 'payload'})
+        if answer is not None:
+            return answer.get('payload')
     return _read(path, pubkey_path)[0]
 
 
@@ -119,6 +149,10 @@ def _first_seen(now, path=None):
 
 def state(now=None, license_path=None, first_seen_path=None, pubkey_path=None):
     """Effective state right now: 'subscribed', 'trial' or 'unlicensed'."""
+    if _use_daemon(now, license_path, first_seen_path, pubkey_path):
+        answer = _ask({'cmd': 'state'})
+        if answer is not None:
+            return answer['state']
     now = now or datetime.now(timezone.utc)
     lic, present = _read(license_path, pubkey_path)
     if lic is None and present:
@@ -146,6 +180,10 @@ def state(now=None, license_path=None, first_seen_path=None, pubkey_path=None):
 
 def entitlements(now=None, license_path=None, first_seen_path=None, pubkey_path=None):
     """What this unit may use right now."""
+    if _use_daemon(now, license_path, first_seen_path, pubkey_path):
+        answer = _ask({'cmd': 'entitlements'})
+        if answer is not None and isinstance(answer.get('entitlements'), dict):
+            return answer['entitlements']
     current = state(now, license_path, first_seen_path, pubkey_path)
     if current == 'unlicensed':
         return _copy(LIMITED)

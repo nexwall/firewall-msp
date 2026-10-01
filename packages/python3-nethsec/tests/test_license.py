@@ -122,6 +122,36 @@ def test_license_without_lease_is_unlicensed(tmp_path):
     assert lic.state(**kw(tmp_path, f)) == 'unlicensed'
 
 
+def test_daemon_answers_are_used_when_no_paths_are_given(tmp_path, monkeypatch):
+    import socket as _socket
+    import threading
+
+    path = str(tmp_path / 'lic.sock')
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    srv.bind(path)
+    srv.listen(5)
+
+    def serve():
+        for _ in range(3):
+            conn, _addr = srv.accept()
+            req = json.loads(conn.recv(4096))
+            if req['cmd'] == 'state':
+                out = {'ok': True, 'state': 'subscribed'}
+            elif req['cmd'] == 'entitlements':
+                out = {'ok': True, 'state': 'subscribed', 'entitlements': lic.FULL}
+            else:
+                out = {'ok': True, 'payload': {'hwid': 'x', 'partner_name': 'Acme'}}
+            conn.sendall(json.dumps(out).encode())
+            conn.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    monkeypatch.setattr(lic, 'DAEMON_SOCKET', path)
+    assert lic.state() == 'subscribed'
+    assert lic.entitlements()['ha'] is True
+    assert lic.load()['partner_name'] == 'Acme'
+    srv.close()
+
+
 def test_feature_and_limit_errors(tmp_path):
     f = write(tmp_path, status='expired', license_state='unlicensed')
     k = kw(tmp_path, f)
