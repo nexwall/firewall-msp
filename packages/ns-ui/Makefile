@@ -6,25 +6,24 @@
 include $(TOPDIR)/rules.mk
  
 PKG_NAME:=ns-ui
-# Nexwall fork of NethServer/nethsecurity-ui (upstream 2.24.1), pinned to a commit.
-# Bump PKG_SOURCE_VERSION (and PKG_RELEASE) to ship a new UI build.
+# The web UI is built in a private repository and published, signed, to the Nexwall vendor feed. This recipe
+# downloads one pinned build and checks its SHA-256, so the public tree needs no access to that repository.
+# PKG_VERSION stays at the upstream-derived 2.24.1 so package upgrades keep ordering correctly; the feed build is
+# UI_FEED_VERSION. To ship a new UI: release it (scripts/release-feed.sh in the UI repository), then bump
+# UI_FEED_VERSION and UI_FEED_SHA256 here and PKG_RELEASE.
 PKG_VERSION:=2.24.1
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
-PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/nexwall/nexwall-ui.git
-PKG_SOURCE_VERSION:=9131a5936e59dae00da01b0b3c0b1eb166a8c699
-PKG_SOURCE_SUBDIR:=nexwall-ui-$(PKG_VERSION)
-# tarball name tied to the commit, so a cached upstream tarball is never reused
-PKG_SOURCE:=nexwall-ui-$(PKG_SOURCE_VERSION).tar.zst
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_SOURCE_SUBDIR)
-PKG_MIRROR_HASH:=skip
+UI_FEED_VERSION:=1.0.0
+UI_FEED_SHA256:=864cd1516e9f3c41c18d9affb12282ec1a5232014863b97b2c94733149cde042
+UI_FEED:=https://updates.nexwall.com.br/vendor/stable
+
+PKG_SOURCE:=nexwall-ui_$(UI_FEED_VERSION)_all.tar.gz
+PKG_SOURCE_URL:=$(UI_FEED)/all
+PKG_HASH:=$(UI_FEED_SHA256)
 
 PKG_MAINTAINER:=Giacomo Sanchietti <giacomo.sanchietti@nethesis.it>
 PKG_LICENSE:=GPL-3.0-only
-
-PKG_BUILD_DEPENDS:=node/host
-PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -32,13 +31,17 @@ define Package/ns-ui
 	SECTION:=base
 	CATEGORY:=Nexwall
 	TITLE:=Nexwall Firewall UI
-	URL:=https://github.com/nexwall/nexwall-ui/
 	DEPENDS:=+nginx-ssl
 	PKGARCH:=all
 endef
 
 define Package/ns-ui/description
 Nexwall Firewall web user interface
+endef
+
+define Build/Prepare
+	mkdir -p $(PKG_BUILD_DIR)/dist
+	tar -C $(PKG_BUILD_DIR)/dist -xzf $(DL_DIR)/$(PKG_SOURCE)
 endef
 
 define Build/Configure
@@ -50,7 +53,6 @@ define Package/ns-ui/conffiles
 endef
 
 define Build/Compile
-	(cd $(PKG_BUILD_DIR) && npm ci && npm run build)
 endef
 
 define Package/ns-ui/postinst
@@ -72,6 +74,7 @@ define Package/ns-ui/install
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/ns-ui.uci-defaults $(1)/etc/uci-defaults
 	$(CP) $(PKG_BUILD_DIR)/dist/* $(1)/www-ns
+	rm -f $(1)/www-ns/BUILD_INFO
 endef
  
 $(eval $(call BuildPackage,ns-ui))
