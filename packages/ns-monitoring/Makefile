@@ -41,7 +41,7 @@ define Package/ns-monitoring
 	CATEGORY:=NethServer
 	TITLE:=Nethsecurity Monitoring
 	URL:=https://github.com/nexwall/nexwall-monitoring
-	DEPENDS:=+nexwall-netify-plugins $(GO_ARCH_DEPENDS) netifyd ns-dpi
+	DEPENDS:=$(GO_ARCH_DEPENDS) netifyd ns-dpi
 endef
 
 define Package/ns-monitoring/conffiles
