@@ -29,6 +29,7 @@ define Package/ns-dpi
 		+python3 \
 		+python3-jinja2 \
 		+python3-requests \
+		+nexwall-dpi-plugin \
 		+python3-cryptodome
 	PKGARCH:=all
 endef
@@ -89,11 +90,8 @@ define Package/ns-dpi/install
 	$(INSTALL_BIN) ./files/99-dpi-data-update-cron.uci-defaults $(1)/etc/uci-defaults/99-dpi-data-update-cron
 	$(INSTALL_DIR) $(1)/usr/share/ns-plug/hooks/register
 	$(INSTALL_BIN) ./files/70dpi $(1)/usr/share/ns-plug/hooks/unregister/
-	# proc-flow-actions plugin wiring (nx-proc-flow-actions.so is built and
-	# installed by the netifyd package - see its Makefile - this just wires
-	# up the config that points at dpi-config's own output file, above)
-	$(INSTALL_DIR) $(1)/etc/netifyd/plugins.d
-	$(INSTALL_DATA) ./files/netifyd/plugins.d/10-dpi-actions.conf $(1)/etc/netifyd/plugins.d/10-dpi-actions.conf
+	# the proc-flow-actions plugin and its config (/etc/netifyd/plugins.d/10-dpi-actions.conf) come from the
+	# nexwall-dpi-plugin package (vendor feed); dpi-config's output file is what that plugin reads
 endef
 
 $(eval $(call BuildPackage,ns-dpi))

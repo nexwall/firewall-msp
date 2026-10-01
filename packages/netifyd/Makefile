@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=netifyd
 PKG_VERSION:=5.2.8
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_MAINTAINER:=Nexwall <dev@nexwall.com.br>
 PKG_LICENSE:=GPL-3.0-or-later
 
@@ -151,7 +151,6 @@ define Package/netifyd/install
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-proc-flows.so $(1)/usr/lib/
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-sink-http.so $(1)/usr/lib/
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-proc-aggregator.so $(1)/usr/lib/
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-proc-flow-actions.so $(1)/usr/lib/
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-sink-log.so $(1)/usr/lib/
 	$(INSTALL_DIR) $(1)/etc/netifyd
 	$(INSTALL_DIR) $(1)/etc/netifyd/address-groups.d
