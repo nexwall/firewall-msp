@@ -12,13 +12,17 @@
 #  - it only ever switches things OFF. Configuration is kept, so an administrator can turn a service
 #    back on once the unit is licensed again; nothing is re-enabled automatically.
 #  - idempotent and cheap: with nothing to do it only reads the license and a few UCI options.
-#  - reverse proxy and HA are not stopped here (that could cut live traffic or a failover pair);
-#    creating or changing them is refused by the API.
+#  - reverse proxy and HA carry live traffic or a failover pair, so they are not cut at once: when the
+#    license stops covering them a grace period starts (default 7 days, uci nexwall-license.main.grace_days),
+#    the unit logs it, and only when it runs out they are switched off (HA: this node only). The grace
+#    clock is kept in enforced.json and cleared as soon as the license covers the feature again.
+#    Creating or changing them is refused by the API from the first minute.
 #
 # Usage: nexwall-license-enforce [--dry-run]
 import json
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 
 from euci import EUci
 from nethsec import license as nx_license
@@ -26,6 +30,7 @@ from nethsec import utils
 
 DRY = '--dry-run' in sys.argv[1:]
 STATE_FILE = '/etc/nexwall-license/enforced.json'
+GRACE_DAYS_DEFAULT = 7
 acted = []
 to_run = []   # commands to run after the commit, in order
 to_stop = []  # init scripts to stop explicitly: a config reload alone does not unload their rules
@@ -152,12 +157,96 @@ def enforce_sslvpn(u, allowed):
         u.commit('users')
 
 
+def load_state():
+    try:
+        with open(STATE_FILE) as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def reverse_proxy_in_use(u):
+    for name, o in utils.get_all_by_type(u, 'nginx', 'server').items():
+        if o.get('uci_description') is not None and o.get('uci_enable', 'true') != 'false':
+            return True
+    includes = list(u.get('nginx', '_lan', 'include', default=[], list=True))
+    return 'conf.d/_lan[.]proxy' in includes
+
+
+def stop_reverse_proxy(u):
+    for name, o in utils.get_all_by_type(u, 'nginx', 'server').items():
+        if o.get('uci_description') is not None and o.get('uci_enable', 'true') != 'false':
+            u.set('nginx', name, 'uci_enable', 'false')
+    includes = [i for i in u.get('nginx', '_lan', 'include', default=[], list=True) if i != 'conf.d/_lan[.]proxy']
+    if includes:
+        u.set('nginx', '_lan', 'include', includes)
+    else:
+        try:
+            u.delete('nginx', '_lan', 'include')
+        except Exception:
+            pass
+    u.commit('nginx')
+    to_run.append(['/etc/init.d/ns-reverse-proxy', 'restart'])
+
+
+def ha_in_use(u):
+    return u.get('keepalived', 'globals', 'enabled', default='0') == '1'
+
+
+def stop_ha(u):
+    u.set('keepalived', 'globals', 'enabled', '0')
+    u.commit('keepalived')
+    to_stop.append('keepalived')
+
+
+def enforce_grace(u, ent, now=None):
+    """Reverse proxy and HA: warn first, switch off only when the grace period has run out."""
+    now = now or datetime.now(timezone.utc)
+    days = int(u.get('nexwall-license', 'main', 'grace_days', default=GRACE_DAYS_DEFAULT) or GRACE_DAYS_DEFAULT)
+    state = load_state()
+    grace = state.get('grace') if isinstance(state.get('grace'), dict) else {}
+    changed = False
+    for feature, in_use, stop, label in (('reverse_proxy', reverse_proxy_in_use, stop_reverse_proxy, 'reverse proxy'),
+                                         ('ha', ha_in_use, stop_ha, 'high availability')):
+        if ent.get(feature) or not in_use(u):
+            if feature in grace:  # covered again, or not in use any more: forget the clock
+                del grace[feature]
+                changed = True
+            continue
+        started = nx_license._ts(grace.get(feature))
+        if started is None:
+            started = now
+            grace[feature] = now.isoformat()
+            changed = True
+            log(f'{label} is not covered by the license: grace period of {days} days started')
+        end = started + timedelta(days=days)
+        if now >= end:
+            record(f'{label} (grace period ended {end.date()})')
+            if not DRY:
+                stop(u)
+            del grace[feature]
+            changed = True
+        else:
+            print(f'{label}: not covered by the license, switched off after {end.date()}')
+    if changed and not DRY:
+        state['grace'] = grace
+        state['state'] = nx_license.state()
+        try:
+            with open(STATE_FILE, 'w') as f:
+                json.dump(state, f, indent=2)
+        except OSError:
+            pass
+    return state
+
+
 def main():
     ent = nx_license.entitlements()
     u = EUci()
     before = pending_configs()
     if not ent['security_services']:
         enforce_security_services(u)
+    enforce_grace(u, ent)
     lim = ent['limits']
     if lim.get('ipsec_s2s') is not None:
         enforce_ipsec(u, lim['ipsec_s2s'])
@@ -175,8 +264,10 @@ def main():
         for cmd in to_run:
             subprocess.run(cmd, capture_output=True, timeout=300, check=False)
         try:
+            state = load_state()
+            state.update({'state': nx_license.state(), 'switched_off': acted})
             with open(STATE_FILE, 'w') as f:
-                json.dump({'state': nx_license.state(), 'switched_off': acted}, f, indent=2)
+                json.dump(state, f, indent=2)
         except OSError:
             pass
     if not acted:
