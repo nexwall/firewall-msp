@@ -41,7 +41,7 @@ define Package/ns-monitoring
 	CATEGORY:=NethServer
 	TITLE:=Nethsecurity Monitoring
 	URL:=https://github.com/nexwall/nexwall-monitoring
-	DEPENDS:=$(GO_ARCH_DEPENDS) netifyd ns-dpi
+	DEPENDS:=+nexwall-netify-plugins $(GO_ARCH_DEPENDS) netifyd ns-dpi
 endef
 
 define Package/ns-monitoring/conffiles
@@ -69,8 +69,8 @@ define Package/ns-monitoring/install
 	# installed by the netifyd package); proc-aggregator -> sink-http -> ns-stats
 	# (aggregator not yet part of this image, see 10-ns-stats.conf)
 	$(INSTALL_DIR) $(1)/etc/netifyd/plugins.d
-	$(INSTALL_DATA) ./files/netifyd/plugins.d/10-ns-flows.conf $(1)/etc/netifyd/plugins.d/10-ns-flows.conf
-	$(INSTALL_DATA) ./files/netifyd/plugins.d/10-ns-stats.conf $(1)/etc/netifyd/plugins.d/10-ns-stats.conf
+	# plugins.d/10-ns-flows.conf and 10-ns-stats.conf (the loaders of the proprietary plugins) are installed by
+	# the nexwall-netify-plugins package together with the plugins
 	$(INSTALL_DATA) ./files/netifyd/netify-ns-flows-proc.json $(1)/etc/netifyd/netify-ns-flows-proc.json
 	$(INSTALL_DATA) ./files/netifyd/netify-ns-flows-sink.json $(1)/etc/netifyd/netify-ns-flows-sink.json
 	$(INSTALL_DATA) ./files/netifyd/netify-ns-stats-proc.json $(1)/etc/netifyd/netify-ns-stats-proc.json

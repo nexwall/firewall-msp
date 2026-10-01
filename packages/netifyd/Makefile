@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=netifyd
 PKG_VERSION:=5.2.8
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 PKG_MAINTAINER:=Nexwall <dev@nexwall.com.br>
 PKG_LICENSE:=GPL-3.0-or-later
 
@@ -148,10 +148,6 @@ define Package/netifyd/install
 	# preserves the SONAME symlinks libtool already creates.
 	$(INSTALL_DIR) $(1)/usr/lib
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnetifyd.so* $(1)/usr/lib/
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-proc-flows.so $(1)/usr/lib/
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-sink-http.so $(1)/usr/lib/
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-proc-aggregator.so $(1)/usr/lib/
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libnx-sink-log.so $(1)/usr/lib/
 	$(INSTALL_DIR) $(1)/etc/netifyd
 	$(INSTALL_DIR) $(1)/etc/netifyd/address-groups.d
 	$(INSTALL_DIR) $(1)/etc/netifyd/categories.d
@@ -164,9 +160,8 @@ define Package/netifyd/install
 	# vendor's own inert usage examples
 	$(INSTALL_DATA) ./files/10-nfqueue.conf $(1)/etc/netifyd/interfaces.d/10-nfqueue.conf
 	$(INSTALL_DIR) $(1)/etc/netifyd/plugins.d
-	# proc-aggregator/sink-log: feeds ns.talkers ("Top consumers" in the UI)
-	$(INSTALL_DATA) ./files/plugins.d/10-netify-proc-aggregator.conf $(1)/etc/netifyd/plugins.d/10-netify-proc-aggregator.conf
-	$(INSTALL_DATA) ./files/plugins.d/10-sink-log.conf $(1)/etc/netifyd/plugins.d/10-sink-log.conf
+	# the plugin loaders (plugins.d/*.conf) travel with the plugins (package nexwall-netify-plugins); a loader
+	# without its library crash-loops the engine. Their JSON settings below are plain data and stay here.
 	$(INSTALL_DATA) ./files/netify-proc-aggregator.json $(1)/etc/netifyd/netify-proc-aggregator.json
 	$(INSTALL_DATA) ./files/netify-sink-log.json $(1)/etc/netifyd/netify-sink-log.json
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/deploy/netify-apps.conf $(1)/etc/netifyd

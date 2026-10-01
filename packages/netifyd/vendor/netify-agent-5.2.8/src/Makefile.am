@@ -108,34 +108,8 @@ endif
 # For debugging ns_initparse
 #netifyd_SOURCES += ns-parse.c
 
-# Nexwall plugins:
-# - nx-proc-flows, nx-sink-http: open-source equivalents of the proprietary
-#   proc-core/sink-http distribution.
-# - nx-proc-aggregator: proprietary, canonical source lives in the private
-#   nexwall/netify-plugins-pro repo, vendored here to build alongside the
-#   others.
-# All three: none buildable against this engine version any other way - see
-# msp/DPI_PLAN.md in the internal repo. Against the same public plugin ABI.
-# -module -avoid-version: these are dlopen'd plugins, not a versioned shared
-# library like libnetifyd.la itself, so they must not carry a SONAME suffix.
-plugin_LTLIBRARIES = libnx-proc-flows.la libnx-sink-http.la libnx-proc-aggregator.la libnx-sink-log.la
+# Nexwall plugins (nx-proc-flows, nx-sink-http, nx-proc-aggregator, nx-sink-log, nx-proc-flow-actions) are NOT built
+# here. They are proprietary, built in the private pipeline against exactly this build (they link against
+# libnetifyd) and delivered through the Nexwall vendor feed, package nexwall-netify-plugins.
+# plugindir is still defined: that pipeline reuses it for the install path.
 plugindir = $(plugin_libdir)
-
-libnx_proc_flows_la_SOURCES = plugins/nx-proc-flows.cpp
-libnx_proc_flows_la_LDFLAGS = -module -avoid-version -shared
-libnx_proc_flows_la_LIBADD = libnetifyd.la
-
-libnx_sink_http_la_SOURCES = plugins/nx-sink-http.cpp
-libnx_sink_http_la_LDFLAGS = -module -avoid-version -shared
-libnx_sink_http_la_LIBADD = libnetifyd.la $(LIBCURL_LIBS)
-
-libnx_proc_aggregator_la_SOURCES = plugins/nx-proc-aggregator.cpp
-libnx_proc_aggregator_la_LDFLAGS = -module -avoid-version -shared
-libnx_proc_aggregator_la_LIBADD = libnetifyd.la
-
-# nx-proc-flow-actions (DPI rule enforcement) is not built here: it is a proprietary plugin built in the private
-# pipeline against this exact build and delivered through the vendor feed (package nexwall-dpi-plugin).
-
-libnx_sink_log_la_SOURCES = plugins/nx-sink-log.cpp
-libnx_sink_log_la_LDFLAGS = -module -avoid-version -shared
-libnx_sink_log_la_LIBADD = libnetifyd.la

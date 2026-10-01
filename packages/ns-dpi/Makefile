@@ -29,7 +29,7 @@ define Package/ns-dpi
 		+python3 \
 		+python3-jinja2 \
 		+python3-requests \
-		+nexwall-dpi-plugin \
+		+nexwall-netify-plugins \
 		+python3-cryptodome
 	PKGARCH:=all
 endef
