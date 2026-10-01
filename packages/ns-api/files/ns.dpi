@@ -11,6 +11,7 @@ import sys
 from euci import EUci
 from nethsec import dpi, utils
 from nethsec import license as nx_license
+from nethsec.license import enforcement
 
 cmd = sys.argv[1]
 
@@ -71,6 +72,7 @@ if cmd == 'list':
         },
         'update-catalog': {},
         'get-engine-settings': {},
+        'get-enforcement-status': {},
         'set-engine-settings': {
             'overload_action': 'allow',
             'queue_limit': 256
@@ -172,6 +174,8 @@ elif cmd == 'call':
             print(json.dumps({'message': 'success'}))
         elif action == 'update-catalog':
             print(json.dumps(dpi.update_catalog()))
+        elif action == 'get-enforcement-status':
+            print(json.dumps(enforcement.dpi_enforcement()))
         elif action == 'get-engine-settings':
             print(json.dumps(dpi.get_engine_settings(e_uci)))
         elif action == 'set-engine-settings':
