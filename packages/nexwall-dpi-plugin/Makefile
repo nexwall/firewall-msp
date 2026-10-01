@@ -19,7 +19,7 @@ PKG_MAINTAINER:=Nexwall
 # valid short-lived token; without the plugin (community build) the engine still classifies traffic but nothing is
 # blocked or marked. See nexwall-internal/msp/DPI_PLUGIN_LICENSE_TOKEN.md.
 PLUGIN_FEED_VERSION:=1.0.0
-PLUGIN_FEED_SHA256:=PLACEHOLDER_UNTIL_PUBLISHED
+PLUGIN_FEED_SHA256:=5d0d2b7482688ae9ebac19b1b9cd82e6a855b74217d056eb4c9586c9ede9ed0c
 PLUGIN_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 NETIFYD_ABI:=$(shell sed -n 's/^PKG_VERSION:=//p' $(CURDIR)/../netifyd/Makefile)-r$(shell sed -n 's/^PKG_RELEASE:=//p' $(CURDIR)/../netifyd/Makefile)
