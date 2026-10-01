@@ -111,7 +111,9 @@ check() {
 
 	local test_conf="${CONF_DIR}/test_conf.lua"
 	_SNORT_WITHOUT_RULES="$no_rules" print snort > "${test_conf}" || die "Errors during generation of snort config"
-	if $PROG -T $warn -c "${test_conf}" 2> $OUT ; then
+	local plugin_args=""
+	[ -f /usr/lib/snort_nexwall/nx_ips_gate.so ] && plugin_args="--plugin-path /usr/lib/snort_nexwall"
+	if $PROG -T $warn $plugin_args -c "${test_conf}" 2> $OUT ; then
 		rm "${test_conf:?}"
 	else
 		die "Errors in snort config tests.  Examine ${test_conf} for issues"

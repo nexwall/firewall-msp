@@ -79,8 +79,14 @@ def log(msg):
 
 
 def license_state():
+    """subscribed, trial, unlicensed, or unknown when the license core is installed but not answering (stopped, starting).
+    Unknown must never be read as "unlicensed": it would replace verified signatures with the fallback every time the unit boots
+    before the license service is up."""
     try:
         from nethsec import license as nx_license
+        from nethsec.license import enforcement
+        if enforcement.core_state() == 'down':
+            return 'unknown'
         return nx_license.state()
     except Exception:
         return 'unlicensed'
@@ -152,6 +158,10 @@ def download_files(manifest, names):
 def cmd_update(force=False):
     state = load_state()
     st = license_state()
+    if st == 'unknown':
+        state.update(last_check=int(time.time()), last_result='license service not answering: keeping the installed signatures')
+        save_state(state)
+        return 1  # a failure that keeps the verified bundle already on the unit (see cmd_apply)
     if st not in ('subscribed', 'trial'):
         state.update(last_check=int(time.time()), last_result='not licensed: Community rules are used')
         save_state(state)

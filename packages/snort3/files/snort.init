@@ -71,6 +71,11 @@ setup_tweaks() {
 }
 
 start_service() {
+	# Nexwall license gate (vendor plugin): snort loads plugins from --plugin-path on the command line only; the same
+	# setting inside the generated configuration is read too late and snort then reports "unknown table nx_ips_gate"
+	local plugin_args=""
+	[ -f /usr/lib/snort_nexwall/nx_ips_gate.so ] && plugin_args="--plugin-path /usr/lib/snort_nexwall"
+
 	# If you wish to use application-managed PID file:
 	# output.logdir, in the snort lua config, determines the PID file location.
 	# Add '--create-pidfile' to the 'command', below.
@@ -104,7 +109,7 @@ start_service() {
 		if [ -z "${maxlen}" ]; then
 			maxlen=1024
 		fi
-		procd_set_param command "$PROG" -c "${config_file}" --tweaks ns_local --daq nfq --daq-var queue_maxlen=${maxlen}
+		procd_set_param command "$PROG" -c "${config_file}" $plugin_args --tweaks ns_local --daq nfq --daq-var queue_maxlen=${maxlen}
 	else
 		procd_set_param command $PROG -q -i "$interface" -c "${config_dir%/}/snort.lua" --tweaks local
 		procd_set_param env SNORT_LUA_PATH="$config_dir"

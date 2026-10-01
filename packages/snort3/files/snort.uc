@@ -44,9 +44,6 @@ snort  = {
 {% if (snort.mode == 'ips'): %}
   ['-Q'] = true,
 {% endif %}
-{% if (nx_gate): %}
-  ['--plugin-path'] = '/usr/lib/snort_nexwall',
-{% endif %}
   ['--daq'] = '{{ snort.method }}',
 {% if (snort.method == 'nfq'): %}
   ['--max-packet-threads'] = {{ nfq.thread_count }},

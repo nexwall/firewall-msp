@@ -176,3 +176,17 @@ def test_unlicensed_unit_always_falls_back_even_with_a_cache(env):
     env.cmd_apply()
     env._env['state']['license'] = 'unlicensed'
     assert env.cmd_apply(download=True) == 3
+
+
+def test_license_service_not_answering_keeps_the_bundle_and_never_falls_back(env):
+    assert env.cmd_apply() == 0
+    before = installed(env)
+    env._env['state']['license'] = 'unknown'
+    assert env.cmd_apply(download=True) == 0             # keeps the verified cached bundle
+    assert installed(env) == before
+    assert 'not answering' in env.load_state()['last_result']
+
+
+def test_license_service_not_answering_without_a_cache_asks_for_the_fallback(env):
+    env._env['state']['license'] = 'unknown'
+    assert env.cmd_apply() == 1                          # nothing cached: ns-snort-rules uses the Community rules

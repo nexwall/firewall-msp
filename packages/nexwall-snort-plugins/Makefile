@@ -18,8 +18,8 @@ PKG_MAINTAINER:=Nexwall
 # only while the Nexwall license core hands the plugin a valid short-lived token. Without the package (community build) snort
 # runs ungated, but the managed signatures and the license-checked API are not there either.
 # See nexwall-internal/msp/IPS_PLUGIN_AND_SIGNATURES.md.
-PLUGIN_FEED_VERSION:=1.0.0
-PLUGIN_FEED_SHA256:=PLACEHOLDER_UNTIL_PUBLISHED
+PLUGIN_FEED_VERSION:=1.0.1
+PLUGIN_FEED_SHA256:=54290609e9a704165a07d768b633f06db885fe3016ceb4b157856a53bf50bfc1
 PLUGIN_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 SNORT_ABI:=$(shell sed -n 's/^PKG_VERSION:=//p' $(CURDIR)/../snort3/Makefile)-r$(shell sed -n 's/^PKG_RELEASE:=//p' $(CURDIR)/../snort3/Makefile)
