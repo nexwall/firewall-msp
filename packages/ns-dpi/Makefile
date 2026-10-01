@@ -29,7 +29,7 @@ define Package/ns-dpi
 		+python3 \
 		+python3-jinja2 \
 		+python3-requests \
-		+python3-pycryptodome
+		+python3-cryptodome
 	PKGARCH:=all
 endef
 
