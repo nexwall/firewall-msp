@@ -24,6 +24,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -192,7 +193,26 @@ def verify_manifest(resp):
     return m
 
 
+CORE_CTL = '/usr/sbin/licensectl'
+
+
+class CoreResponse:
+    def __init__(self, status_code, content):
+        self.status_code, self.content = status_code, content
+
+    def json(self):
+        return json.loads(self.content)
+
+
 def fetch(server, headers, path):
+    if os.path.exists(CORE_CTL):
+        # the compiled license core talks to the server: pinned TLS, device token and device signature
+        p = subprocess.run([CORE_CTL, 'get', path], capture_output=True, timeout=180)
+        if p.returncode == 0:
+            return CoreResponse(200, p.stdout)
+        msg = p.stderr.decode(errors='replace')
+        m = re.search(r'\((\d{3})\)', msg) or re.search(r'HTTP (\d{3})', msg)
+        return CoreResponse(int(m.group(1)) if m else 599, b'')
     r = requests.get(server + path, headers=headers, timeout=(10, 120))
     return r
 
