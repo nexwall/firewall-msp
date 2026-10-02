@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-scripts
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -34,7 +34,7 @@ define Package/nexwall-scripts/description
 	being served, with report, alert and restart limits) and dpidbg (look inside the
 	DPI engine: status, unclassified traffic, debug capture, loaded catalog).
 	Also nexwall-fastpath (hands connections the DPI and IPS engines are finished with to the kernel's
-	flow table; off by default, see /etc/config/nexwall_perf).
+	flow table; on by default, see /etc/config/nexwall_perf).
 	See nexwall-scripts (github.com/nexwall/nexwall-scripts) for full docs.
 endef
 
