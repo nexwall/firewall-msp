@@ -19,8 +19,8 @@ PKG_MAINTAINER:=Nexwall
 # so a mismatch is refused at build time). The enforcement and statistics plugins act only while the Nexwall license
 # core hands them a valid short-lived token. Without the package (community build) the engine still classifies
 # traffic but nothing is blocked, accounted or exported. See nexwall-internal/msp/DPI_PLUGIN_LICENSE_TOKEN.md.
-PLUGIN_FEED_VERSION:=1.0.0
-PLUGIN_FEED_SHA256:=5eeaabefe206e4a0652220ff3882f52ecb317b804da5cfa38a06ad11926c254b
+PLUGIN_FEED_VERSION:=1.0.1
+PLUGIN_FEED_SHA256:=23a86ff53d3bfddf7018aefa72469f5727ef53c604dcce8d081e6a9a13ff37a3
 PLUGIN_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 NETIFYD_ABI:=$(shell sed -n 's/^PKG_VERSION:=//p' $(CURDIR)/../netifyd/Makefile)-r$(shell sed -n 's/^PKG_RELEASE:=//p' $(CURDIR)/../netifyd/Makefile)
