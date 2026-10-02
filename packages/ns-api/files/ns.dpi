@@ -9,7 +9,7 @@ import json
 import sys
 
 from euci import EUci
-from nethsec import dpi, utils, performance
+from nethsec import dpi, utils, performance, engine_metrics
 from nethsec import license as nx_license
 from nethsec.license import enforcement
 
@@ -73,6 +73,7 @@ if cmd == 'list':
         'update-catalog': {},
         'get-engine-settings': {},
         'get-performance': {},
+        'get-engine-metrics': {},
         'set-performance': {
             'dpi_threads': 'auto',
             'fastpath': False,
@@ -189,6 +190,8 @@ elif cmd == 'call':
             data = json.JSONDecoder().decode(sys.stdin.read())
             dpi.set_engine_settings(e_uci, data['overload_action'], data['queue_limit'])
             print(json.dumps({'message': 'success'}))
+        elif action == 'get-engine-metrics':
+            print(json.dumps(engine_metrics.collect()))
         elif action == 'get-performance':
             print(json.dumps({**performance.get_settings(e_uci), 'fastpath_status': performance.fastpath_status()}))
         elif action == 'set-performance':
