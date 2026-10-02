@@ -2,54 +2,20 @@
 
 #
 # Copyright (C) 2023 Nethesis S.r.l.
+# Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
 
 #
-# Threat shield: add Nexwall categories to banip
+# Threat shield IP: add the address categories of the Nexwall threat feeds to banip (local files downloaded by
+# nexwall-threat-feeds from the license server).
 #
 
-. /lib/functions.sh
-
-keep=''
-
-handle_blocklist() {
-    # preserve only non-enteprise lists
-    if ! echo $1 | grep -q -E '^nexwall' ; then
-        keep="$keep $1"
-    fi
-}
-
-
-function exit_error {
-    >&2 echo "[ERROR] $@"
-    exit 1
-}
-
-SYSTEM_SECRET=$(uci -q get ns-plug.config.secret)
-SYSTEM_ID=$(uci -q get ns-plug.config.system_id)
-TYPE=$(uci -q get ns-plug.config.type)
-
-if [ ! -z "$SYSTEM_SECRET" ] && [ ! -z "$SYSTEM_ID" ]; then
-    jq -s '.[0] * .[1]' /etc/banip/banip.nexwall.feeds /etc/banip/banip.feeds \
-	    | sed -e "s/__USER__/$SYSTEM_ID/" -e "s/__PASSWORD__/$SYSTEM_SECRET/" -e "s/__TYPE__/$TYPE/" > /etc/banip/banip.custom.feeds
-    if ! uci -q get banip.global.ban_allowurl | grep -q lists.nexwall.com.br; then
-        uci add_list banip.global.ban_allowurl="https://$SYSTEM_ID:$SYSTEM_SECRET@lists.nexwall.com.br/plain/$TYPE/nexwall-blacklists/whitelist.global"
-        uci commit banip
-    fi
+TMP_FEEDS=/tmp/ts-ip.feeds
+if /usr/sbin/nexwall-threat-feeds feeds-ip > "$TMP_FEEDS" 2>/dev/null && jq -e . "$TMP_FEEDS" >/dev/null 2>&1; then
+    jq -s '.[0] * .[1]' "$TMP_FEEDS" /etc/banip/banip.feeds > /etc/banip/banip.custom.feeds.new && mv /etc/banip/banip.custom.feeds.new /etc/banip/banip.custom.feeds
 else
-    allow=$(uci -q get banip.global.ban_allowurl | tr " " "\n" | grep lists.nexwall.com.br)
-    if [ "$allow" != "" ]; then
-        # cleanup allowlist
-        uci del_list banip.global.ban_allowurl="$allow"
-        # remove premium blocklist
-        config_load banip
-        config_list_foreach global ban_feed handle_blocklist
-        uci -q delete banip.global.ban_feed
-        for k in $keep; do
-            uci add_list banip.global.ban_feed=$k
-        done
-        uci commit banip
-    fi
-    > /etc/banip/banip.custom.feeds
+    # keep the previous definitions on a transient failure; without any, banip uses its own list
+    [ -f /etc/banip/banip.custom.feeds ] || : > /etc/banip/banip.custom.feeds
 fi
+rm -f "$TMP_FEEDS"

@@ -1,0 +1,374 @@
+#!/usr/bin/python3
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Threat feeds of this firewall: the lists behind DNS filtering (adblock, domains) and IP blocking (banip, addresses).
+#
+#   licensed (subscription or trial)  the signed Nexwall threat feed bundle (malware, phishing, scam, adult, ... and IP
+#                                     reputation categories, built daily on the license server from vetted open lists) is
+#                                     downloaded through the license service, verified and given to adblock and banip as local files
+#   not licensed                      no lists are provided
+#   license service not answering     what is on the unit stays (it is not read as "unlicensed")
+#
+#   nexwall-threat-feeds update [--force]   check the server, download the categories that are switched on (and the catalog)
+#   nexwall-threat-feeds feeds-dns          JSON for /etc/adblock/adblock.custom.feeds (called by ts-dns)
+#   nexwall-threat-feeds feeds-ip           JSON for /etc/banip/banip.custom.feeds (called by ts-ip)
+#   nexwall-threat-feeds sync               update, then reload adblock / banip when something they use changed (cron)
+#   nexwall-threat-feeds status [--json]
+#
+# The unit never trusts what the server sends: the manifest must carry the license server's signature and every file must
+# match the signed hash, in its compressed and in its plain form.
+import argparse
+import base64
+import gzip
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+CORE_CTL = '/usr/sbin/licensectl'
+PUBKEY = '/etc/nexwall-license/pubkey.pem'
+MIN_INTERVAL = 25 * 60
+FEED_PREFIX = 'nexwall_'          # feed ids in adblock and banip: nexwall_<category>
+BYTES_PER_DOMAIN = 75             # what dnsmasq needs per blocked domain (measured: 3.5 million domains took 260 MB)
+VERSION_RE = re.compile(r'^\d{4}\.\d{2}\.\d{2}\.\d+$')
+
+
+def uci(key, default=''):
+    p = subprocess.run(['uci', '-q', 'get', key], capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 and p.stdout.strip() else default
+
+
+def uci_list(key):
+    p = subprocess.run(['uci', '-q', 'get', key], capture_output=True, text=True)
+    return [x.strip("'") for x in p.stdout.split()] if p.returncode == 0 else []
+
+
+def cache_dir():
+    return '/mnt/data/threat-feeds' if os.path.isdir('/mnt/data') else '/var/threat-feeds'
+
+
+def state_path():
+    return os.path.join(cache_dir(), 'state.json')
+
+
+def load_state():
+    try:
+        with open(state_path()) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state):
+    os.makedirs(cache_dir(), exist_ok=True)
+    tmp = state_path() + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(state, f, indent=2)
+    os.replace(tmp, state_path())
+
+
+def log(msg):
+    print(msg, file=sys.stderr)
+    subprocess.run(['logger', '-t', 'nexwall-threat-feeds', msg], check=False)
+
+
+def license_state():
+    try:
+        from nethsec import license as nx_license
+        from nethsec.license import enforcement
+        if enforcement.core_state() == 'down':
+            return 'unknown'
+        return nx_license.state()
+    except Exception:
+        return 'unlicensed'
+
+
+def fetch(path):
+    p = subprocess.run([CORE_CTL, 'get', path], capture_output=True, timeout=600)
+    if p.returncode != 0:
+        raise RuntimeError('%s: %s' % (path, p.stderr.decode(errors='replace').strip() or 'request failed'))
+    return p.stdout
+
+
+def verify_manifest(resp):
+    from Crypto.Hash import SHA256
+    from Crypto.PublicKey import RSA
+    from Crypto.Signature import pkcs1_15
+    with open(PUBKEY, 'rb') as f:
+        key = RSA.import_key(f.read())
+    payload = base64.b64decode(resp['payload'])
+    pkcs1_15.new(key).verify(SHA256.new(payload), base64.b64decode(resp['signature']))
+    m = json.loads(payload)
+    if m.get('kind') != 'threat-feeds':
+        raise ValueError('not a threat feed manifest')
+    return m
+
+
+def version_dir(version):
+    return os.path.join(cache_dir(), version)
+
+
+def catalog():
+    """The verified manifest of the newest bundle seen: category id -> metadata, or {}."""
+    try:
+        with open(os.path.join(cache_dir(), 'manifest.json')) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def enabled_categories(manifest):
+    """Categories switched on in adblock (domains) and banip (addresses), as category ids."""
+    dns = {f[len(FEED_PREFIX):] for f in uci_list('adblock.global.adb_feed') if f.startswith(FEED_PREFIX)}
+    ip = {f[len(FEED_PREFIX):] for f in uci_list('banip.global.ban_feed') if f.startswith(FEED_PREFIX)}
+    cats = manifest.get('categories', {})
+    return {c for c in dns if cats.get(c, {}).get('kind') == 'dns'} | {c for c in ip if cats.get(c, {}).get('kind') == 'ip'}
+
+
+def category_path(version, manifest, cid):
+    return os.path.join(version_dir(version), manifest['files'][manifest['categories'][cid]['file']]['name'])
+
+
+def download_category(manifest, cid):
+    version = manifest['version']
+    gzname = manifest['categories'][cid]['file']
+    want = manifest['files'][gzname]
+    out = os.path.join(version_dir(version), want['name'])
+    if os.path.exists(out) and os.path.getsize(out) == want['raw_size']:
+        return False
+    os.makedirs(version_dir(version), exist_ok=True)
+    data = fetch('/api/v1/threat/file/%s/%s' % (version, gzname))
+    if len(data) != want['size'] or hashlib.sha256(data).hexdigest() != want['sha256']:
+        raise ValueError('%s does not match the signed manifest' % gzname)
+    raw = gzip.decompress(data)
+    if len(raw) != want['raw_size'] or hashlib.sha256(raw).hexdigest() != want['raw_sha256']:
+        raise ValueError('%s does not match the signed manifest after decompression' % gzname)
+    tmp = out + '.tmp'
+    with open(tmp, 'wb') as f:
+        f.write(raw)
+    os.replace(tmp, out)
+    return True
+
+
+def prune():
+    versions = sorted(d for d in os.listdir(cache_dir()) if VERSION_RE.match(d))
+    for old in versions[:-2]:
+        shutil.rmtree(os.path.join(cache_dir(), old), ignore_errors=True)
+
+
+# the category names of the lists earlier versions fetched from a third-party mirror, and the Nexwall category that replaces each
+LEGACY = {'malware_lvl2': 'malware', 'malware_privacy_lvl2': 'ads_tracking', 'malware_privacy_lvl3': 'ads_tracking',
+          'malware_privacy_lvl4': 'ads_tracking', 'adult': 'adult', 'gambling': 'gambling', 'piracy': 'piracy',
+          'doh_vpn_tor_proxy': 'bypass'}
+
+
+def migrate_legacy(manifest):
+    """Carry the administrator's choices over: an earlier category that is switched on becomes its Nexwall counterpart."""
+    key = 'adblock.global.adb_feed'
+    old = uci_list(key)
+    if not any(f in LEGACY for f in old):
+        return False
+    new = []
+    for f in old:
+        target = FEED_PREFIX + LEGACY[f] if f in LEGACY and LEGACY[f] in manifest.get('categories', {}) else f
+        if f in LEGACY and target == f:
+            continue                  # no counterpart: drop the dead entry
+        if target not in new:
+            new.append(target)
+    subprocess.run(['uci', '-q', 'delete', key], check=False)
+    for f in new:
+        subprocess.run(['uci', 'add_list', '%s=%s' % (key, f)], check=False)
+    subprocess.run(['uci', 'commit', 'adblock'], check=False)
+    return True
+
+
+def apply_defaults(manifest):
+    """First start: switch on the categories the catalog marks as default (domains in adblock, addresses in banip), but only
+    where the administrator has not chosen anything yet."""
+    changed = False
+    existing = {'dns': uci_list('adblock.global.adb_feed'), 'ip': uci_list('banip.global.ban_feed')}
+    for cid, cat in manifest.get('categories', {}).items():
+        if not cat.get('default') or existing[cat['kind']]:
+            continue
+        feed = FEED_PREFIX + cid
+        key = 'adblock.global.adb_feed' if cat['kind'] == 'dns' else 'banip.global.ban_feed'
+        subprocess.run(['uci', 'add_list', '%s=%s' % (key, feed)], check=False)
+        changed = True
+    if changed:
+        subprocess.run(['uci', 'commit', 'adblock'], check=False)
+        subprocess.run(['uci', 'commit', 'banip'], check=False)
+    return changed
+
+
+def cmd_update(force=False):
+    """-> exit status: 0 ok, 1 failed (what is on the unit stays), 2 nothing published, 3 not licensed"""
+    state = load_state()
+    st = license_state()
+    now = int(time.time())
+    if st == 'unknown':
+        state.update(last_check=now, last_result='license service not answering: keeping the installed lists')
+        save_state(state)
+        return 1
+    if st not in ('subscribed', 'trial'):
+        state.update(last_check=now, last_result='not licensed: no threat feeds')
+        save_state(state)
+        return 3
+    if not force and now - state.get('last_check', 0) < MIN_INTERVAL and state.get('version'):
+        return 0
+    try:
+        resp = json.loads(fetch('/api/v1/threat/manifest'))
+        if not resp.get('entitled'):
+            state.update(last_check=now, last_result='server: not entitled (%s)' % resp.get('license_state'))
+            save_state(state)
+            return 3
+        if not resp.get('payload'):
+            state.update(last_check=now, last_result='no threat feed bundle published yet')
+            save_state(state)
+            return 2
+        manifest = verify_manifest(resp)
+        os.makedirs(cache_dir(), exist_ok=True)
+        first = not state.get('version')
+        with open(os.path.join(cache_dir(), 'manifest.json.tmp'), 'w') as f:
+            json.dump(manifest, f)
+        os.replace(os.path.join(cache_dir(), 'manifest.json.tmp'), os.path.join(cache_dir(), 'manifest.json'))
+        if first and not state.get('defaults_applied'):
+            migrate_legacy(manifest)
+            apply_defaults(manifest)
+            state['defaults_applied'] = True
+        downloaded = []
+        for cid in sorted(enabled_categories(manifest)):
+            if download_category(manifest, cid):
+                downloaded.append(cid)
+        changed = state.get('version') != manifest['version'] or bool(downloaded)
+        state.update(version=manifest['version'], counts=manifest.get('counts'), last_check=now, last_result='ok %s' % manifest['version'],
+                     last_error=None, downloaded=downloaded, changed=changed)
+        save_state(state)
+        prune()
+        return 0
+    except Exception as e:
+        state.update(last_check=now, last_result='update failed', last_error=str(e)[:300])
+        save_state(state)
+        log('update failed: %s' % e)
+        return 1
+
+
+def ensure_files(manifest):
+    """Download what is switched on and missing (a category was just enabled); never raises."""
+    if license_state() not in ('subscribed', 'trial'):
+        return
+    for cid in sorted(enabled_categories(manifest)):
+        try:
+            download_category(manifest, cid)
+        except Exception as e:
+            log('cannot download %s: %s' % (cid, e))
+
+
+def feeds(kind):
+    """The custom feed definitions of adblock (kind dns) or banip (kind ip): every category of the catalog."""
+    state = load_state()
+    manifest = catalog()
+    st = license_state()
+    if not manifest or st not in ('subscribed', 'trial', 'unknown'):
+        return {}
+    if manifest.get('version') != state.get('version'):
+        return {}
+    ensure_files(manifest)
+    out = {}
+    for cid, cat in sorted(manifest['categories'].items()):
+        if cat['kind'] != kind:
+            continue
+        path = category_path(manifest['version'], manifest, cid)
+        url = 'file://' + path
+        if kind == 'dns':
+            out[FEED_PREFIX + cid] = {'url': url, 'rule': 'feed 1', 'size': size_class(cat['count']), 'focus': cat['title'],
+                                      'descurl': 'https://nexwall.com.br'}
+        else:
+            out[FEED_PREFIX + cid] = {'url_4': url, 'rule': 'feed 1', 'chain': 'in', 'descr': cat['title']}
+    return out
+
+
+def size_class(count):
+    return 'S' if count < 20000 else 'M' if count < 100000 else 'L' if count < 400000 else 'XL' if count < 800000 else 'XXL'
+
+
+def installed_state():
+    """Which category files are on the unit and what is switched on."""
+    manifest = catalog()
+    state = load_state()
+    enabled = enabled_categories(manifest) if manifest else set()
+    cats = []
+    memory = 0
+    for cid, cat in sorted(manifest.get('categories', {}).items()):
+        present = False
+        if manifest.get('version') == state.get('version'):
+            try:
+                present = os.path.exists(category_path(manifest['version'], manifest, cid))
+            except KeyError:
+                present = False
+        on = cid in enabled
+        if on and cat['kind'] == 'dns':
+            memory += cat['count'] * BYTES_PER_DOMAIN
+        cats.append({'id': cid, 'kind': cat['kind'], 'title': cat['title'], 'description': cat['description'], 'count': cat['count'],
+                     'enabled': on, 'downloaded': present, 'default': cat.get('default', False)})
+    return {'license_state': license_state(), 'version': state.get('version'), 'last_check': state.get('last_check'),
+            'last_result': state.get('last_result'), 'last_error': state.get('last_error'), 'categories': cats,
+            'dns_memory_mib': round(memory / 1048576)}
+
+
+def reload_services(dns_changed, ip_changed):
+    if dns_changed and uci('adblock.global.adb_enabled', '0') == '1' and uci('adblock.global.ts_enabled', '0') == '1':
+        subprocess.run(['/etc/init.d/adblock', 'reload'], check=False, capture_output=True)
+    if ip_changed and uci('banip.global.ban_enabled', '0') == '1':
+        subprocess.run(['/usr/sbin/ts-ip'], check=False, capture_output=True)
+        subprocess.run(['/etc/init.d/banip', 'reload'], check=False, capture_output=True)
+
+
+def cmd_sync():
+    rc = cmd_update()
+    state = load_state()
+    if rc not in (0, 3):
+        return rc
+    licensed = rc == 0
+    # reload when new data arrived, and once when the license ends (the lists are taken away) or comes back
+    if state.get('changed') or state.get('licensed') != licensed:
+        reload_services(True, True)
+        state['changed'] = False
+        state['licensed'] = licensed
+        save_state(state)
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('command', choices=['update', 'feeds-dns', 'feeds-ip', 'sync', 'status'])
+    ap.add_argument('--force', action='store_true')
+    ap.add_argument('--json', action='store_true')
+    a = ap.parse_args()
+    if a.command == 'update':
+        return cmd_update(a.force)
+    if a.command == 'feeds-dns':
+        print(json.dumps(feeds('dns'), indent=2))
+        return 0
+    if a.command == 'feeds-ip':
+        print(json.dumps(feeds('ip'), indent=2))
+        return 0
+    if a.command == 'sync':
+        return cmd_sync()
+    st = installed_state()
+    if a.json:
+        print(json.dumps(st))
+    else:
+        print('license: %s  bundle: %s  last check: %s' % (st['license_state'], st['version'], st['last_result']))
+        for c in st['categories']:
+            print('  %-18s %-3s %9d  %s%s' % (c['id'], c['kind'], c['count'], 'on ' if c['enabled'] else 'off', ' (file ok)' if c['downloaded'] else ''))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

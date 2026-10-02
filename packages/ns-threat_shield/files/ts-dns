@@ -2,43 +2,35 @@
 
 #
 # Copyright (C) 2022 Nethesis S.r.l.
+# Copyright (C) 2026 Nexwall
 # SPDX-License-Identifier: GPL-2.0-only
 #
 
-DEST_DIR=/etc/adblock
-NEXWALL_SOURCES=/usr/share/threat_shield/nexwall-dns.sources.gz
-COMMUNITY_SOURCES=/usr/share/threat_shield/community-dns.sources.gz
-CUSTOM_FEEDS="$DEST_DIR/adblock.custom.feeds"
-TMP_FILE=/tmp/ts-dns.sources
+# Threat shield DNS: give adblock the domain categories of the Nexwall threat feeds. They are downloaded by
+# nexwall-threat-feeds from the license server (signed, checked) and handed to adblock as local files.
+# Called every time adblock is started or reloaded.
 
-SYSTEM_ID=$(uci -q get ns-plug.config.system_id)
-SYSTEM_SECRET=$(uci -q get ns-plug.config.secret)
-TYPE=$(uci -q get ns-plug.config.type)
+DEST_DIR=/etc/adblock
+CUSTOM_FEEDS="$DEST_DIR/adblock.custom.feeds"
 TS_ENABLED=$(uci -q get adblock.global.ts_enabled)
 
 if [ "$TS_ENABLED" = 1 ]; then
-    # Setup dnsmasq as backend
+    # dnsmasq is the backend
     uci set adblock.global.adb_dns='dnsmasq'
     uci set adblock.global.adb_dnsinstance='0'
 
-    # Build custom feeds from community sources
-    gunzip -c "$COMMUNITY_SOURCES" > "$TMP_FILE"
-
-    # Merge Nexwall sources if the machine has a subscription
-    if [ -n "$SYSTEM_SECRET" ] && [ -n "$SYSTEM_ID" ]; then
-        gunzip -c "$NEXWALL_SOURCES" | sed -e "s/__USER__/$SYSTEM_ID/" -e "s/__PASSWORD__/$SYSTEM_SECRET/" -e "s/__TYPE__/$TYPE/" >> "$TMP_FILE"
+    TMP_FILE=/tmp/ts-dns.feeds
+    if /usr/sbin/nexwall-threat-feeds feeds-dns > "$TMP_FILE" 2>/dev/null && jq -e . "$TMP_FILE" >/dev/null 2>&1; then
+        mv "$TMP_FILE" "$CUSTOM_FEEDS"
+    else
+        # nothing usable now: keep what is there rather than dropping every list on a transient failure
+        rm -f "$TMP_FILE"
+        [ -f "$CUSTOM_FEEDS" ] || echo '{}' > "$CUSTOM_FEEDS"
     fi
-
-    # Merge all sources into a single JSON object and write to adblock.custom.feeds
-    jq -s 'reduce .[] as $item ({}; . * $item)' "$TMP_FILE" > "$CUSTOM_FEEDS"
-
-    # Cleanup
-    rm -f "$TMP_FILE"
 else
-    # Clear custom feeds when threat shield is disabled
+    # clear the custom feeds when threat shield is disabled
     : > "$CUSTOM_FEEDS"
 fi
 
 # Save changes
 uci commit adblock
-

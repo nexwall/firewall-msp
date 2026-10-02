@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# The threat feeds are checked every 30 minutes (random delay); adblock and banip are reloaded only when something changed,
+# not on a timer: reloading dnsmasq with a large list interrupts DNS for a moment.
+sed -i '/\/etc\/init.d\/adblock reload/d' /etc/crontabs/root 2>/dev/null
+crontab -l 2>/dev/null | grep -q nexwall-threat-feeds || echo '*/30 * * * * sleep $(( RANDOM % 600 )); /usr/sbin/nexwall-threat-feeds sync >/dev/null 2>&1' >> /etc/crontabs/root
+
+# first catalog and default categories shortly after the license service is up
+( sleep 180; /usr/sbin/nexwall-threat-feeds sync >/dev/null 2>&1 ) &
+
+exit 0

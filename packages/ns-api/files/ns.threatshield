@@ -270,43 +270,12 @@ continent_table = {
 ## Utilities
 
 def has_bl_entitlement(e_uci):
-    cache_file = "/tmp/bl_entitlement_cache"
-    cache_timeout = 3600 * 6 # 6 hours
-
-    # Check if cache file exists and if it is still valid
-    if os.path.exists(cache_file) and time.time() - os.path.getmtime(cache_file) < cache_timeout:
-        with open(cache_file, 'r') as f:
-            return f.read() == "True"
-
-    system_id = e_uci.get('ns-plug', 'config', 'system_id', default='')
-    secret = e_uci.get('ns-plug', 'config', 'secret', default='')
-    type = e_uci.get('ns-plug', 'config', 'type', default='')
+    """The threat feeds need the license (subscription or trial); the license service decides."""
     try:
-        with open('/etc/banip/banip.nethesis.feeds') as fp:
-            feeds = json.load(fp)
-        fkey = next(iter(feeds))
-        url = feeds[fkey]['url_4'].replace('__USER__:__PASSWORD__@','').replace('__TYPE__', type)
-    except:
-        return False
-    auth_string = f"{system_id}:{secret}".encode("utf-8")
-    auth_header = f"Basic {base64.b64encode(auth_string).decode('utf-8')}"
-    headers = {
-        "Accept": "application/json",
-        "Authorization": auth_header,
-    }
-    try:
-        req = urllib.request.Request(url, headers=headers)
-        response = urllib.request.urlopen(req, timeout=20)  # Add timeout of 20 seconds
-    except urllib.error.URLError as e:
+        return nx_license.state() in ('subscribed', 'trial')
+    except Exception:
         return False
 
-    has_bl = response.status == 200
-
-    # Cache the result in the file
-    with open(cache_file, 'w') as f:
-        f.write(str(has_bl))
-
-    return has_bl
 
 def list_feeds():
     if os.path.exists('/etc/banip/banip.custom.feeds') and os.path.getsize('/etc/banip/banip.custom.feeds') > 0:
@@ -387,16 +356,26 @@ def read_json(file):
                 return {}
     return {}
 
+def threat_catalog():
+    """Categories of the Nexwall threat feeds (verified catalog kept by nexwall-threat-feeds): id -> metadata."""
+    for path in ('/mnt/data/threat-feeds/manifest.json', '/var/threat-feeds/manifest.json'):
+        data = read_json(path)
+        if data:
+            return data.get('categories', {})
+    return {}
+
+
+def threat_info(feed_name, catalog):
+    if not feed_name.startswith('nexwall_'):
+        return {}
+    cat = catalog.get(feed_name[len('nexwall_'):], {})
+    return {'count': cat.get('count'), 'details': cat.get('description'), 'title': cat.get('title'),
+            'confidence': cat.get('confidence', -1)}
+
+
 def list_dns_feeds(enterprise=False):
-    ret = {}
-    sources = '/etc/adblock/adblock.custom.feeds'
-    if not os.path.exists(sources):
-        ret = read_gz('/usr/share/threat_shield/community-dns.sources.gz')
-        if enterprise:
-            ret.update(read_gz('/usr/share/threat_shield/nethesis-dns.sources.gz'))
-    else:
-        ret = read_json(sources)
-    return ret
+    # the domain categories are written by ts-dns (from the Nexwall threat feeds) into adblock's custom feeds
+    return read_json('/etc/adblock/adblock.custom.feeds')
 
 def get_confidence(f, enterprise=False):
     confidence = -1
@@ -455,6 +434,7 @@ def get_countries_from_banip(e_uci):
 
 def list_blocklist(e_uci):
     ret = []
+    catalog = threat_catalog()
     feeds = list_feeds()
     has_bl = has_bl_entitlement(e_uci)
     try:
@@ -469,7 +449,7 @@ def list_blocklist(e_uci):
         feed = feeds[f]
         enabled = f in enabled_feeds
 
-        if 'nethesis-blacklists' in feed.get('url_4'):
+        if f.startswith('nexwall_'):
             type = 'enterprise'
         else:
             type = 'community'
@@ -481,7 +461,10 @@ def list_blocklist(e_uci):
 
         protocols, ports = parse_feed_flag(feed.get('flag'))
 
-        ret.append({ 'name': f, 'type': type, 'enabled': enabled, 'confidence': get_confidence(f, type == 'enterprise'), 'description': feed.get('descr'), 'direction': feed.get('chain', 'in'), 'protocols': protocols, 'ports': ports})
+        info = threat_info(f, catalog)
+        ret.append({ 'name': f, 'type': type, 'enabled': enabled, 'confidence': info.get('confidence', get_confidence(f, type == 'enterprise')),
+                     'description': feed.get('descr'), 'direction': feed.get('chain', 'in'), 'protocols': protocols, 'ports': ports,
+                     'details': info.get('details'), 'count': info.get('count')})
     return { "data": ret }
 
 def list_settings(e_uci):
@@ -694,6 +677,7 @@ def edit_blocked(payload):
 
 def dns_list_blocklist(e_uci):
     ret = []
+    catalog = threat_catalog()
     has_bl = has_bl_entitlement(e_uci)
     feeds = list_dns_feeds(has_bl)
     try:
@@ -704,7 +688,7 @@ def dns_list_blocklist(e_uci):
         feed = feeds[f]
         enabled = f in enabled_feeds
 
-        if 'nethesis-blacklists' in feed.get('url'):
+        if f.startswith('nexwall_'):
             type = 'enterprise'
         else:
             type = 'community'
@@ -714,7 +698,9 @@ def dns_list_blocklist(e_uci):
             if type == 'enterprise' and not has_bl:
                 continue
 
-        ret.append({ 'name': f, 'type': type, 'enabled': enabled, 'confidence': get_confidence(f, type == 'enterprise'), 'description': feed.get('focus')})
+        info = threat_info(f, catalog)
+        ret.append({ 'name': f, 'type': type, 'enabled': enabled, 'confidence': info.get('confidence', get_confidence(f, type == 'enterprise')),
+                     'description': feed.get('focus'), 'details': info.get('details'), 'count': info.get('count')})
     return { "data": ret }
 
 def dns_edit_blocklist(e_uci, payload):
