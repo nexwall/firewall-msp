@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-scripts
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -19,7 +19,7 @@ define Package/nexwall-scripts
 	SECTION:=base
 	CATEGORY:=Nexwall
 	TITLE:=Nexwall operator/support diagnostic tools
-	DEPENDS:=+nftables +conntrack-tools +gawk +socat +curl
+	DEPENDS:=+nftables +conntrack-tools +gawk +socat +curl +python3-light
 	PKGARCH:=all
 endef
 
@@ -33,6 +33,8 @@ define Package/nexwall-scripts/description
 	Also nfq-watchdog (recovers the DPI/IPS engines when a kernel packet queue stops
 	being served, with report, alert and restart limits) and dpidbg (look inside the
 	DPI engine: status, unclassified traffic, debug capture, loaded catalog).
+	Also nexwall-fastpath (hands connections the DPI and IPS engines are finished with to the kernel's
+	flow table; off by default, see /etc/config/nexwall_perf).
 	See nexwall-scripts (github.com/nexwall/nexwall-scripts) for full docs.
 endef
 
@@ -45,8 +47,12 @@ define Package/nexwall-scripts/install
 	$(INSTALL_BIN) ./files/fwtrace $(1)/usr/sbin/fwtrace
 	$(INSTALL_BIN) ./files/nfq-watchdog $(1)/usr/sbin/nexwall-nfq-watchdog
 	$(INSTALL_BIN) ./files/dpidbg $(1)/usr/sbin/dpidbg
+	$(INSTALL_BIN) ./files/nexwall-fastpath $(1)/usr/sbin/nexwall-fastpath
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/nexwall-fastpath.init $(1)/etc/init.d/nexwall-fastpath
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-nfq-watchdog $(1)/etc/uci-defaults/99-nexwall-nfq-watchdog
+	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-perf $(1)/etc/uci-defaults/99-nexwall-perf
 	$(INSTALL_DIR) $(1)/usr/lib/nexwall-scripts
 	$(INSTALL_DATA) ./files/lib/trace.awk $(1)/usr/lib/nexwall-scripts/trace.awk
 	$(INSTALL_DATA) ./files/lib/common.sh $(1)/usr/lib/nexwall-scripts/common.sh

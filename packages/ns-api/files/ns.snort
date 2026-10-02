@@ -15,7 +15,7 @@ import ipaddress
 from datetime import datetime, timedelta
 from glob import glob
 
-from nethsec import utils
+from nethsec import utils, performance
 from nethsec import license as nx_license
 from nethsec.license import enforcement
 from euci import EUci
@@ -526,7 +526,9 @@ if cmd == 'list':
         "status": {},
         "get-signatures-status": {},
         "update-signatures": {},
-        "get-enforcement-status": {}
+        "get-enforcement-status": {},
+        "get-performance": {},
+        "set-performance": {"fastpath": False, "packet_steering": False}
     }))
 else:
     try:
@@ -574,6 +576,12 @@ else:
             print(json.dumps({"status": "started"}))
         elif action == "get-enforcement-status":
             print(json.dumps(enforcement.ips_enforcement()))
+        elif action == "get-performance":
+            print(json.dumps({**performance.get_settings(EUci()), "fastpath_status": performance.fastpath_status()}))
+        elif action == "set-performance":
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            performance.set_settings(EUci(), None, data.get("fastpath"), data.get("packet_steering"))
+            print(json.dumps({"status": "success"}))
         elif action == "status":
             print(json.dumps({"status": __status()}))
 

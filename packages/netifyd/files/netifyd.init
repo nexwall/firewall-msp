@@ -100,5 +100,12 @@ start_service() {
 
 reload_service() {
 	/usr/sbin/ns-netifyd-configure
-	procd_send_signal netifyd
+	if [ $? -eq 10 ]; then
+		# the number of capture instances changed: they are created at start only
+		restart
+	else
+		procd_send_signal netifyd
+	fi
+	# flows already handed to the fast path have to be judged again with the new rules
+	[ -x /usr/sbin/nexwall-fastpath ] && /usr/sbin/nexwall-fastpath apply >/dev/null 2>&1
 }

@@ -9,7 +9,7 @@ import json
 import sys
 
 from euci import EUci
-from nethsec import dpi, utils
+from nethsec import dpi, utils, performance
 from nethsec import license as nx_license
 from nethsec.license import enforcement
 
@@ -72,6 +72,12 @@ if cmd == 'list':
         },
         'update-catalog': {},
         'get-engine-settings': {},
+        'get-performance': {},
+        'set-performance': {
+            'dpi_threads': 'auto',
+            'fastpath': False,
+            'packet_steering': False
+        },
         'get-enforcement-status': {},
         'set-engine-settings': {
             'overload_action': 'allow',
@@ -181,6 +187,12 @@ elif cmd == 'call':
         elif action == 'set-engine-settings':
             data = json.JSONDecoder().decode(sys.stdin.read())
             dpi.set_engine_settings(e_uci, data['overload_action'], data['queue_limit'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'get-performance':
+            print(json.dumps({**performance.get_settings(e_uci), 'fastpath_status': performance.fastpath_status()}))
+        elif action == 'set-performance':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            performance.set_settings(e_uci, data.get('dpi_threads'), data.get('fastpath'), data.get('packet_steering'))
             print(json.dumps({'message': 'success'}))
         elif action == 'list-devices':
             print(json.dumps({'values': dpi.list_devices(e_uci)}))

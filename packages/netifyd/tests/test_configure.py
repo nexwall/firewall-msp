@@ -105,3 +105,43 @@ def test_policy_is_idempotent_and_reversible(mod, tmp_path):
 
 def test_missing_interface_file_is_not_an_error(mod, tmp_path):
     assert mod.apply_queue_policy(False, 256, str(tmp_path / 'nope.conf')) is False
+
+
+@pytest.mark.parametrize('cores,setting,expected', [
+    (1, 'auto', (1, 1)), (2, 'auto', (1, 1)), (4, 'auto', (2, 1)), (6, 'auto', (3, 1)),
+    (8, 'auto', (4, 2)), (32, 'auto', (4, 2)),
+    (2, '3', (3, 1)), (16, '1', (1, 2)),
+    (4, '9', (2, 1)), (4, '0', (2, 1)), (4, 'x', (2, 1)), (4, None, (2, 1)),
+])
+def test_instance_plan(mod, cores, setting, expected):
+    assert mod.plan_instances(cores, setting) == expected
+
+
+def test_queue_range(mod):
+    assert mod.queue_range(50, 1) == '50'
+    assert mod.queue_range(50, 4) == '50-53'
+    assert mod.queue_range(54, 2) == '54-55'
+
+
+def test_instances_are_written_and_read_back(mod, tmp_path):
+    f = tmp_path / '10-nfqueue.conf'
+    f.write_text(ORIGINAL)
+    assert mod.read_instances(str(f)) == (4, 4)
+    assert mod.apply_queue_policy(False, 256, str(f), instances=(2, 1)) is True
+    assert mod.read_instances(str(f)) == (2, 1)
+    s = sections(f.read_text())
+    assert s['capture-interface-lan']['queue_instances'] == '2'
+    assert s['capture-interface-wan']['queue_instances'] == '1'
+    # idempotent
+    assert mod.apply_queue_policy(False, 256, str(f), instances=(2, 1)) is False
+
+
+def test_instances_are_left_alone_without_a_plan(mod, tmp_path):
+    f = tmp_path / '10-nfqueue.conf'
+    f.write_text(ORIGINAL)
+    mod.apply_queue_policy(False, 256, str(f))
+    assert mod.read_instances(str(f)) == (4, 4)
+
+
+def test_read_instances_of_a_missing_file(mod, tmp_path):
+    assert mod.read_instances(str(tmp_path / 'none')) == (None, None)

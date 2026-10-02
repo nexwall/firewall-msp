@@ -7,7 +7,7 @@
 #
 # Generates the standalone "inet netifyd" nftables table that routes packets
 # into the NFQUEUE queues declared in /etc/netifyd/interfaces.d/10-nfqueue.conf
-# (queues 50-53 for forward/LAN-WAN traffic, 54-57 for input/output traffic
+# (queues 50-53 at most for forward/LAN-WAN traffic, 54-55 at most for input/output traffic
 # to/from the firewall itself), via generic input/forward/output firewall
 # chain hooks - not tied to any specific interface name or device.
 
@@ -23,6 +23,10 @@ NFQ_INTERFACES_FILE = '/etc/netifyd/interfaces.d/10-nfqueue.conf'
 DEFAULT_QUEUE_LIMIT = 256
 QUEUE_LIMITS = (128, 256, 512, 1024)
 DEFAULT_MGMT_PORTS = ['22', '443', '9090']
+FORWARD_QUEUE_BASE = 50   # forwarded traffic (role lan), up to MAX_FORWARD_INSTANCES queues
+LOCAL_QUEUE_BASE = 54     # the firewall's own traffic (role wan)
+MAX_FORWARD_INSTANCES = 4
+RESTART_EXIT_CODE = 10    # the number of capture instances changed: the engine has to be restarted, not just reloaded
 
 
 NFQ_TABLE = """
@@ -73,8 +77,8 @@ table inet netifyd {
         # Netifyd only analyzes the first 32 packets
         ct packets > 32 accept
 
-        # Traffic to queues 54-57
-        queue flags bypass to 54-57
+        # Traffic to queues {{ local_range }}
+        queue flags bypass to {{ local_range }}
     }
 {%- endif %}
 
@@ -94,9 +98,9 @@ table inet netifyd {
         # Netifyd only analyzes the first 32 packets
         ct packets > 32 accept
 
-        # Traffic to queues 50-53. With the "block" overload action the bypass flag is left out: while the
+        # Traffic to queues {{ forward_range }}. With the "block" overload action the bypass flag is left out: while the
         # engine is not running, new connections through the firewall are dropped instead of passed.
-        {{ forward_queue }} to 50-53
+        {{ forward_queue }} to {{ forward_range }}
     }
 {%- endif %}
 
@@ -122,8 +126,8 @@ table inet netifyd {
         # Netifyd only analyzes the first 32 packets
         ct packets > 32 accept
 
-        # Traffic to queues 54-57
-        queue flags bypass to 54-57
+        # Traffic to queues {{ local_range }}
+        queue flags bypass to {{ local_range }}
     }
 {%- endif %}
 
@@ -156,6 +160,61 @@ def _format_nft_elements(entries):
     return formatted
 
 
+def cpu_count():
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 1
+
+
+def plan_instances(cores, setting='auto'):
+    """
+    How many capture instances (one thread each, plus a detection thread) the engine runs. The engine looks only at the
+    first packets of a connection, so it needs far less CPU than the intrusion prevention, which shares the same cores:
+    forwarded traffic gets half of the cores (1 to 4, or the value chosen in "threads"), the firewall's own traffic 1
+    (2 from 8 cores). More threads than cores only make the engine and the IPS compete for the same CPUs.
+
+    Returns:
+        (forward instances, local instances)
+    """
+    local = 1 if cores < 8 else 2
+    try:
+        forward = int(setting)
+    except (TypeError, ValueError):
+        forward = 0
+    if not 1 <= forward <= MAX_FORWARD_INSTANCES:
+        forward = max(1, min(MAX_FORWARD_INSTANCES, cores // 2))
+    return forward, local
+
+
+def queue_range(base, count):
+    return str(base) if count == 1 else f'{base}-{base + count - 1}'
+
+
+def read_instances(path=None):
+    """Capture instances written in the interface file: (lan, wan) or None for what is missing."""
+    found = {}
+    section = None
+    try:
+        with open(path or NFQ_INTERFACES_FILE) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith('[') and stripped.endswith(']'):
+                    section = stripped[1:-1]
+                elif section and stripped.startswith('queue_instances') and '=' in stripped:
+                    try:
+                        found[section] = int(stripped.split('=', 1)[1])
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return found.get('capture-interface-lan'), found.get('capture-interface-wan')
+
+
+def read_engine_threads(e_uci):
+    return str(e_uci.get('dpi', 'engine', 'threads', default='auto')).strip().lower()
+
+
 def read_engine_policy(e_uci):
     """
     What happens to traffic when the analysis engine cannot keep up or is not running (/etc/config/dpi, section
@@ -176,10 +235,12 @@ def read_engine_policy(e_uci):
     return action == 'block', limit
 
 
-def apply_queue_policy(block, limit, path=None):
+def apply_queue_policy(block, limit, path=None, instances=None):
     """
     Write the queue limit and the action on a full queue into the interface file the engine reads: the forward queues
     (role lan) follow the setting, the queues of the firewall's own traffic (role wan) always accept.
+
+    instances is (forward, local) capture instances, left as they are when None.
 
     Returns:
         True when the file changed (the engine has to reload its interfaces)
@@ -194,6 +255,9 @@ def apply_queue_policy(block, limit, path=None):
         'capture-interface-lan': {'queue_maxlen': str(limit), 'queue_fail_open': 'no' if block else 'yes'},
         'capture-interface-wan': {'queue_maxlen': str(limit), 'queue_fail_open': 'yes'},
     }
+    if instances:
+        wanted['capture-interface-lan']['queue_instances'] = str(instances[0])
+        wanted['capture-interface-wan']['queue_instances'] = str(instances[1])
     out = []
     section = None
     pending = {}
@@ -273,7 +337,10 @@ def generate_nfq_table():
             print(f"Warning: invalid mgmt_ports value '{value}', ignoring.", file=sys.stderr)
 
     block, limit = read_engine_policy(e_uci)
-    apply_queue_policy(block, limit)
+    plan = plan_instances(cpu_count(), read_engine_threads(e_uci))
+    before = read_instances()
+    apply_queue_policy(block, limit, instances=plan)
+    restart = before != (None, None) and before != plan
 
     template = Environment(loader=BaseLoader()).from_string(NFQ_TABLE)
     render = template.render(
@@ -282,6 +349,8 @@ def generate_nfq_table():
         firewall_chains=firewall_chains,
         mgmt_ports=mgmt_ports,
         forward_queue='queue' if block else 'queue flags bypass',
+        forward_range=queue_range(FORWARD_QUEUE_BASE, plan[0]),
+        local_range=queue_range(LOCAL_QUEUE_BASE, plan[1]),
     )
 
     # Apply nftables
@@ -292,7 +361,9 @@ def generate_nfq_table():
         os.unlink(NFQ_TABLE_FILE)
     except subprocess.CalledProcessError as e:
         print(f"Error applying nftables configuration: {e.stderr.decode()}", file=sys.stderr)
+    return restart
 
 
 if __name__ == "__main__":
-    generate_nfq_table()
+    # the exit code tells the init script whether a plain reload is enough
+    sys.exit(RESTART_EXIT_CODE if generate_nfq_table() else 0)
