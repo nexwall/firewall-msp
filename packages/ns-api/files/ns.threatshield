@@ -356,6 +356,31 @@ def read_json(file):
                 return {}
     return {}
 
+BYTES_PER_DOMAIN = 75       # what dnsmasq needs per blocked domain (measured: 1.8 million domains took 134 MB)
+MEMORY_WARN_PERCENT = 20    # share of the installed memory from which the administrator is warned
+MEMORY_HIGH_PERCENT = 35
+
+
+def total_memory_mib():
+    try:
+        with open('/proc/meminfo') as f:
+            for line in f:
+                if line.startswith('MemTotal:'):
+                    return int(line.split()[1]) // 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0
+
+
+def memory_summary(items, total_mib):
+    """Estimate for the switched-on domain lists: {estimate_mib, total_mib, percent, level} (level ok, warn, high)."""
+    estimate = sum((i.get('count') or 0) * BYTES_PER_DOMAIN for i in items if i.get('enabled'))
+    mib = round(estimate / 1048576)
+    percent = round(100 * mib / total_mib) if total_mib else 0
+    level = 'high' if percent >= MEMORY_HIGH_PERCENT else 'warn' if percent >= MEMORY_WARN_PERCENT else 'ok'
+    return {'estimate_mib': mib, 'total_mib': total_mib, 'percent': percent, 'level': level}
+
+
 def threat_catalog():
     """Categories of the Nexwall threat feeds (verified catalog kept by nexwall-threat-feeds): id -> metadata."""
     for path in ('/mnt/data/threat-feeds/manifest.json', '/var/threat-feeds/manifest.json'):
@@ -700,8 +725,9 @@ def dns_list_blocklist(e_uci):
 
         info = threat_info(f, catalog)
         ret.append({ 'name': f, 'type': type, 'enabled': enabled, 'confidence': info.get('confidence', get_confidence(f, type == 'enterprise')),
-                     'description': feed.get('focus'), 'details': info.get('details'), 'count': info.get('count')})
-    return { "data": ret }
+                     'description': feed.get('focus'), 'details': info.get('details'), 'count': info.get('count'),
+                     'memory_mib': round((info.get('count') or 0) * BYTES_PER_DOMAIN / 1048576)})
+    return { "data": ret, "memory": memory_summary(ret, total_memory_mib()) }
 
 def dns_edit_blocklist(e_uci, payload):
     try:

@@ -123,12 +123,58 @@ def catalog():
         return {}
 
 
+GEO_FAMILIES = {'country_v4': 'v4', 'country_v6': 'v6'}     # category id -> folder of the per-country files
+
+
+def geo_wanted():
+    """Geo-blocking is on when banIP's country feed is switched on (the countries themselves are banip.global.ban_country)."""
+    return 'country' in uci_list('banip.global.ban_feed')
+
+
 def enabled_categories(manifest):
-    """Categories switched on in adblock (domains) and banip (addresses), as category ids."""
+    """Categories switched on in adblock (domains) and banip (addresses), as category ids; the country lists when geo-blocking is on."""
     dns = {f[len(FEED_PREFIX):] for f in uci_list('adblock.global.adb_feed') if f.startswith(FEED_PREFIX)}
     ip = {f[len(FEED_PREFIX):] for f in uci_list('banip.global.ban_feed') if f.startswith(FEED_PREFIX)}
     cats = manifest.get('categories', {})
-    return {c for c in dns if cats.get(c, {}).get('kind') == 'dns'} | {c for c in ip if cats.get(c, {}).get('kind') == 'ip'}
+    out = {c for c in dns if cats.get(c, {}).get('kind') == 'dns'} | {c for c in ip if cats.get(c, {}).get('kind') == 'ip'}
+    if geo_wanted():
+        out |= {c for c in GEO_FAMILIES if cats.get(c, {}).get('kind') == 'geo'}
+    return out
+
+
+def geo_dir(version):
+    return os.path.join(version_dir(version), 'geo')
+
+
+def prepare_geo(manifest):
+    """Split the country files ("<cc> <CIDR>" per line) into the per-country files banIP asks for: <cc>-aggregated.zone.
+    Returns True when both families are ready."""
+    version = manifest['version']
+    ready = True
+    for cid, sub in GEO_FAMILIES.items():
+        if cid not in manifest.get('categories', {}):
+            continue
+        src = category_path(version, manifest, cid)
+        if not os.path.exists(src):
+            ready = False
+            continue
+        out = os.path.join(geo_dir(version), sub)
+        marker = os.path.join(out, '.done')
+        if os.path.exists(marker) and os.path.getmtime(marker) >= os.path.getmtime(src):
+            continue
+        shutil.rmtree(out, ignore_errors=True)
+        os.makedirs(out)
+        blocks = {}
+        with open(src) as f:
+            for line in f:
+                cc, _, cidr = line.strip().partition(' ')
+                if cc and cidr:
+                    blocks.setdefault(cc, []).append(cidr)
+        for cc, cidrs in blocks.items():
+            with open(os.path.join(out, '%s-aggregated.zone' % cc), 'w') as f:
+                f.write('\n'.join(cidrs) + '\n')
+        open(marker, 'w').close()
+    return ready
 
 
 def category_path(version, manifest, cid):
@@ -194,7 +240,7 @@ def apply_defaults(manifest):
     changed = False
     existing = {'dns': uci_list('adblock.global.adb_feed'), 'ip': uci_list('banip.global.ban_feed')}
     for cid, cat in manifest.get('categories', {}).items():
-        if not cat.get('default') or existing[cat['kind']]:
+        if not cat.get('default') or cat['kind'] not in existing or existing[cat['kind']]:
             continue
         feed = FEED_PREFIX + cid
         key = 'adblock.global.adb_feed' if cat['kind'] == 'dns' else 'banip.global.ban_feed'
@@ -245,6 +291,8 @@ def cmd_update(force=False):
         for cid in sorted(enabled_categories(manifest)):
             if download_category(manifest, cid):
                 downloaded.append(cid)
+        if geo_wanted():
+            prepare_geo(manifest)
         changed = state.get('version') != manifest['version'] or bool(downloaded)
         state.update(version=manifest['version'], counts=manifest.get('counts'), last_check=now, last_result='ok %s' % manifest['version'],
                      last_error=None, downloaded=downloaded, changed=changed)
@@ -280,6 +328,11 @@ def feeds(kind):
         return {}
     ensure_files(manifest)
     out = {}
+    if kind == 'ip' and geo_wanted() and st in ('subscribed', 'trial') and prepare_geo(manifest):
+        # geo-blocking: banIP asks <url><cc>-aggregated.zone for every blocked country; give it our files, not a third party's
+        base = geo_dir(manifest['version'])
+        out['country'] = {'url_4': 'file://%s/v4/' % base, 'url_6': 'file://%s/v6/' % base, 'rule': 'feed 1', 'chain': 'in',
+                          'descr': 'country blocks'}
     for cid, cat in sorted(manifest['categories'].items()):
         if cat['kind'] != kind:
             continue

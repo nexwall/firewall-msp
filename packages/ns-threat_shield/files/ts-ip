@@ -13,7 +13,7 @@
 
 TMP_FEEDS=/tmp/ts-ip.feeds
 if /usr/sbin/nexwall-threat-feeds feeds-ip > "$TMP_FEEDS" 2>/dev/null && jq -e . "$TMP_FEEDS" >/dev/null 2>&1; then
-    jq -s '.[0] * .[1]' "$TMP_FEEDS" /etc/banip/banip.feeds > /etc/banip/banip.custom.feeds.new && mv /etc/banip/banip.custom.feeds.new /etc/banip/banip.custom.feeds
+    jq -s '.[1] * .[0]' "$TMP_FEEDS" /etc/banip/banip.feeds > /etc/banip/banip.custom.feeds.new && mv /etc/banip/banip.custom.feeds.new /etc/banip/banip.custom.feeds
 else
     # keep the previous definitions on a transient failure; without any, banip uses its own list
     [ -f /etc/banip/banip.custom.feeds ] || : > /etc/banip/banip.custom.feeds
