@@ -7,3 +7,5 @@ netify-flow-actions
 netify-agent-stats-plugin
 tools/netifyd-update/work/
 tools/netifyd-update/dist/
+__pycache__/
+*.pyc
