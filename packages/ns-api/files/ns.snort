@@ -210,6 +210,16 @@ def __save_settings():
     if not isinstance(max_inspect_bytes, int) or max_inspect_bytes < 0:
         raise ValidationError('max_inspect_bytes', 'invalid')
     e_uci.set('snort', 'nfq', 'max_inspect_bytes', str(max_inspect_bytes))
+    # mode: "block" (default, the rules act as written: blocking rules drop) or "alert" (detect only, nothing is blocked)
+    if 'mode' in data:
+        if data['mode'] not in ('block', 'alert'):
+            raise ValidationError('mode', 'invalid')
+        e_uci.set('snort', 'snort', 'action', 'default' if data['mode'] == 'block' else 'alert')
+    # log_alerts: also load the detection-only rules, so the event list shows what is seen but allowed
+    if 'log_alerts' in data:
+        if not isinstance(data['log_alerts'], bool):
+            raise ValidationError('log_alerts', 'invalid')
+        e_uci.set('snort', 'snort', 'ns_alert_excluded', '1' if data['log_alerts'] else '0')
     e_uci.save('snort')
 
 
@@ -229,6 +239,8 @@ def __settings():
         "oinkcode_set": bool(e_uci.get('snort', 'snort', 'oinkcode', default='')),
         "home_net": home_net,
         "max_inspect_bytes": int(e_uci.get('snort', 'nfq', 'max_inspect_bytes', default='1048576')),
+        "mode": 'alert' if e_uci.get('snort', 'snort', 'action', default='default') == 'alert' else 'block',
+        "log_alerts": str(e_uci.get('snort', 'snort', 'ns_alert_excluded', default='0')) in ('1', 'true', 'yes', 'on'),
     }
 
 
@@ -511,7 +523,7 @@ if cmd == 'list':
             "home_net": ["192.168.1.0/24"],
             "max_inspect_bytes": 1048576,
         },
-        "save-settings": {"enabled": True, "ns_policy": "balanced", "oinkcode": "1234567890", "home_net": ["192.168.1.0/24"], "max_inspect_bytes": 1048576},
+        "save-settings": {"enabled": True, "ns_policy": "balanced", "oinkcode": "1234567890", "home_net": ["192.168.1.0/24"], "max_inspect_bytes": 1048576, "mode": "block", "log_alerts": False},
         "check-oinkcode": {},
         "list-bypasses": {},
         "create-bypass": {"protocol": "ipv4", "ip": "*.*.*.*", "description": "Description"},
