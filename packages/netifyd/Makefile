@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=netifyd
 PKG_VERSION:=5.2.8
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 PKG_MAINTAINER:=Nexwall <dev@nexwall.com.br>
 PKG_LICENSE:=GPL-3.0-or-later
 
