@@ -101,3 +101,12 @@ def test_offloaded_flows_are_counted(mod, tmp_path):
     f.write_text('ipv4 2 tcp 6 100 ESTABLISHED src=1 [OFFLOAD] mark=0\nipv4 2 tcp 6 100 ESTABLISHED src=2 mark=0\n')
     assert mod.offloaded_flows(str(f)) == 1
     assert mod.offloaded_flows(str(tmp_path / 'none')) == 0
+
+
+def test_flow_listing(mod, tmp_path):
+    f = tmp_path / 'ct'
+    f.write_text('ipv4 2 tcp 6 100 ESTABLISHED src=10.0.0.2 dst=1.1.1.1 sport=40000 dport=443 packets=5 bytes=1000 '
+                 'src=1.1.1.1 dst=192.168.0.2 sport=443 dport=40000 packets=9 bytes=9000 [OFFLOAD] mark=0\n'
+                 'ipv4 2 udp 17 30 src=10.0.0.3 dst=8.8.8.8 sport=1 dport=53 packets=1 bytes=60 src=8.8.8.8 dst=1.1.1.2 sport=53 dport=1 packets=1 bytes=90 mark=0\n')
+    assert mod.flows(str(f)) == [('tcp', '10.0.0.2', '1.1.1.1', '40000', '443', 10000)]
+    assert mod.flows(str(tmp_path / 'none')) == []

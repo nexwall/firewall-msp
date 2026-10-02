@@ -19,7 +19,9 @@
 # Everything is in its own nftables table (inet nexwall_fastpath); removing the table puts all connections back on the
 # normal path. Any error leaves traffic on the normal path.
 #
-# Usage: nexwall-fastpath apply | status | stop
+# Usage: nexwall-fastpath apply | status | stop | list
+#   list: the connections that are on the fast path right now (also: grep OFFLOAD /proc/net/nf_conntrack, conntrack -L | grep OFFLOAD)
+# Every apply, stop and failure is written to the system log with the tag nexwall-fastpath (logread -e nexwall-fastpath).
 # Settings (/etc/config/nexwall_perf, section main): fastpath 0|1, min_bytes auto|<bytes>
 
 import json
@@ -165,6 +167,13 @@ def render(devices, threshold, dpi_active):
     return '\n'.join(lines)
 
 
+def syslog(message):
+    try:
+        subprocess.run(['logger', '-t', 'nexwall-fastpath', message], check=False, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def write_state(state):
     try:
         with open(STATE_FILE, 'w') as f:
@@ -181,9 +190,33 @@ def offloaded_flows(path=CONNTRACK_FILE):
         return 0
 
 
+def flows(path=CONNTRACK_FILE):
+    """Connections on the fast path: [(proto, src, dst, sport, dport, bytes)]."""
+    out = []
+    try:
+        with open(path) as f:
+            for line in f:
+                if '[OFFLOAD]' not in line:
+                    continue
+                kv = {}
+                total = 0
+                for part in line.split():
+                    if '=' in part:
+                        k, v = part.split('=', 1)
+                        if k == 'bytes':
+                            total += int(v) if v.isdigit() else 0
+                        else:
+                            kv.setdefault(k, v)
+                out.append((line.split()[2], kv.get('src', ''), kv.get('dst', ''), kv.get('sport', ''), kv.get('dport', ''), total))
+    except OSError:
+        pass
+    return out
+
+
 def stop(reason='disabled'):
     if table_exists('inet', TABLE):
         run(['nft', 'delete', 'table', 'inet', TABLE])
+        syslog('fast path stopped (%s)' % reason)
     write_state({'enabled': reason != 'disabled', 'active': False, 'reason': reason})
 
 
@@ -211,7 +244,9 @@ def apply():
         stop('error')
         write_state({'enabled': True, 'active': False, 'reason': 'error', 'error': result.stderr.strip()[:300]})
         print(result.stderr.strip(), file=sys.stderr)
+        syslog('fast path could not be applied: %s' % result.stderr.strip()[:200])
         return 1
+    syslog('fast path active: devices %s, from %d bytes, dpi %s, ips %s' % (','.join(devices), threshold, dpi, ips))
     write_state({'enabled': True, 'active': True, 'devices': devices, 'min_bytes': threshold, 'dpi': dpi, 'ips': ips})
     return 0
 
@@ -239,5 +274,9 @@ if __name__ == '__main__':
         sys.exit(0)
     if cmd == 'status':
         sys.exit(status())
-    print('usage: nexwall-fastpath apply | status | stop', file=sys.stderr)
+    if cmd == 'list':
+        for proto, src, dst, sport, dport, total in sorted(flows(), key=lambda x: -x[5]):
+            print('%-4s %s:%s -> %s:%s  %d bytes' % (proto, src, sport, dst, dport, total))
+        sys.exit(0)
+    print('usage: nexwall-fastpath apply | status | stop | list', file=sys.stderr)
     sys.exit(2)
