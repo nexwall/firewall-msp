@@ -46,7 +46,7 @@ def get_settings(e_uci: EUci) -> dict:
     """
     Returns:
         dict with "dpi_threads" ("auto" or "1" to "4"), "dpi_threads_auto" (what "auto" means on this hardware),
-        "fastpath" and "packet_steering" (bool) and "cpu_count"
+        "fastpath", "packet_steering" and "ring_buffers" (bool) and "cpu_count"
     """
     threads = str(e_uci.get('dpi', 'engine', 'threads', default='auto')).strip().lower()
     cores = cpu_count()
@@ -57,11 +57,12 @@ def get_settings(e_uci: EUci) -> dict:
         'dpi_threads_auto': auto_dpi_threads(cores),
         'fastpath': str(e_uci.get('nexwall_perf', 'main', 'fastpath', default='0')) == '1',
         'packet_steering': steering in ('1', '2'),
+        'ring_buffers': str(e_uci.get('nexwall_perf', 'main', 'ring_buffers', default='0')) == '1',
         'cpu_count': cores,
     }
 
 
-def set_settings(e_uci: EUci, dpi_threads=None, fastpath=None, packet_steering=None):
+def set_settings(e_uci: EUci, dpi_threads=None, fastpath=None, packet_steering=None, ring_buffers=None):
     """
     Store the given settings (None leaves one as it is). Applied when the changes are committed: the DPI service,
     the fast path and the packet steering all reload on their configuration.
@@ -71,7 +72,7 @@ def set_settings(e_uci: EUci, dpi_threads=None, fastpath=None, packet_steering=N
     """
     if dpi_threads is not None and str(dpi_threads) not in DPI_THREAD_CHOICES:
         raise ValidationError('dpi_threads', 'invalid', str(dpi_threads))
-    for name, value in (('fastpath', fastpath), ('packet_steering', packet_steering)):
+    for name, value in (('fastpath', fastpath), ('packet_steering', packet_steering), ('ring_buffers', ring_buffers)):
         if value is not None and not isinstance(value, bool):
             raise ValidationError(name, 'invalid', str(value))
 
@@ -80,10 +81,13 @@ def set_settings(e_uci: EUci, dpi_threads=None, fastpath=None, packet_steering=N
             e_uci.set('dpi', 'engine', 'engine')
         e_uci.set('dpi', 'engine', 'threads', str(dpi_threads))
         e_uci.save('dpi')
-    if fastpath is not None:
+    if fastpath is not None or ring_buffers is not None:
         if e_uci.get('nexwall_perf', 'main', default=None) is None:
             e_uci.set('nexwall_perf', 'main', 'main')
-        e_uci.set('nexwall_perf', 'main', 'fastpath', '1' if fastpath else '0')
+        if fastpath is not None:
+            e_uci.set('nexwall_perf', 'main', 'fastpath', '1' if fastpath else '0')
+        if ring_buffers is not None:
+            e_uci.set('nexwall_perf', 'main', 'ring_buffers', '1' if ring_buffers else '0')
         e_uci.save('nexwall_perf')
     if packet_steering is not None:
         section = _globals_section(e_uci)

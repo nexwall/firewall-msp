@@ -540,7 +540,7 @@ if cmd == 'list':
         "update-signatures": {},
         "get-enforcement-status": {},
         "get-performance": {},
-        "set-performance": {"fastpath": False, "packet_steering": False}
+        "set-performance": {"fastpath": False, "packet_steering": False, "ring_buffers": False}
     }))
 else:
     try:
@@ -592,7 +592,7 @@ else:
             print(json.dumps({**performance.get_settings(EUci()), "fastpath_status": performance.fastpath_status()}))
         elif action == "set-performance":
             data = json.JSONDecoder().decode(sys.stdin.read())
-            performance.set_settings(EUci(), None, data.get("fastpath"), data.get("packet_steering"))
+            performance.set_settings(EUci(), None, data.get("fastpath"), data.get("packet_steering"), data.get("ring_buffers"))
             print(json.dumps({"status": "success"}))
         elif action == "status":
             print(json.dumps({"status": __status()}))

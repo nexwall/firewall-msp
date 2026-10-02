@@ -76,7 +76,8 @@ if cmd == 'list':
         'set-performance': {
             'dpi_threads': 'auto',
             'fastpath': False,
-            'packet_steering': False
+            'packet_steering': False,
+            'ring_buffers': False
         },
         'get-enforcement-status': {},
         'set-engine-settings': {
@@ -192,7 +193,8 @@ elif cmd == 'call':
             print(json.dumps({**performance.get_settings(e_uci), 'fastpath_status': performance.fastpath_status()}))
         elif action == 'set-performance':
             data = json.JSONDecoder().decode(sys.stdin.read())
-            performance.set_settings(e_uci, data.get('dpi_threads'), data.get('fastpath'), data.get('packet_steering'))
+            performance.set_settings(e_uci, data.get('dpi_threads'), data.get('fastpath'), data.get('packet_steering'),
+                                 data.get('ring_buffers'))
             print(json.dumps({'message': 'success'}))
         elif action == 'list-devices':
             print(json.dumps({'values': dpi.list_devices(e_uci)}))

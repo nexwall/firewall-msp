@@ -19,7 +19,7 @@ define Package/nexwall-scripts
 	SECTION:=base
 	CATEGORY:=Nexwall
 	TITLE:=Nexwall operator/support diagnostic tools
-	DEPENDS:=+nftables +conntrack-tools +gawk +socat +curl +python3-light
+	DEPENDS:=+nftables +conntrack-tools +gawk +socat +curl +ethtool +python3-light
 	PKGARCH:=all
 endef
 

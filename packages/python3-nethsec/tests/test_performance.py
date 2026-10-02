@@ -16,7 +16,7 @@ def e_uci(tmp_path):
 def test_defaults(e_uci, mocker):
     mocker.patch.object(performance, 'cpu_count', return_value=4)
     assert performance.get_settings(e_uci) == {
-        'dpi_threads': 'auto', 'dpi_threads_auto': 2, 'fastpath': False, 'packet_steering': False, 'cpu_count': 4}
+        'dpi_threads': 'auto', 'dpi_threads_auto': 2, 'fastpath': False, 'packet_steering': False, 'ring_buffers': False, 'cpu_count': 4}
 
 
 @pytest.mark.parametrize('cores,expected', [(1, 1), (2, 1), (3, 1), (4, 2), (7, 3), (8, 4), (64, 4)])
@@ -57,3 +57,13 @@ def test_bad_values_change_nothing(e_uci, kwargs, parameter):
 def test_status_when_the_tool_is_missing(mocker):
     mocker.patch.object(performance, 'FASTPATH_BIN', '/nonexistent/nexwall-fastpath')
     assert performance.fastpath_status()['reason'] == 'not-installed'
+
+
+def test_ring_buffers_are_stored_and_validated(e_uci):
+    performance.set_settings(e_uci, ring_buffers=True)
+    assert performance.get_settings(e_uci)['ring_buffers'] is True
+    performance.set_settings(e_uci, ring_buffers=False)
+    assert performance.get_settings(e_uci)['ring_buffers'] is False
+    with pytest.raises(ValidationError) as exc:
+        performance.set_settings(e_uci, ring_buffers='yes')
+    assert exc.value.parameter == 'ring_buffers'
