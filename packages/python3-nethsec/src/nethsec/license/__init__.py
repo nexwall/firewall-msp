@@ -28,17 +28,30 @@ from nethsec import utils
 DAEMON_SOCKET = '/var/run/nexwall-license.sock'
 CORE_BINARY = '/usr/sbin/nexwall-licensed'
 
+# What a unit can be subscribed to: the five base modules come with the license activation, the add-ons are sold apart.
+MODULES = (
+    ('dpi', 'Application Control (DPI)', 'base'),
+    ('ips', 'Network Protection (IPS)', 'base'),
+    ('dns', 'DNS Filtering', 'base'),
+    ('geo', 'IP & Geo Blocking', 'base'),
+    ('vpn_ext', 'VPN Extended', 'base'),
+    ('waf', 'Web Server Protection (WAF)', 'addon'),
+    ('mta', 'Email Protection (MTA)', 'addon'),
+)
+
 FULL = {
     'security_services': True,
     'reverse_proxy': True,
     'ha': True,
     'limits': {'ipsec_s2s': None, 'wireguard': None, 'sslvpn_users': None},
+    'modules': {code: kind == 'base' for code, _name, kind in MODULES},
 }
 LIMITED = {
     'security_services': False,
     'reverse_proxy': False,
     'ha': False,
     'limits': {'ipsec_s2s': 1, 'wireguard': 1, 'sslvpn_users': 3},
+    'modules': {code: False for code, _name, _kind in MODULES},
 }
 
 # user-facing names for the error the UI shows
@@ -99,6 +112,23 @@ def entitlements(*_args, **_kwargs):
     answer = _ask({'cmd': 'entitlements'})
     ent = answer.get('entitlements') if answer else None
     return ent if isinstance(ent, dict) else _copy(LIMITED)
+
+
+def modules(*_args, **_kwargs):
+    """{code: bool} for every module. A core that does not report modules (older) grants the five base ones with security_services."""
+    ent = entitlements()
+    mods = ent.get('modules')
+    if isinstance(mods, dict):
+        return {code: bool(mods.get(code)) for code, _name, _kind in MODULES}
+    base = bool(ent.get('security_services'))
+    return {code: (kind == 'base' and base) for code, _name, kind in MODULES}
+
+
+def module_error(code, **kwargs):
+    """None when the module is included, otherwise an API validation error."""
+    if modules(**kwargs).get(code):
+        return None
+    return utils.validation_error('license', 'license_required', code)
 
 
 def feature_error(feature, **kwargs):

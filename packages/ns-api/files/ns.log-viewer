@@ -37,7 +37,19 @@ def status():
     }
 
 
+def already_enabled():
+    return os.path.islink(RSYSLOG_CONF) and os.path.islink(NGINX_INC) and is_running()
+
+
+def regenerate_web_config():
+    """ns-ui restarts nginx, which would cut the very request that asks for it: do it after the answer went out."""
+    subprocess.Popen(["sh", "-c", "sleep 2; /usr/sbin/ns-ui"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+
+
 def enable():
+    if already_enabled():
+        return {"result": "success", "restarting": False}
     try:
         os.makedirs("/etc/rsyslog.d", exist_ok=True)
         # symlinks, not copies: a future ns-log-viewer package update changes
@@ -51,12 +63,11 @@ def enable():
         run(["/etc/init.d/victoria-logs", "enable"])
         run(["/etc/init.d/victoria-logs", "start"])
         run(["/etc/init.d/rsyslog", "restart"])
-        # regenerates ns-ui.conf from its template, which - since the fix in
-        # this same change set - now includes logs-viewer.inc if present
-        run(["/usr/sbin/ns-ui"])
+        # regenerates ns-ui.conf from its template, which includes logs-viewer.inc if present
+        regenerate_web_config()
     except subprocess.CalledProcessError as e:
         return {"result": "failure", "message": (e.stderr or b"").decode(errors="replace")[:500]}
-    return {"result": "success"}
+    return {"result": "success", "restarting": True}
 
 
 def disable():

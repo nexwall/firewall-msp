@@ -10,6 +10,7 @@
 import sys
 import json
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from nethsec import utils
@@ -119,29 +120,31 @@ def evaluate(lic, now=None):
 def info():
     serial = get_serial()
     lic = load_license()
-    state = evaluate(lic)
-    if state == "not_registered":
-        return {"systemd_id": "", "serial": serial, "state": state, "assigned": False,
-                "active": False, "trial_days_left": None, "expiration": 0, "company": "",
-                "entitlements": nx_license.entitlements()}
-
+    state = nx_license.state()  # what the license core decides: subscribed, trial or unlicensed
+    registered = bool(lic and lic.get("hwid"))
+    mods = nx_license.modules()
+    modules = [{"code": code, "name": name, "kind": kind, "active": bool(mods.get(code))}
+               for code, name, kind in nx_license.MODULES]
     now = datetime.now(timezone.utc)
-    trial_end = _ts(lic.get("trial_end"))
-    sub_end = _ts(lic.get("subscription_end"))
-    assigned = lic.get("status") != "unassigned"
+    trial_end = _ts(lic.get("trial_end")) if lic else None
+    sub_end = _ts(lic.get("subscription_end")) if lic else None
+    assigned = bool(lic) and lic.get("status") not in ("unassigned", None)
     return {
-        # non-empty only while a partner subscription is active: the UI reads it as "subscribed"
-        "systemd_id": lic["hwid"] if state == "subscribed" else "",
         "serial": serial,
         "state": state,
+        "registered": registered,
         "assigned": assigned,
-        "plan": lic.get("partner_name", "-"),
+        # non-empty only while a subscription is active: kept for the pages that read it as "subscribed"
+        "systemd_id": lic["hwid"] if (registered and state == "subscribed") else "",
+        "plan": (lic.get("partner_name") or "-") if lic else "-",
         "company": (lic.get("partner_name") or "") if assigned else "",
         "expiration": int(sub_end.timestamp()) * 1000 if sub_end else 0,
         "trial_end": int(trial_end.timestamp()) * 1000 if trial_end else 0,
         "trial_days_left": max(0, (trial_end - now).days) if trial_end and state == "trial" else None,
         "active": state == "subscribed",
+        "modules": modules,
         "entitlements": nx_license.entitlements(),
+        "sync": inventory_status(),
     }
 
 
@@ -155,11 +158,29 @@ def inventory_status():
         return {"status": "not attempted"}
 
 
-def send_inventory():
-    # refresh the license now: it re-validates with the server, which also records the
-    # unit's last check-in (the heartbeat)
-    subprocess.run([LICENSE_CLIENT], capture_output=True)
-    return {"status": "success"}
+def sync():
+    """Check in with the license server now (registers the unit by itself the first time) and report how it went."""
+    code = ''
+    message = ''
+    ok = False
+    try:
+        proc = subprocess.run([LICENSE_CLIENT], capture_output=True, text=True, timeout=90)
+        ok = proc.returncode == 0
+        message = (proc.stderr or '').strip()
+        m = re.search(r'\(([A-Z_]{4,})\)\s*$', message)
+        code = m.group(1) if m else ''
+    except Exception as e:  # noqa: BLE001 - the UI shows a generic error, the log has the reason
+        message = str(e)
+    status = {"status": "success" if ok else "error", "last_attempt": datetime.now(timezone.utc).isoformat(),
+              "code": code, "message": message[:300]}
+    try:
+        with open('/tmp/inventory-sent.json', 'w') as f:
+            json.dump(status, f)
+    except OSError:
+        pass
+    if not ok:
+        log(f'synchronization failed: {message}')
+    return status
 
 
 cmd = sys.argv[1]
@@ -170,7 +191,8 @@ if cmd == 'list':
         "unregister": {},
         "info": {},
         "inventory-status": {},
-        "send-inventory": {}
+        "send-inventory": {},
+        "sync": {}
     }))
 elif cmd == 'call':
     action = sys.argv[2]
@@ -183,7 +205,7 @@ elif cmd == 'call':
         ret = info()
     elif action == "inventory-status":
         ret = inventory_status()
-    elif action == "send-inventory":
-        ret = send_inventory()
+    elif action in ("send-inventory", "sync"):
+        ret = sync()
 
     print(json.dumps(ret))

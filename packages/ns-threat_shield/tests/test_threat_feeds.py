@@ -82,12 +82,25 @@ def test_legacy_choices_are_carried_over(mod, monkeypatch):
 def test_defaults_only_where_nothing_is_chosen(mod, monkeypatch):
     u = Uci(mod, monkeypatch)
     manifest, _ = make_manifest()
+    monkeypatch.setattr(mod, 'total_memory_mib', lambda: 4096)
     assert mod.apply_defaults(manifest) is True
-    assert u.lists == {'adblock.global.adb_feed': ['nexwall_malware'], 'banip.global.ban_feed': ['nexwall_attackers']}
+    # a unit with enough memory gets everything switched on
+    assert sorted(u.lists['adblock.global.adb_feed']) == ['nexwall_adult', 'nexwall_malware']
+    assert u.lists['banip.global.ban_feed'] == ['nexwall_attackers']
     u2 = Uci(mod, monkeypatch, lists={'adblock.global.adb_feed': ['nexwall_adult']})
     assert mod.apply_defaults(manifest) is True
     assert u2.lists['adblock.global.adb_feed'] == ['nexwall_adult']          # the administrator's choice stays
     assert u2.lists['banip.global.ban_feed'] == ['nexwall_attackers']
+
+
+def test_a_small_unit_gets_only_the_default_categories(mod, monkeypatch):
+    u = Uci(mod, monkeypatch)
+    manifest, _ = make_manifest()
+    manifest['categories']['adult']['count'] = 900000          # 70 MB of domains: too much for a 128 MiB unit
+    monkeypatch.setattr(mod, 'total_memory_mib', lambda: 128)
+    assert mod.apply_defaults(manifest) is True
+    assert u.lists['adblock.global.adb_feed'] == ['nexwall_malware']
+    assert u.lists['banip.global.ban_feed'] == ['nexwall_attackers']                  # address lists are small: always on
 
 
 def test_download_checks_both_hashes_and_writes_plain_text(mod, monkeypatch):
@@ -170,13 +183,14 @@ def test_update_follows_the_license(mod, monkeypatch):
 def test_update_downloads_the_enabled_categories_and_applies_defaults_once(mod, monkeypatch):
     u = Uci(mod, monkeypatch)
     manifest, _ = make_manifest()
+    monkeypatch.setattr(mod, 'total_memory_mib', lambda: 4096)
     monkeypatch.setattr(mod, 'license_state', lambda: 'trial')
     monkeypatch.setattr(mod, 'fetch', lambda path: json.dumps({'entitled': True, 'payload': 'x', 'signature': 'y'}).encode())
     monkeypatch.setattr(mod, 'verify_manifest', lambda resp: manifest)
     got = []
     monkeypatch.setattr(mod, 'download_category', lambda m, cid: got.append(cid) or True)
     assert mod.cmd_update(force=True) == 0
-    assert sorted(got) == ['attackers', 'malware']                          # the defaults, nothing else
+    assert sorted(got) == ['adult', 'attackers', 'malware']                 # everything: the unit has the memory
     st = mod.load_state()
     assert st['version'] == manifest['version'] and st['changed'] is True and st['defaults_applied'] is True
     # a later update does not switch the defaults on again after the administrator removed them

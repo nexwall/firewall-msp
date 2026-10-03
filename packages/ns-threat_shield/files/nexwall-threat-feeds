@@ -234,13 +234,35 @@ def migrate_legacy(manifest):
     return True
 
 
+def total_memory_mib():
+    try:
+        with open('/proc/meminfo') as f:
+            for line in f:
+                if line.startswith('MemTotal:'):
+                    return int(line.split()[1]) // 1024
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0
+
+
+# the share of the installed memory the domain lists may use for everything to be switched on by default
+ALL_ON_MEMORY_SHARE = 0.25
+
+
 def apply_defaults(manifest):
-    """First start: switch on the categories the catalog marks as default (domains in adblock, addresses in banip), but only
-    where the administrator has not chosen anything yet."""
+    """First start: switch the categories on, but only where the administrator has not chosen anything yet.
+
+    Everything is switched on (all address lists, all domain categories), so a new firewall protects at once. A unit with
+    little memory gets only the categories the catalog marks as default: all domain lists would not fit."""
     changed = False
     existing = {'dns': uci_list('adblock.global.adb_feed'), 'ip': uci_list('banip.global.ban_feed')}
-    for cid, cat in manifest.get('categories', {}).items():
-        if not cat.get('default') or cat['kind'] not in existing or existing[cat['kind']]:
+    cats = manifest.get('categories', {})
+    domains = sum(c.get('count') or 0 for c in cats.values() if c['kind'] == 'dns')
+    everything = domains * BYTES_PER_DOMAIN <= ALL_ON_MEMORY_SHARE * total_memory_mib() * 1048576
+    for cid, cat in cats.items():
+        if cat['kind'] not in existing or existing[cat['kind']]:
+            continue
+        if not (cat.get('default') or cat['kind'] == 'ip' or everything):
             continue
         feed = FEED_PREFIX + cid
         key = 'adblock.global.adb_feed' if cat['kind'] == 'dns' else 'banip.global.ban_feed'

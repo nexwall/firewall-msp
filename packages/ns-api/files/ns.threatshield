@@ -531,6 +531,27 @@ def edit_blocklist(e_uci, payload):
     e_uci.save('banip')
     return {'message': 'success'}
 
+def edit_all_blocklists(e_uci, payload):
+    """Switch every Nexwall IP list on or off at once. The country feed of the geo-blocking is left as it is."""
+    if not isinstance(payload.get('enabled'), bool):
+        raise ValidationError('enabled', 'invalid', payload.get('enabled'))
+    has_bl = has_bl_entitlement(e_uci)
+    feeds = list_feeds()
+    try:
+        current = list(e_uci.get_all('banip', 'global', 'ban_feed'))
+    except Exception:  # noqa: BLE001 - option not set
+        current = []
+    listed = [f for f in feeds if f not in ('country', 'asn') and (not f.startswith('nexwall_') or has_bl or f in current)]
+    targets = [f for f in listed if f.startswith('nexwall_')]
+    if payload['enabled']:
+        wanted = current + [f for f in targets if f not in current]
+    else:
+        wanted = [f for f in current if f not in targets]
+    wanted = [f for f in wanted if f in feeds]
+    e_uci.set('banip', 'global', 'ban_feed', wanted)
+    e_uci.save('banip')
+    return {'message': 'success', 'count': len(targets)}
+
 def set_default(e_uci, option, value):
     try:
         e_uci.get('banip', 'global', option)
@@ -728,6 +749,28 @@ def dns_list_blocklist(e_uci):
                      'description': feed.get('focus'), 'details': info.get('details'), 'count': info.get('count'),
                      'memory_mib': round((info.get('count') or 0) * BYTES_PER_DOMAIN / 1048576)})
     return { "data": ret, "memory": memory_summary(ret, total_memory_mib()) }
+
+def dns_edit_all_blocklists(e_uci, payload):
+    """Switch every Nexwall DNS category on or off at once."""
+    if not isinstance(payload.get('enabled'), bool):
+        raise ValidationError('enabled', 'invalid', payload.get('enabled'))
+    has_bl = has_bl_entitlement(e_uci)
+    feeds = list_dns_feeds(has_bl)
+    # only the Nexwall lists: a unit that has not received them yet (first minutes after the setup) is left alone,
+    # the first download switches them on by itself
+    targets = [f for f in feeds if f.startswith('nexwall_')]
+    try:
+        current = list(e_uci.get_all('adblock', 'global', 'adb_feed'))
+    except Exception:  # noqa: BLE001 - option not set
+        current = []
+    if payload['enabled']:
+        enabled = current + [f for f in targets if f not in current]
+    else:
+        enabled = [f for f in current if f not in targets]
+    enabled = [f for f in enabled if f in feeds]
+    e_uci.set('adblock', 'global', 'adb_feed', enabled)
+    e_uci.save('adblock')
+    return {'message': 'success', 'count': len(targets)}
 
 def dns_edit_blocklist(e_uci, payload):
     try:
@@ -1125,6 +1168,8 @@ if cmd == 'list':
         'is-ip-blocked': {'ip': ''},
         'dns-list-blocklist': {},
         'dns-edit-blocklist': { "blocklist": "blocklist_name", "enabled": True },
+        'dns-edit-all-blocklists': { "enabled": True },
+        'edit-all-blocklists': { "enabled": True },
         'dns-list-settings': {},
         'dns-list-zones': {},
         'dns-edit-settings': { 'enabled': True, 'zones': ["lan"], "ports": ["53", "853"] },
@@ -1190,6 +1235,12 @@ elif cmd == 'call':
         elif action == 'dns-edit-blocklist':
             payload = json.loads(sys.stdin.read())
             ret = dns_edit_blocklist(e_uci, payload)
+        elif action == 'dns-edit-all-blocklists':
+            payload = json.loads(sys.stdin.read())
+            ret = dns_edit_all_blocklists(e_uci, payload)
+        elif action == 'edit-all-blocklists':
+            payload = json.loads(sys.stdin.read())
+            ret = edit_all_blocklists(e_uci, payload)
         elif action == 'dns-list-settings':
             ret = dns_list_settings(e_uci)
         elif action == 'dns-edit-settings':
