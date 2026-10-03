@@ -167,6 +167,147 @@ def tsip_malware_report():
         "malware_by_chain": dict(chain_count)
     }
 
+def _log_lines(grep_pattern):
+    """Today's lines of the system log (and the rotated one) that match an extended regex."""
+    date_str = datetime.now().strftime('%b %e ').rstrip()
+    for file_path in ['/var/log/messages.1.gz', '/var/log/messages']:
+        if file_path.endswith('.gz'):
+            command = f'zcat {file_path} 2>/dev/null | grep "{date_str}" | grep -E "{grep_pattern}"'
+        else:
+            command = f'grep "{date_str}" {file_path} | grep -E "{grep_pattern}"'
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for line in process.stdout:
+            yield line.decode('utf-8', errors='replace')
+        process.stdout.close()
+        process.wait()
+
+
+def _line_hour(line):
+    m = re.search(r'(\d{2}):(\d{2}):(\d{2})', line)
+    return int(m.group(1)) if m else None
+
+
+def dns_block_report():
+    """Domains the DNS filter refused today: dnsmasq answers them itself ("config <domain> is NXDOMAIN"); the query log is
+    reduced to these lines by the rsyslog rule of the firewall, so nothing else is counted."""
+    count = 0
+    hourly = [0] * 24
+    domains = defaultdict(int)
+    first_seen = 0
+    pattern = re.compile(r'config (\S+) is NXDOMAIN')
+    for line in _log_lines('dnsmasq.*config .* is NXDOMAIN'):
+        m = pattern.search(line)
+        if not m:
+            continue
+        domain = m.group(1).lower()
+        # reverse lookups of addresses and local names are answered the same way: not a blocked domain
+        if re.fullmatch(r'[0-9.:a-f]+', domain) or domain.endswith('.arpa') or '.' not in domain:
+            continue
+        count += 1
+        hour = _line_hour(line)
+        if hour is not None:
+            hourly[hour] += 1
+        if not first_seen:
+            first_seen = datetime.strptime(f"{datetime.now().year} {line[:15]}", '%Y %b %d %H:%M:%S').timestamp()
+        domains[domain] += 1
+    logging = EUci().get('dhcp', 'ns_dnsmasq', 'logqueries', default='0') == '1'
+    return {
+        "first_seen": int(first_seen),
+        "dns_block_count": count,
+        "dns_block_by_hour": format_hourly_data(hourly),
+        "dns_block_by_domain": sorted(domains.items(), key=lambda item: item[1], reverse=True)[:50],
+        "logging": logging,
+    }
+
+
+def _country_ranges():
+    """Address blocks of the countries the Nexwall bundle knows: [(start, end, cc)] sorted, for IPv4."""
+    import ipaddress
+    try:
+        with open('/mnt/data/threat-feeds/state.json') as f:
+            version = json.load(f).get('version')
+    except (OSError, ValueError):
+        version = None
+    base = None
+    for root in ('/mnt/data/threat-feeds', '/var/threat-feeds'):
+        if version and os.path.isdir(os.path.join(root, version, 'geo', 'v4')):
+            base = os.path.join(root, version, 'geo', 'v4')
+            break
+    ranges = []
+    if base:
+        for name in os.listdir(base):
+            if not name.endswith('-aggregated.zone'):
+                continue
+            cc = name.split('-')[0]
+            with open(os.path.join(base, name)) as f:
+                for entry in f:
+                    entry = entry.strip()
+                    if entry:
+                        try:
+                            net = ipaddress.ip_network(entry, strict=False)
+                        except ValueError:
+                            continue
+                        ranges.append((int(net.network_address), int(net.broadcast_address), cc))
+    ranges.sort()
+    return ranges
+
+
+def _country_names():
+    names = {}
+    try:
+        with open('/etc/banip/banip.countries') as f:
+            for row in f:
+                cols = row.rstrip('\n').split('\t')
+                if len(cols) >= 3:
+                    names[cols[0]] = cols[2]
+    except OSError:
+        pass
+    return names
+
+
+def geo_block_report():
+    """Traffic the country blocks of IP & Geo Blocking refused today, by country (the country of the blocked address is
+    found in the same address blocks the firewall blocks with)."""
+    import bisect
+    import ipaddress
+    count = 0
+    hourly = [0] * 24
+    by_cc = defaultdict(int)
+    first_seen = 0
+    ranges = None
+    starts = None
+    for line in _log_lines(r'banIP/[a-zA-Z0-9_-]+/(drop|reject)/country'):
+        count += 1
+        hour = _line_hour(line)
+        if hour is not None:
+            hourly[hour] += 1
+        if not first_seen:
+            first_seen = datetime.strptime(f"{datetime.now().year} {line[:15]}", '%Y %b %d %H:%M:%S').timestamp()
+        # inbound: the source is the foreign address; outbound: the destination
+        outbound = '/outbound/' in line
+        m = re.search(r'\b%s=([0-9.]+)\b' % ('DST' if outbound else 'SRC'), line)
+        cc = 'unknown'
+        if m:
+            if ranges is None:
+                ranges = _country_ranges()
+                starts = [r[0] for r in ranges]
+            try:
+                value = int(ipaddress.ip_address(m.group(1)))
+                i = bisect.bisect_right(starts, value) - 1
+                if i >= 0 and ranges[i][0] <= value <= ranges[i][1]:
+                    cc = ranges[i][2]
+            except ValueError:
+                pass
+        by_cc[cc] += 1
+    names = _country_names()
+    return {
+        "first_seen": int(first_seen),
+        "geo_block_count": count,
+        "geo_block_by_hour": format_hourly_data(hourly),
+        "geo_block_by_country": [[cc, names.get(cc, cc.upper()), n] for cc, n in sorted(by_cc.items(), key=lambda item: item[1], reverse=True)[:50]],
+    }
+
+
 def mwan_report():
     file_paths = ['/var/log/messages.1.gz', '/var/log/messages']
     # Get the current date in the format '%b %e ' (e.g., 'Aug  8 ')
@@ -401,6 +542,8 @@ if cmd == 'list':
     print(json.dumps({
         'tsip-malware-report': {},
         'tsip-attack-report': {},
+        'dns-block-report': {},
+        'geo-block-report': {},
         'mwan-report': {},
         'latency-and-quality-report': {},
         'get-public-ip-addresses': {
@@ -434,6 +577,16 @@ elif cmd == 'call':
         if ret is None:
             ret = tsip_malware_report()
             save_cached_report('tsip-malware-report', ret)
+    elif action == 'dns-block-report':
+        ret = get_cached_report('dns-block-report', 300)
+        if ret is None:
+            ret = dns_block_report()
+            save_cached_report('dns-block-report', ret)
+    elif action == 'geo-block-report':
+        ret = get_cached_report('geo-block-report', 300)
+        if ret is None:
+            ret = geo_block_report()
+            save_cached_report('geo-block-report', ret)
     elif action == 'tsip-attack-report':
         ret = get_cached_report('tsip-attack-report', 900)
         if ret is None:

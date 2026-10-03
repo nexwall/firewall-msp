@@ -56,6 +56,7 @@ define Package/nexwall-scripts/install
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-nfq-watchdog $(1)/etc/uci-defaults/99-nexwall-nfq-watchdog
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-perf $(1)/etc/uci-defaults/99-nexwall-perf
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-secure-defaults $(1)/etc/uci-defaults/99-nexwall-secure-defaults
+	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-dns-log $(1)/etc/uci-defaults/99-nexwall-dns-log
 	$(INSTALL_DIR) $(1)/usr/lib/nexwall-scripts
 	$(INSTALL_DATA) ./files/lib/trace.awk $(1)/usr/lib/nexwall-scripts/trace.awk
 	$(INSTALL_DATA) ./files/lib/common.sh $(1)/usr/lib/nexwall-scripts/common.sh

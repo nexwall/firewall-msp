@@ -1,0 +1,21 @@
+#!/bin/sh
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+
+# DNS Filtering answers a blocked domain itself ("config <domain> is NXDOMAIN"). dnsmasq only logs that when query logging
+# is on, and then it logs EVERY query: the rsyslog rule below keeps the answers that come from the filter and drops the rest
+# of the query traffic before it is written anywhere, so the Log Viewer and the Traffic Analytics can show the blocks at
+# no cost in log volume.
+MARK='Nexwall: dnsmasq logs every DNS query'
+if [ -f /etc/rsyslog.conf ] && ! grep -q "$MARK" /etc/rsyslog.conf; then
+	cat >> /etc/rsyslog.conf <<'EOF'
+# Nexwall: dnsmasq logs every DNS query once query logging is on; only the answers that come from the DNS filter
+# (config ... is NXDOMAIN) are kept, the rest of the query traffic is dropped here before it reaches any log
+if ($programname == 'dnsmasq') and re_match($msg, '^ ?[0-9]+ [^ ]+/[0-9]+ (query\\[|forwarded |reply |cached |cached-stale |/etc/hosts |dnssec-query |validation )') then stop
+EOF
+fi
+if uci -q get dhcp.ns_dnsmasq >/dev/null; then
+	uci -q set dhcp.ns_dnsmasq.logqueries='1'
+	uci -q commit dhcp
+fi
+exit 0

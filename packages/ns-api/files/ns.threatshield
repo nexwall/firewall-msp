@@ -484,6 +484,11 @@ def list_blocklist(e_uci):
             if type == 'enterprise' and not has_bl:
                 continue
 
+        # the third-party community lists are not offered (DNS Filtering shows the Nexwall lists only); one that is
+        # already switched on stays visible so it can be switched off
+        if type == 'community' and not enabled:
+            continue
+
         protocols, ports = parse_feed_flag(feed.get('flag'))
 
         info = threat_info(f, catalog)
@@ -776,8 +781,10 @@ def get_feed_status():
         'license_state': st.get('license_state'), 'version': st.get('version'), 'last_check': st.get('last_check'),
         'last_result': st.get('last_result'), 'last_error': st.get('last_error'),
         'domains': total('dns'), 'addresses': total('ip'), 'country_blocks': total('geo'),
-        'categories': len([c for c in cats if c.get('kind') in ('dns', 'ip')]),
-        'enabled': len([c for c in cats if c.get('enabled') and c.get('kind') in ('dns', 'ip')]),
+        'dns_lists': len([c for c in cats if c.get('kind') == 'dns']),
+        'dns_enabled': len([c for c in cats if c.get('kind') == 'dns' and c.get('enabled')]),
+        'ip_lists': len([c for c in cats if c.get('kind') == 'ip']),
+        'ip_enabled': len([c for c in cats if c.get('kind') == 'ip' and c.get('enabled')]),
         'updating': feed_updating(),
     }
 
