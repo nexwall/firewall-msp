@@ -31,6 +31,8 @@ import time
 DONE = '/etc/nexwall/secure-defaults.done'
 TRIES = '/etc/nexwall/secure-defaults.tries'
 MAX_TRIES = 5
+RETRIES = 12                    # attempts in one start ...
+RETRY_SECONDS = 150             # ... this far apart (about half an hour)
 PRIVATE_NETWORKS = ['192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8']
 
 
@@ -115,24 +117,38 @@ def main():
     if not wait_for_api(['ns.snort', 'ns.threatshield', 'ns.dpi', 'ns.commit']):
         log('the API did not come up: will try again at the next start')
         return 1
-    failed = []
-    for name, step in (('Network Protection', step_ips), ('DNS Filtering', step_dns), ('IP & Geo Blocking', step_ip),
-                       ('Application Control', step_dpi)):
+    # Every step on its own; the ones that fail (typically: the license is not known yet because the unit has no
+    # internet at its first start) are tried again every few minutes for a while before giving up until the next start.
+    pending = [('Network Protection', step_ips), ('DNS Filtering', step_dns), ('IP & Geo Blocking', step_ip),
+               ('Application Control', step_dpi)]
+    for attempt in range(RETRIES):
+        if attempt and uci_get('ns-wizard.config.complete') == '1':
+            mark_done()                 # the administrator ran the setup wizard meanwhile: its choices stand
+            return 0
+        failed = []
+        for name, step in pending:
+            try:
+                step()
+                log('%s: switched on' % name)
+            except Exception as e:  # noqa: BLE001 - the log says why
+                failed.append((name, step))
+                log('%s: %s' % (name, e))
         try:
-            step()
-            log('%s: switched on' % name)
-        except Exception as e:  # noqa: BLE001 - every step on its own, the log says why
-            failed.append(name)
-            log('%s: %s' % (name, e))
-    try:
-        changes = ubus('uci', 'changes').get('changes') or {}
-        if changes:
-            ubus('ns.commit', 'commit', {'changes': changes})
-    except Exception as e:  # noqa: BLE001
-        failed.append('commit')
-        log('commit: %s' % e)
-    if failed:
-        log('not everything could be switched on (%s): will try again at the next start' % ', '.join(failed))
+            changes = ubus('uci', 'changes').get('changes') or {}
+            if changes:
+                ubus('ns.commit', 'commit', {'changes': changes})
+        except Exception as e:  # noqa: BLE001
+            log('commit: %s' % e)
+            failed = pending          # nothing is certain: all again
+        pending = failed
+        if not pending:
+            break
+        if attempt < RETRIES - 1:
+            log('not everything could be switched on (%s): trying again in %d minutes' % (
+                ', '.join(n for n, _ in pending), RETRY_SECONDS // 60))
+            time.sleep(RETRY_SECONDS)
+    if pending:
+        log('gave up for now (%s): will try again at the next start' % ', '.join(n for n, _ in pending))
         return 1
     mark_done()
     log('secure defaults applied')

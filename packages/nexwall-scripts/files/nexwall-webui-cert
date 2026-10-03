@@ -1,0 +1,297 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+"""
+nexwall-webui-cert - a certificate the browser trusts for the web interface of this firewall.
+
+The administrator opens https://firewall.nexwall.com.br. This firewall answers that name itself (a static DNS entry
+pointing to its own LAN address, kept current by this tool) and presents a Let's Encrypt certificate for it, which it
+downloads from the Nexwall license server:
+
+  - the answer is signed by the license server and is only accepted when it is for firewall.nexwall.com.br, the certificate
+    is valid for that name, is not about to expire and belongs to the private key that came with it;
+  - until a valid certificate is installed, and whenever it stops being valid (expired, or the server cannot be reached for
+    too long), the web interface keeps using - or goes back to - its own self-signed certificate, so it is always reachable;
+  - opening the web interface by IP address (https://192.168.1.1) cannot be trusted by a browser: no public authority issues
+    certificates for private addresses. The browser warns, as it always did.
+
+  nexwall-webui-cert sync       static DNS entry + download/renew the certificate (cron, every few hours, and at boot)
+  nexwall-webui-cert status     what is installed (JSON)
+  nexwall-webui-cert dns        only the static DNS entry
+  nexwall-webui-cert revert     go back to the self-signed certificate
+  nexwall-webui-cert install FULLCHAIN KEY    install a certificate that was provided by hand (same checks)
+"""
+
+import argparse
+import base64
+import datetime
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+
+HOSTNAME = 'firewall.nexwall.com.br'
+DIR = '/etc/nexwall/webui-cert'
+CHAIN = os.path.join(DIR, 'fullchain.pem')
+KEY = os.path.join(DIR, 'privkey.pem')
+SELF_CRT = '/etc/nginx/conf.d/_lan.crt'
+SELF_KEY = '/etc/nginx/conf.d/_lan.key'
+CORE_CTL = '/usr/sbin/licensectl'
+PUBKEY = '/etc/nexwall-license/pubkey.pem'
+MIN_DAYS_LEFT = 1                 # a certificate that expires sooner than this is not installed
+NOW_FLOOR = 1735689600            # 2025-01-01: a clock before this has not been set yet, expiry cannot be judged
+
+
+def log(msg):
+    print(msg, file=sys.stderr)
+    subprocess.run(['logger', '-t', 'nexwall-webui-cert', msg], check=False)
+
+
+def run(cmd, stdin=None, timeout=60):
+    return subprocess.run(cmd, input=stdin, capture_output=True, text=True, timeout=timeout)
+
+
+def uci(key, default=''):
+    p = run(['uci', '-q', 'get', key])
+    return p.stdout.strip() if p.returncode == 0 and p.stdout.strip() else default
+
+
+# ---------------------------------------------------------------- static DNS entry
+
+def lan_address():
+    """The LAN address of this firewall (the first address of the 'lan' interface)."""
+    value = uci('network.lan.ipaddr')
+    if not value:
+        p = run(['uci', '-q', 'get', 'network.lan.ipaddr'])
+        value = p.stdout.split()[0] if p.stdout.split() else ''
+    return value.split('/')[0].strip("'") if value else ''
+
+
+def ensure_dns():
+    """firewall.nexwall.com.br -> the LAN address of this unit, in the DNS server of the firewall. True when it changed."""
+    ip = lan_address()
+    if not ip:
+        return False
+    if uci('dhcp.nexwall_webui.name') == HOSTNAME and uci('dhcp.nexwall_webui.ip') == ip:
+        return False
+    run(['uci', 'set', 'dhcp.nexwall_webui=domain'])
+    run(['uci', 'set', 'dhcp.nexwall_webui.name=%s' % HOSTNAME])
+    run(['uci', 'set', 'dhcp.nexwall_webui.ip=%s' % ip])
+    run(['uci', 'commit', 'dhcp'])
+    run(['/etc/init.d/dnsmasq', 'reload'])
+    log('%s now points to %s' % (HOSTNAME, ip))
+    return True
+
+
+# ---------------------------------------------------------------- certificate checks
+
+def cert_info(path):
+    """-> dict(not_after=epoch, names=[...], pubkey=PEM) or raises ValueError."""
+    p = run(['openssl', 'x509', '-in', path, '-noout', '-enddate', '-ext', 'subjectAltName'])
+    if p.returncode != 0:
+        raise ValueError('not a certificate')
+    m = re.search(r'notAfter=(.+)', p.stdout)
+    if not m:
+        raise ValueError('no expiry date')
+    not_after = int(datetime.datetime.strptime(m.group(1).strip(), '%b %d %H:%M:%S %Y %Z')
+                    .replace(tzinfo=datetime.timezone.utc).timestamp())
+    names = re.findall(r'DNS:([^\s,]+)', p.stdout)
+    pub = run(['openssl', 'x509', '-in', path, '-noout', '-pubkey']).stdout
+    return {'not_after': not_after, 'names': [n.lower() for n in names], 'pubkey': pub}
+
+
+def key_pubkey(path):
+    p = run(['openssl', 'pkey', '-in', path, '-pubout'])
+    if p.returncode != 0:
+        raise ValueError('not a private key')
+    return p.stdout
+
+
+def check_pair(chain_path, key_path):
+    """The certificate is for our name, is not about to expire, and its private key is the one given. Returns the info."""
+    info = cert_info(chain_path)
+    if HOSTNAME not in info['names']:
+        raise ValueError('the certificate is not for %s' % HOSTNAME)
+    if time.time() > NOW_FLOOR and info['not_after'] < time.time() + MIN_DAYS_LEFT * 86400:
+        raise ValueError('the certificate is expired or about to expire')
+    if key_pubkey(key_path) != info['pubkey']:
+        raise ValueError('the private key does not belong to the certificate')
+    return info
+
+
+def verify_signature(resp):
+    from Crypto.Hash import SHA256
+    from Crypto.PublicKey import RSA
+    from Crypto.Signature import pkcs1_15
+    with open(PUBKEY, 'rb') as f:
+        key = RSA.import_key(f.read())
+    payload = base64.b64decode(resp['payload'])
+    pkcs1_15.new(key).verify(SHA256.new(payload), base64.b64decode(resp['signature']))
+    data = json.loads(payload)
+    if data.get('kind') != 'webui-certificate' or data.get('hostname') != HOSTNAME:
+        raise ValueError('not the web interface certificate of %s' % HOSTNAME)
+    return data
+
+
+# ---------------------------------------------------------------- web server
+
+def nginx_uses():
+    return uci('nginx._lan.ssl_certificate')
+
+
+def restart_web():
+    """Regenerate the web server configuration and restart it (ns-ui does both); True when it answers on 443 afterwards."""
+    run(['/usr/sbin/ns-ui'], timeout=120)
+    for _ in range(10):
+        time.sleep(1)
+        if run(['sh', '-c', "curl -sk -o /dev/null -m 5 https://127.0.0.1/ && echo ok"]).stdout.strip() == 'ok':
+            return True
+    return False
+
+
+def use_own(chain=CHAIN, key=KEY):
+    run(['uci', 'set', 'nginx._lan.ssl_certificate=%s' % chain])
+    run(['uci', 'set', 'nginx._lan.ssl_certificate_key=%s' % key])
+    run(['uci', '-q', 'delete', 'nginx._lan.uci_manage_ssl'])
+    run(['uci', 'commit', 'nginx'])
+
+
+def use_self_signed():
+    run(['uci', 'set', 'nginx._lan.ssl_certificate=%s' % SELF_CRT])
+    run(['uci', 'set', 'nginx._lan.ssl_certificate_key=%s' % SELF_KEY])
+    run(['uci', 'set', 'nginx._lan.uci_manage_ssl=self-signed'])
+    run(['uci', 'commit', 'nginx'])
+
+
+def revert():
+    use_self_signed()
+    ok = restart_web()
+    log('back to the self-signed certificate (web interface %s)' % ('answers' if ok else 'DOES NOT ANSWER'))
+    return ok
+
+
+def same_file(path, data):
+    try:
+        with open(path) as f:
+            return f.read() == data
+    except OSError:
+        return False
+
+
+def install(fullchain, privkey):
+    """Check and install a certificate + key pair, and point the web server at it. Returns 'installed' or 'unchanged'."""
+    os.makedirs(DIR, mode=0o700, exist_ok=True)
+    if same_file(CHAIN, fullchain) and same_file(KEY, privkey) and nginx_uses() == CHAIN:
+        check_pair(CHAIN, KEY)
+        return 'unchanged'
+    tmp = tempfile.mkdtemp(dir=DIR)
+    try:
+        c, k = os.path.join(tmp, 'fullchain.pem'), os.path.join(tmp, 'privkey.pem')
+        with open(c, 'w') as f:
+            f.write(fullchain)
+        fd = os.open(k, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w') as f:
+            f.write(privkey)
+        check_pair(c, k)
+        os.replace(k, KEY)
+        os.replace(c, CHAIN)
+    finally:
+        for name in os.listdir(tmp):
+            os.unlink(os.path.join(tmp, name))
+        os.rmdir(tmp)
+    os.chmod(KEY, 0o600)
+    use_own()
+    if not restart_web():
+        log('the web interface does not answer with the new certificate: going back')
+        revert()
+        raise RuntimeError('the new certificate could not be used')
+    info = cert_info(CHAIN)
+    log('certificate installed for %s, valid until %s' % (HOSTNAME, datetime.datetime.fromtimestamp(info['not_after'], datetime.timezone.utc).date()))
+    return 'installed'
+
+
+def installed_status():
+    out = {'hostname': HOSTNAME, 'lan_address': lan_address(), 'dns_entry': uci('dhcp.nexwall_webui.ip'),
+           'using': 'nexwall' if nginx_uses() == CHAIN else 'self-signed', 'valid': False}
+    if os.path.exists(CHAIN) and os.path.exists(KEY):
+        try:
+            info = check_pair(CHAIN, KEY)
+            out.update({'valid': True, 'not_after': info['not_after']})
+        except (ValueError, OSError) as e:
+            out['error'] = str(e)
+    return out
+
+
+# ---------------------------------------------------------------- commands
+
+def cmd_sync(_args):
+    ensure_dns()
+    try:
+        p = subprocess.run([CORE_CTL, 'get', '/api/v1/webui-cert'], capture_output=True, timeout=120)
+        if p.returncode != 0:
+            raise RuntimeError(p.stderr.decode(errors='replace').strip() or 'request failed')
+        data = verify_signature(json.loads(p.stdout))
+        result = install(data['fullchain'], data['privkey'])
+        print(result)
+        return 0
+    except Exception as e:  # noqa: BLE001 - whatever happens, the web interface keeps working
+        log('could not get the certificate: %s' % e)
+        st = installed_status()
+        # a certificate that is no longer valid must not stay in use
+        if st['using'] == 'nexwall' and not st['valid']:
+            revert()
+        return 1
+
+
+def cmd_status(_args):
+    print(json.dumps(installed_status()))
+    return 0
+
+
+def cmd_dns(_args):
+    ensure_dns()
+    return 0
+
+
+def cmd_revert(_args):
+    return 0 if revert() else 1
+
+
+def cmd_install(args):
+    with open(args.fullchain) as f:
+        chain = f.read()
+    with open(args.key) as f:
+        key = f.read()
+    ensure_dns()
+    try:
+        print(install(chain, key))
+    except (ValueError, RuntimeError) as e:
+        print('not installed: %s' % e, file=sys.stderr)
+        return 1
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Certificate of the web interface')
+    sub = parser.add_subparsers(dest='cmd', required=True)
+    sub.add_parser('sync').set_defaults(func=cmd_sync)
+    sub.add_parser('status').set_defaults(func=cmd_status)
+    sub.add_parser('dns').set_defaults(func=cmd_dns)
+    sub.add_parser('revert').set_defaults(func=cmd_revert)
+    p = sub.add_parser('install')
+    p.add_argument('fullchain')
+    p.add_argument('key')
+    p.set_defaults(func=cmd_install)
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

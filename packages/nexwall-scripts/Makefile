@@ -19,7 +19,7 @@ define Package/nexwall-scripts
 	SECTION:=base
 	CATEGORY:=Nexwall
 	TITLE:=Nexwall operator/support diagnostic tools
-	DEPENDS:=+nftables +conntrack +gawk +socat +curl +ethtool +python3-light
+	DEPENDS:=+nftables +conntrack +gawk +socat +curl +ethtool +python3-light +openssl-util +python3-cryptodome
 	PKGARCH:=all
 endef
 
@@ -49,6 +49,7 @@ define Package/nexwall-scripts/install
 	$(INSTALL_BIN) ./files/dpidbg $(1)/usr/sbin/dpidbg
 	$(INSTALL_BIN) ./files/nexwall-fastpath $(1)/usr/sbin/nexwall-fastpath
 	$(INSTALL_BIN) ./files/nexwall-secure-defaults $(1)/usr/sbin/nexwall-secure-defaults
+	$(INSTALL_BIN) ./files/nexwall-webui-cert $(1)/usr/sbin/nexwall-webui-cert
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/nexwall-fastpath.init $(1)/etc/init.d/nexwall-fastpath
 	$(INSTALL_BIN) ./files/nexwall-secure-defaults.init $(1)/etc/init.d/nexwall-secure-defaults
@@ -57,6 +58,7 @@ define Package/nexwall-scripts/install
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-perf $(1)/etc/uci-defaults/99-nexwall-perf
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-secure-defaults $(1)/etc/uci-defaults/99-nexwall-secure-defaults
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-dns-log $(1)/etc/uci-defaults/99-nexwall-dns-log
+	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-webui-cert $(1)/etc/uci-defaults/99-nexwall-webui-cert
 	$(INSTALL_DIR) $(1)/usr/lib/nexwall-scripts
 	$(INSTALL_DATA) ./files/lib/trace.awk $(1)/usr/lib/nexwall-scripts/trace.awk
 	$(INSTALL_DATA) ./files/lib/common.sh $(1)/usr/lib/nexwall-scripts/common.sh
