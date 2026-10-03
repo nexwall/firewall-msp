@@ -56,6 +56,30 @@ config rule 'ns_ping_wan'
 	option family		ipv4
 	option target		ACCEPT
 
+# Forward rules every unit starts with. The first one lets the LAN reach the internet; the
+# second one is the closing rule for that path and cannot be deleted (tag "protected").
+# New forward rules are always placed before it.
+config rule 'ns_lan_to_wan'
+	option name 'LAN -> WAN'
+	option src 'lan'
+	option dest 'wan'
+	option target 'ACCEPT'
+	option ns_service '*'
+	option proto 'all'
+	option enabled '1'
+
+config rule 'ns_default_drop'
+	option name 'DROP DEFAULT'
+	option src 'lan'
+	option dest 'wan'
+	option target 'DROP'
+	option ns_service '*'
+	option proto 'all'
+	option enabled '1'
+	option log '1'
+	option log_limit '1/s'
+	list ns_tag 'protected'
+
 # include a file with users custom iptables rules
 config include 'ns_user_include'
 	option path /etc/firewall.user

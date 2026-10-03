@@ -955,6 +955,23 @@ def add_default_ipv6_rules(uci):
             ret.append(add_template_rule(uci, r))
     return ret
 
+PROTECTED_TAG = 'protected'
+
+
+def is_protected_rule(record: dict) -> bool:
+    """A protected rule (the default drop rule) cannot be deleted and always stays at the end of the forward rules."""
+    tags = record.get('ns_tag') or []
+    if isinstance(tags, str):
+        tags = [tags]
+    return PROTECTED_TAG in tags
+
+
+def protected_rules_last(uci, ids: list) -> list:
+    """Stable partition: the protected rules go after all the others."""
+    normal = [i for i in ids if not is_protected_rule(uci.get_all('firewall', i) or {})]
+    return normal + [i for i in ids if i not in normal]
+
+
 def delete_rule(uci, id: str) -> str:
     """
     Delete rule from firewall config.
@@ -971,6 +988,8 @@ def delete_rule(uci, id: str) -> str:
     """
     if id not in list_rule_ids(uci):
         raise utils.ValidationError('id', 'rule_not_found', id)
+    if is_protected_rule(uci.get_all('firewall', id) or {}):
+        raise utils.ValidationError('id', 'rule_protected', id)
     uci.delete('firewall', id)
     uci.save('firewall')
     reorder_firewall_config(uci)
@@ -1065,7 +1084,7 @@ def order_rules(uci, rule_type: str, order: list[str]) -> list[str]:
     elif rule_type == 'output':
         final_order = defaults + zones + forwardings + other_rules + forward_rules + order + input_rules
     elif rule_type == 'forward':
-        final_order = defaults + zones + forwardings + other_rules + order + output_rules + input_rules
+        final_order = defaults + zones + forwardings + other_rules + protected_rules_last(uci, order) + output_rules + input_rules
     
     # enforce new order
     index = 0
@@ -1694,12 +1713,17 @@ def add_rule(uci, name: str, src: str, src_ip: list[str], dest: str, dest_ip: li
         name of rule config that was added
     """
     validate_rule(uci, src, src_ip, dest, dest_ip, proto, dest_port, target, service, ns_src, ns_dst)
+    tag = [t for t in (tag or []) if t != PROTECTED_TAG]
     rule = utils.get_random_id()
     uci.set('firewall', rule, 'rule')
     setup_rule(uci, rule, name, src, src_ip, dest, dest_ip, proto, dest_port, target, service, enabled, log, tag, ns_src, ns_dst, ns_link)
     reorder_firewall_config(uci)
     update_firewall_rules(uci) # expand objects and save
 
+    if not add_to_top and is_forward_rule(uci.get_all('firewall', rule)):
+        ids = list(map(lambda x: x['id'], list_forward_rules(uci)))
+        if protected_rules_last(uci, ids) != ids:
+            order_rules(uci, 'forward', ids)
     if add_to_top:
         rule_type = uci.get_all('firewall', rule)
         if is_forward_rule(rule_type):
@@ -1743,6 +1767,9 @@ def edit_rule(uci, id: str, name: str, src: str, src_ip: list[str], dest: str, d
     if not uci.get('firewall', id, default=None):
         raise utils.ValidationError("id", "rule_does_not_exists", id)  
     validate_rule(uci, src, src_ip, dest, dest_ip, proto, dest_port, target, service, ns_src, ns_dst)
+    tag = [t for t in (tag or []) if t != PROTECTED_TAG]
+    if is_protected_rule(uci.get_all('firewall', id) or {}):
+        tag.append(PROTECTED_TAG)
     setup_rule(uci, id, name, src, src_ip, dest, dest_ip, proto, dest_port, target, service, enabled, log, tag, ns_src, ns_dst, ns_link)
     update_firewall_rules(uci) # expand objects and save
     return id
