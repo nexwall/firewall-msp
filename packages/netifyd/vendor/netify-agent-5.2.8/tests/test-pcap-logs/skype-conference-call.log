@@ -1,0 +1,7 @@
+offline0: i4pcu------r---- UDP [OR] 104.46.40.49:60642 --> [L] 192.168.2.20:49282
+    : Skype/Teams/Call.netify.teams
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 104.46.40.49:60642
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+

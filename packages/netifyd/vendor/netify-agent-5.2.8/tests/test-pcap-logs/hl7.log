@@ -1,0 +1,18 @@
+offline0: i4pc-------r--F- TCP [L] 10.0.0.126:6661 <-- [OL] 10.0.0.155:49242
+    : HealthLevel7
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 10
+
+offline0: i4pc-------r--F- TCP [L] 10.0.0.126:6661 <-- [OL] 10.0.0.155:49250
+    : HealthLevel7
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 4
+
+offline0: i4pc-------r--F- TCP [L] 10.0.0.126:6661 <-- [OL] 10.0.0.155:49252
+    : HealthLevel7
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 4
+

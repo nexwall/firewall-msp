@@ -1,0 +1,102 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Turns the Nexwall Log Viewer (VictoriaLogs-backed) on or off. Off by
+# default: the extra rsyslog inputs and VictoriaLogs itself only run once an
+# admin explicitly enables this, since they add real, ongoing CPU/disk cost
+# that most units don't need most of the time. See docs/ns-log-viewer.md.
+
+import json
+import os
+import subprocess
+import sys
+
+NGINX_INC = "/etc/nginx/conf.d/logs-viewer.inc"
+NGINX_INC_TEMPLATE = "/usr/share/ns-log-viewer/logs-viewer.inc"
+RSYSLOG_CONF = "/etc/rsyslog.d/nexwall-log-viewer.conf"
+RSYSLOG_CONF_TEMPLATE = "/usr/share/ns-log-viewer/nexwall-extra.conf"
+
+
+def run(cmd):
+    subprocess.run(cmd, check=True, capture_output=True)
+
+
+def is_running():
+    r = subprocess.run(["/etc/init.d/victoria-logs", "running"], capture_output=True)
+    return r.returncode == 0
+
+
+def status():
+    return {
+        "enabled": os.path.exists(NGINX_INC) and os.path.exists(RSYSLOG_CONF),
+        "victoria_logs_running": is_running(),
+    }
+
+
+def already_enabled():
+    return os.path.islink(RSYSLOG_CONF) and os.path.islink(NGINX_INC) and is_running()
+
+
+def regenerate_web_config():
+    """ns-ui restarts nginx, which would cut the very request that asks for it: do it after the answer went out."""
+    subprocess.Popen(["sh", "-c", "sleep 2; /usr/sbin/ns-ui"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+
+
+def enable():
+    if already_enabled():
+        return {"result": "success", "restarting": False}
+    try:
+        os.makedirs("/etc/rsyslog.d", exist_ok=True)
+        # symlinks, not copies: a future ns-log-viewer package update changes
+        # behavior immediately, no re-enable needed
+        for target, link in ((RSYSLOG_CONF_TEMPLATE, RSYSLOG_CONF), (NGINX_INC_TEMPLATE, NGINX_INC)):
+            if not os.path.islink(link):
+                if os.path.exists(link):
+                    os.remove(link)
+                os.symlink(target, link)
+
+        run(["/etc/init.d/victoria-logs", "enable"])
+        run(["/etc/init.d/victoria-logs", "start"])
+        run(["/etc/init.d/rsyslog", "restart"])
+        # regenerates ns-ui.conf from its template, which includes logs-viewer.inc if present
+        regenerate_web_config()
+    except subprocess.CalledProcessError as e:
+        return {"result": "failure", "message": (e.stderr or b"").decode(errors="replace")[:500]}
+    return {"result": "success", "restarting": True}
+
+
+def disable():
+    try:
+        for link in (RSYSLOG_CONF, NGINX_INC):
+            if os.path.islink(link) or os.path.exists(link):
+                os.remove(link)
+
+        run(["/etc/init.d/victoria-logs", "stop"])
+        run(["/etc/init.d/victoria-logs", "disable"])
+        run(["/etc/init.d/rsyslog", "restart"])
+        run(["/usr/sbin/ns-ui"])
+    except subprocess.CalledProcessError as e:
+        return {"result": "failure", "message": (e.stderr or b"").decode(errors="replace")[:500]}
+    return {"result": "success"}
+
+
+cmd = sys.argv[1]
+
+if cmd == "list":
+    print(json.dumps({"status": {}, "enable": {}, "disable": {}}))
+else:
+    action = sys.argv[2]
+    if action == "status":
+        ret = status()
+    elif action == "enable":
+        ret = enable()
+    elif action == "disable":
+        ret = disable()
+    else:
+        ret = {"result": "failure", "message": "unknown action"}
+    print(json.dumps(ret))

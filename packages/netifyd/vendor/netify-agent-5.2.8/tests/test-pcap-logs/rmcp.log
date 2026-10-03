@@ -1,0 +1,36 @@
+offline0: i4pc-------r---- UDP [OR] 123.212.25.229:49531 --> [L] 171.47.173.23:623
+    : RMCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 14.85.79.172:623 <-- [L] 54.229.154.152:59937
+    : RMCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 82.132.4.178:623 <-- [L] 137.141.61.18:59937
+    : RMCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 129.222.153.30:58065 --> [L] 190.219.142.148:623
+    : RMCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 30.144.16.67:623 <-- [L] 64.240.55.240:57984
+    : RMCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 127.36.88.103:34698 --> [OR] 164.114.97.252:623
+    : RMCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

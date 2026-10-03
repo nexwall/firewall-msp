@@ -1,0 +1,29 @@
+offline0: i4pc-------r---- UDP [L] 192.168.10.9:5246 <-- [OL] 192.168.10.10:12379
+    : CAPWAP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.10.10:12380 --> [OB] 255.255.255.255:5246
+    : CAPWAP
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.10.9:5246 <-- [OL] 192.168.10.10:12380
+    : CAPWAP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.10.9:5247 <-- [OL] 192.168.10.10:12380
+    : CAPWAP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc--x--------- UDP [L] 192.168.10.10:49259 --> [OB] 255.255.255.255:53
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: cisco-capwap-controller
+    : DP: 2
+

@@ -1,0 +1,14 @@
+offline0: i4pc-gx----r---- TCP [OR] 64.227.107.71:4444 <-- [L] 172.16.99.201:1732
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID  2: Binary Application Transfer
+    : RID 28: Suspicious Entropy
+    : DP: 15
+
+offline0: i4pc-gx----r---- TCP [OR] 64.227.107.71:53 <-- [L] 172.16.99.10:49652
+    : DNS
+    : CT ID: 0: MARK: 0
+    : RID  2: Binary Application Transfer
+    : RID 28: Suspicious Entropy
+    : DP: 15
+

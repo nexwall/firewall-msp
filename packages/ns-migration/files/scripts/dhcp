@@ -1,0 +1,107 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+from nethsec import firewall, utils
+import nsmigration
+import subprocess
+
+
+def list_dhcp_options():
+    ret = {}
+    pd = subprocess.run(["dnsmasq", "--help", "dhcp"], capture_output=True, text=True)
+    k = 0
+    for line in pd.stdout.rstrip().split("\n"):
+        k = k+1
+        if k == 1:
+            continue
+        tmp = line.strip().split(" ")
+        ret[tmp[0]] = tmp[1]
+    return ret
+
+(u, data, nmap) = nsmigration.init("dhcp.json")
+
+# Set global options
+for section in u.get("dhcp"):
+    if u.get("dhcp", section) == "dnsmasq":
+        dhcpleasemax = data['general'].get("dhcpleasemax", 0)
+        # default value is 1000 leases
+        if dhcpleasemax > 1000:
+            u.set("dhcp", section, "dhcpleasemax", dhcpleasemax)
+        u.set("dhcp", section, "rebind_protection", data['general'].get('rebind_protection', '0'))
+        # add ns_ prefix to the section
+        u.rename("dhcp", section, utils.get_id("dnsmasq"))
+    elif u.get("dhcp", section) == "dhcp":
+        # cleanup dhcp range connected to an non-existing interface
+        interface = u.get('dhcp', section, 'interface')
+        if u.get('network', interface, default=None) == None:
+            u.delete('dhcp', section)
+
+# Setup DHCP ranges
+rcounter = len(data['servers'])
+options = list_dhcp_options()
+for s in data['servers']:
+    iname = None
+    if s["type"] == "ethernet":
+        iname = utils.get_interface_from_mac(u, nsmigration.remap(s["hwaddr"], nmap))
+    elif s["type"] == "vlan":
+        device = utils.get_device_name(nsmigration.remap(s["hwaddr"], nmap))
+        iname = utils.get_interface_from_device(u, f'{device}.{s["vid"]}')
+    else:
+        iname = utils.get_interface_from_device(u, s["device"])
+
+    if iname is None:
+        nsmigration.vprint(f'Skipping DHCP server {s["start"]}')
+        continue
+
+    sname = utils.get_id(f'dhcp{rcounter}')
+    nsmigration.vprint(f'Creating DHCP server {sname} on {iname}')
+    u.set("dhcp", sname, "dhcp") # create named record
+    u.set("dhcp", sname, "interface", iname)
+    u.set("dhcp", sname, "leasetime", s["leasetime"])
+    u.set("dhcp", sname, "ignore", s["ignore"])
+    u.set("dhcp", sname, "start", s["start"])
+    u.set("dhcp", sname, "limit", s["limit"])
+    u.set("dhcp", sname, "dhcpv6", s["dhcpv6"])
+    u.set("dhcp", sname, "dhcpv4", s["dhcpv4"])
+    u.set("dhcp", sname, "ignore", '0')
+    dhcp_options = []
+    for opt in s["dhcp_option"]:
+        tmp = opt.split(",")
+        name = options.get(tmp[0])
+        if name:
+            dhcp_options.append(f'option:{name},{",".join(tmp[1:])}')
+    if dhcp_options:
+        u.set("dhcp", sname, "dhcp_option", dhcp_options)
+    rcounter = rcounter - 1
+
+
+# Check if an IP address has been already reserved
+def already_reserved(ip):
+    for section in u.get_all('dhcp'):
+        if u.get('dhcp', section) != 'host':
+            continue
+        if u.get('dhcp', section, 'ip') == ip:
+            return True
+    return False
+
+# Create static leases
+for r in data['reservations']:
+    # DHCP will refuse to start if there are multiple static leases with the same IP address
+    if already_reserved(r['ip']):
+        nsmigration.vprint(f'Skipping duplicate lease {r["name"]}')
+        continue
+
+    rname = utils.get_id(r["name"])
+    nsmigration.vprint(f'Creating static lease {rname}')
+    u.set("dhcp", rname, "host") # create named record
+    u.set("dhcp", rname, "name", r["name"])
+    u.set("dhcp", rname, "mac", r['mac'])
+    u.set("dhcp", rname, "ip", r['ip'])
+    u.set("dhcp", rname, "dns", 1)
+
+# Save configuration
+u.commit("dhcp")

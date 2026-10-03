@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Generates the standalone "inet netifyd" nftables table that routes packets
+# into the NFQUEUE queues declared in /etc/netifyd/interfaces.d/10-nfqueue.conf
+# (queues 50-53 at most for forward/LAN-WAN traffic, 54-55 at most for input/output traffic
+# to/from the firewall itself), via generic input/forward/output firewall
+# chain hooks - not tied to any specific interface name or device.
+
+import os
+import subprocess
+import sys
+
+from euci import EUci
+from jinja2 import Environment, BaseLoader
+
+NFQ_TABLE_FILE = '/tmp/netifyd-nfq-table-definition.nft'
+NFQ_INTERFACES_FILE = '/etc/netifyd/interfaces.d/10-nfqueue.conf'
+DEFAULT_QUEUE_LIMIT = 256
+QUEUE_LIMITS = (128, 256, 512, 1024)
+DEFAULT_MGMT_PORTS = ['22', '443', '9090']
+FORWARD_QUEUE_BASE = 50   # forwarded traffic (role lan), up to MAX_FORWARD_INSTANCES queues
+LOCAL_QUEUE_BASE = 54     # the firewall's own traffic (role wan)
+MAX_FORWARD_INSTANCES = 4
+RESTART_EXIT_CODE = 10    # the number of capture instances changed: the engine has to be restarted, not just reloaded
+
+
+NFQ_TABLE = """
+table inet netifyd { }
+delete table inet netifyd
+
+table inet netifyd {
+    set nfq_bypass_v4 {
+        type ipv4_addr; flags interval; auto-merge;
+{%- if v4_elements %}
+        elements = { {{ v4_elements | join(', ') }} }
+{%- endif %}
+    }
+
+    set nfq_bypass_v6 {
+        type ipv6_addr; flags interval; auto-merge;
+{%- if v6_elements %}
+        elements = { {{ v6_elements | join(', ') }} }
+{%- endif %}
+    }
+
+    # push input packets to userspace queues for DPI analysis
+{%- if 'input' in firewall_chains %}
+    chain nfq_input {
+        type filter hook input priority filter + 10; policy accept;
+        iifname lo accept
+
+        # Skip untracked traffic
+        ct state untracked accept
+{%- if 'output' not in firewall_chains %}
+        # Skip reply traffic for connections initiated by the firewall itself
+        # (e.g. DNS responses, monitoring ping replies)
+        ct direction reply accept
+{%- endif %}
+        # Accept traffic matching bypass set
+        ip saddr @nfq_bypass_v4 accept
+        ip daddr @nfq_bypass_v4 accept
+        ip6 saddr @nfq_bypass_v6 accept
+        ip6 daddr @nfq_bypass_v6 accept
+{%- if mgmt_ports %}
+
+        # Management access to the firewall itself is never queued, so it stays reachable even if the
+        # analysis engine is slow or stuck. Only traffic addressed to the firewall passes this hook:
+        # forwarded traffic (e.g. LAN users on port 443) is unaffected and still analyzed.
+        tcp dport { {{ mgmt_ports | join(', ') }} } accept
+{%- endif %}
+
+        # Netifyd only analyzes the first 32 packets
+        ct packets > 32 accept
+
+        # Traffic to queues {{ local_range }}
+        queue flags bypass to {{ local_range }}
+    }
+{%- endif %}
+
+    # push forward packets to userspace queues for DPI analysis
+{%- if 'forward' in firewall_chains %}
+    chain nfq_forward {
+        type filter hook forward priority filter + 10; policy accept;
+
+        # Skip untracked traffic
+        ct state untracked accept
+        # Accept traffic matching bypass set
+        ip saddr @nfq_bypass_v4 accept
+        ip daddr @nfq_bypass_v4 accept
+        ip6 saddr @nfq_bypass_v6 accept
+        ip6 daddr @nfq_bypass_v6 accept
+
+        # Netifyd only analyzes the first 32 packets
+        ct packets > 32 accept
+
+        # Traffic to queues {{ forward_range }}. With the "block" overload action the bypass flag is left out: while the
+        # engine is not running, new connections through the firewall are dropped instead of passed.
+        {{ forward_queue }} to {{ forward_range }}
+    }
+{%- endif %}
+
+{%- if 'output' in firewall_chains %}
+    # push output packets to userspace queues for DPI analysis
+    chain nfq_output {
+        type filter hook output priority filter + 10; policy accept;
+        oifname lo accept
+
+        # Skip untracked traffic
+        ct state untracked accept
+        # Accept traffic matching bypass set
+        ip saddr @nfq_bypass_v4 accept
+        ip daddr @nfq_bypass_v4 accept
+        ip6 saddr @nfq_bypass_v6 accept
+        ip6 daddr @nfq_bypass_v6 accept
+{%- if mgmt_ports %}
+
+        # Replies of the management services on this firewall
+        tcp sport { {{ mgmt_ports | join(', ') }} } accept
+{%- endif %}
+
+        # Netifyd only analyzes the first 32 packets
+        ct packets > 32 accept
+
+        # Traffic to queues {{ local_range }}
+        queue flags bypass to {{ local_range }}
+    }
+{%- endif %}
+
+}
+"""
+
+
+def _format_nft_elements(entries):
+    """
+    Format entries for nftables set elements.
+    Each entry can be:
+    - IP/CIDR (no comment)
+    - IP/CIDR | Description (with comment)
+
+    Returns list of formatted elements for nftables.
+    """
+    formatted = []
+    for entry in entries:
+        parts = entry.split('|')
+        ip = parts[0].strip()
+
+        if len(parts) > 1 and parts[1].strip():
+            # Entry has a description - add as nftables comment
+            desc = parts[1].strip()
+            formatted.append(f'{ip} comment "{desc}"')
+        else:
+            # No description
+            formatted.append(ip)
+
+    return formatted
+
+
+def cpu_count():
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 1
+
+
+def plan_instances(cores, setting='auto'):
+    """
+    How many capture instances (one thread each, plus a detection thread) the engine runs. The engine looks only at the
+    first packets of a connection, so it needs far less CPU than the intrusion prevention, which shares the same cores:
+    forwarded traffic gets half of the cores (1 to 4, or the value chosen in "threads"), the firewall's own traffic 1
+    (2 from 8 cores). More threads than cores only make the engine and the IPS compete for the same CPUs.
+
+    Returns:
+        (forward instances, local instances)
+    """
+    local = 1 if cores < 8 else 2
+    try:
+        forward = int(setting)
+    except (TypeError, ValueError):
+        forward = 0
+    if not 1 <= forward <= MAX_FORWARD_INSTANCES:
+        forward = max(1, min(MAX_FORWARD_INSTANCES, cores // 2))
+    return forward, local
+
+
+def queue_range(base, count):
+    return str(base) if count == 1 else f'{base}-{base + count - 1}'
+
+
+def read_instances(path=None):
+    """Capture instances written in the interface file: (lan, wan) or None for what is missing."""
+    found = {}
+    section = None
+    try:
+        with open(path or NFQ_INTERFACES_FILE) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith('[') and stripped.endswith(']'):
+                    section = stripped[1:-1]
+                elif section and stripped.startswith('queue_instances') and '=' in stripped:
+                    try:
+                        found[section] = int(stripped.split('=', 1)[1])
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return found.get('capture-interface-lan'), found.get('capture-interface-wan')
+
+
+def read_engine_threads(e_uci):
+    return str(e_uci.get('dpi', 'engine', 'threads', default='auto')).strip().lower()
+
+
+def read_engine_policy(e_uci):
+    """
+    What happens to traffic when the analysis engine cannot keep up or is not running (/etc/config/dpi, section
+    "engine"): overload_action "allow" (default, traffic passes uninspected) or "block" (new connections through the
+    firewall are dropped until the engine is back); queue_limit, the packets that may wait per queue.
+    Only forwarded traffic can be blocked: the firewall's own traffic (DNS, updates, management) always fails open.
+
+    Returns:
+        (block, queue_limit)
+    """
+    action = str(e_uci.get('dpi', 'engine', 'overload_action', default='allow')).strip().lower()
+    try:
+        limit = int(e_uci.get('dpi', 'engine', 'queue_limit', default=DEFAULT_QUEUE_LIMIT))
+    except (TypeError, ValueError):
+        limit = DEFAULT_QUEUE_LIMIT
+    if limit not in QUEUE_LIMITS:
+        limit = DEFAULT_QUEUE_LIMIT
+    return action == 'block', limit
+
+
+def apply_queue_policy(block, limit, path=None, instances=None):
+    """
+    Write the queue limit and the action on a full queue into the interface file the engine reads: the forward queues
+    (role lan) follow the setting, the queues of the firewall's own traffic (role wan) always accept.
+
+    instances is (forward, local) capture instances, left as they are when None.
+
+    Returns:
+        True when the file changed (the engine has to reload its interfaces)
+    """
+    path = path or NFQ_INTERFACES_FILE
+    try:
+        with open(path) as f:
+            lines = f.read().split('\n')
+    except OSError:
+        return False
+    wanted = {
+        'capture-interface-lan': {'queue_maxlen': str(limit), 'queue_fail_open': 'no' if block else 'yes'},
+        'capture-interface-wan': {'queue_maxlen': str(limit), 'queue_fail_open': 'yes'},
+    }
+    if instances:
+        wanted['capture-interface-lan']['queue_instances'] = str(instances[0])
+        wanted['capture-interface-wan']['queue_instances'] = str(instances[1])
+    out = []
+    section = None
+    pending = {}
+    changed = False
+
+    def flush():
+        nonlocal changed
+        for key, value in pending.items():
+            out.append(f'{key} = {value}')
+            changed = True
+        pending.clear()
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('[') and stripped.endswith(']'):
+            flush()
+            section = stripped[1:-1]
+            pending.update(wanted.get(section, {}))
+            out.append(line)
+            continue
+        key = stripped.split('=')[0].strip() if '=' in stripped and not stripped.startswith('#') else None
+        if section in wanted and key in wanted[section]:
+            value = wanted[section][key]
+            pending.pop(key, None)
+            new = f'{key} = {value}'
+            if stripped != new:
+                changed = True
+            out.append(new)
+            continue
+        if section in wanted and stripped == '' and pending:
+            flush()
+        out.append(line)
+    flush()
+    if changed:
+        with open(path, 'w') as f:
+            f.write('\n'.join(out))
+    return changed
+
+
+def generate_nfq_table():
+    e_uci = EUci()
+
+    # Read IPv4 and IPv6 bypass lists from UCI
+    # Entries can optionally have a description separated by |
+    v4_raw = e_uci.get('netifyd', 'config', 'bypassv4', dtype=str, list=True, default=[])
+    v6_raw = e_uci.get('netifyd', 'config', 'bypassv6', dtype=str, list=True, default=[])
+
+    # Format elements with optional comments for nftables
+    v4_elements = _format_nft_elements(v4_raw)
+    v6_elements = _format_nft_elements(v6_raw)
+
+    # Read which nftables chains to add for DPI analysis.
+    # Valid values: 'input', 'output', 'forward'.
+    # Defaults to all three chains if the option is missing.
+    valid_chains = {'input', 'output', 'forward'}
+    raw_chains = e_uci.get('netifyd', 'config', 'firewall_traffic', dtype=str, list=True, default=list(valid_chains))
+    firewall_chains = []
+    for chain in raw_chains:
+        if chain in valid_chains:
+            firewall_chains.append(chain)
+        else:
+            print(f"Warning: invalid firewall_traffic value '{chain}', ignoring. Valid values: {sorted(valid_chains)}", file=sys.stderr)
+    if not firewall_chains:
+        print("Warning: no valid firewall_traffic chains configured, defaulting to all chains.", file=sys.stderr)
+        firewall_chains = list(valid_chains)
+
+    # TCP ports of the management services of the firewall itself (SSH, web interface) that are never sent to
+    # the analysis engine, only for traffic addressed to or sent by the firewall. Set "mgmt_ports" (list) in
+    # /etc/config/netifyd to change it, or to an empty value to analyze them too.
+    mgmt_ports = []
+    for value in e_uci.get('netifyd', 'config', 'mgmt_ports', dtype=str, list=True, default=DEFAULT_MGMT_PORTS):
+        value = str(value).strip()
+        if value.isdigit() and 0 < int(value) < 65536:
+            if value not in mgmt_ports:
+                mgmt_ports.append(value)
+        elif value and value != 'none':
+            print(f"Warning: invalid mgmt_ports value '{value}', ignoring.", file=sys.stderr)
+
+    block, limit = read_engine_policy(e_uci)
+    plan = plan_instances(cpu_count(), read_engine_threads(e_uci))
+    before = read_instances()
+    apply_queue_policy(block, limit, instances=plan)
+    restart = before != (None, None) and before != plan
+
+    template = Environment(loader=BaseLoader()).from_string(NFQ_TABLE)
+    render = template.render(
+        v4_elements=v4_elements,
+        v6_elements=v6_elements,
+        firewall_chains=firewall_chains,
+        mgmt_ports=mgmt_ports,
+        forward_queue='queue' if block else 'queue flags bypass',
+        forward_range=queue_range(FORWARD_QUEUE_BASE, plan[0]),
+        local_range=queue_range(LOCAL_QUEUE_BASE, plan[1]),
+    )
+
+    # Apply nftables
+    with open(NFQ_TABLE_FILE, 'w') as f:
+        f.write(render)
+    try:
+        subprocess.run(['nft', '-f', NFQ_TABLE_FILE], check=True, capture_output=True)
+        os.unlink(NFQ_TABLE_FILE)
+    except subprocess.CalledProcessError as e:
+        print(f"Error applying nftables configuration: {e.stderr.decode()}", file=sys.stderr)
+    return restart
+
+
+if __name__ == "__main__":
+    # the exit code tells the init script whether a plain reload is enough
+    sys.exit(RESTART_EXIT_CODE if generate_nfq_table() else 0)

@@ -1,0 +1,26 @@
+offline0: i4pcu------r---- TCP [L] 192.168.10.101:3967 --> [OR] 206.33.61.113:443
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0301 CS: 0x0004
+    : RID 36: Obsolete TLS (v1.1 or older)
+    : RID 41: Weak TLS Cipher
+    : DP: 6
+
+offline0: i4pc--x----r---- TCP [L] 10.191.139.17:58552 --> [OR] 54.221.224.45:443
+    : HTTP/S.netify.crashlytics
+    : CT ID: 0: MARK: 0
+    : VLAN: 2
+    : H: e.crashlytics.com
+    : V: 0x0303
+    : TLS/SNI: e.crashlytics.com
+    : JA4: t12d200500_6e20beb92e8e_354730cf0bf0
+    : RID 39: TLS Suspicious Extension
+    : RID 40: Uncommon TLS ALPN
+    : DP: 3
+
+offline0: i4pc-gx----r---- TCP [OR] 67.217.77.28:443 <-- [L] 74.80.160.99:3258
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

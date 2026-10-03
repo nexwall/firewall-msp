@@ -1,0 +1,102 @@
+offline0: i4pc-------r---- UDP [OR] 206.125.246.211:27015 --> [L] 222.204.159.87:20595
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 174.134.158.83:47464 --> [L] 206.125.246.217:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 206.125.246.219:27015 <-- [OM] 237.117.185.247:41251
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 206.125.246.211:27015 <-- [L] 252.187.173.26:42155
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 167.166.182.152:53321 --> [L] 206.125.246.212:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 151.182.246.17:52464 --> [L] 206.125.246.217:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 197.114.186.247:64888 --> [L] 206.125.246.213:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 197.114.186.247:38846 --> [L] 206.125.246.222:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 206.125.246.215:27015 --> [OM] 237.117.153.178:24647
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 206.125.246.216:27015 --> [L] 252.141.177.26:21572
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 165.165.117.188:48822 --> [L] 206.125.246.211:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 140.151.209.84:8335 <-- [L] 206.125.246.214:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 197.114.186.247:41194 --> [L] 206.125.246.214:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 206.125.246.222:27015 <-- [L] 222.158.181.242:58235
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 206.125.246.219:27015 --> [OM] 237.139.153.112:3722
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 118.149.186.147:21285 <-- [L] 206.125.246.214:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 151.182.246.17:17890 <-- [L] 206.125.246.221:27015
+    : SourceEngine
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

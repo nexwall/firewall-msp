@@ -1,0 +1,26 @@
+offline0: i6pc------------ UDP [L] fe80::a00:27ff:feb3:e62e:5353 --> [OM] ff02::fb:5353
+    : MDNS.netify.reverse-dns
+    : CT ID: 0: MARK: 0
+    : H: e.2.6.e.3.b.e.f.f.f.7.2.0.0.a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.e.f.ip6.arpa
+    : MDNS/DN: adb-unidentified._adb._tcp.local
+    : DP: 1
+
+offline0: i6pc----------F- TCP [OR] 2001:b07:a3d:c112::1:53 <-- [L] 2001:b07:a3d:c112:b831:a73f:7974:e604:49774
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: opentracker.io
+    : DP: 6
+
+offline0: i4pc------------ UDP [OR] 82.178.113.245:47255 --> [L] 82.178.158.181:53
+    : DNS.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : VLAN: 785
+    : H: e7.whatsapp.net
+    : DP: 2
+
+offline0: i4pcu-x--------- UDP [L] 192.168.170.8:32795 --> [OL] 192.168.170.20:53
+    : DNS.netify.google
+    : CT ID: 0: MARK: 0
+    : H: www.example.com
+    : DP: 3
+

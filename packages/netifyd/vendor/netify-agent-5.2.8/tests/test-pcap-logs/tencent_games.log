@@ -1,0 +1,20 @@
+offline0: i4pc------------ TCP [L] 10.215.173.1:43300 --> [OR] 43.130.19.227:65010
+    : Tencent/Games
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc------------ TCP [L] 10.215.173.1:46658 --> [OR] 162.62.97.166:8085
+    : Tencent/Games
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc------------ TCP [L] 10.215.173.1:42864 --> [OR] 162.62.116.201:20731
+    : Tencent/Games
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc----------F- TCP [L] 10.215.173.1:47046 --> [OR] 129.226.103.74:31003
+    : Tencent/Games
+    : CT ID: 0: MARK: 0
+    : DP: 4
+

@@ -1,0 +1,9 @@
+offline0: i4pcu----------- TCP [OR] 25.137.80.32:38134 --> [L] 192.91.186.174:443
+    : HTTP/S.netify.instagram
+    : CT ID: 0: MARK: 0
+    : H: i.instagram.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: i.instagram.com
+    : JA4: t00d0309h2_55b375c5d22e_566d5108064c
+    : DP: 4
+

@@ -1,0 +1,60 @@
+offline0: i4pc-------r---- UDP [OR] 65.49.20.98:53234 --> [L] 90.147.69.219:47808
+    : BACnet.netify.shadowserver-bot
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 90.147.69.222:47808 <-- [L] 198.235.24.166:56883
+    : BACnet
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 64.62.197.26:36992 <-- [L] 90.147.69.221:47808
+    : BACnet.netify.shadowserver-bot
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 64.62.197.166:36664 <-- [L] 90.147.69.213:47808
+    : BACnet.netify.shadowserver-bot
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 90.147.69.210:47808 <-- [L] 198.235.24.39:54587
+    : BACnet
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 90.147.69.212:47808 --> [L] 167.94.138.111:27041
+    : BACnet.netify.censys-scanner
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 90.147.69.217:47808 <-- [L] 162.142.125.140:63852
+    : BACnet.netify.censys-scanner
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 90.147.69.219:47808 <-- [L] 198.235.24.45:51922
+    : BACnet
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 90.147.69.219:47808 --> [L] 162.142.125.132:29782
+    : BACnet.netify.censys-scanner
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 204.172.177.159:47808 <-- [L] 204.172.177.255:47808
+    : BACnet
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

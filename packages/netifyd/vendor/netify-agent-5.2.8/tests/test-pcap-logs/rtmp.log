@@ -1,0 +1,18 @@
+offline0: i4pc------------ TCP [L] 192.168.43.1:1177 --> [OL] 192.168.43.128:1935
+    : RTMP
+    : CT ID: 0: MARK: 0
+    : DP: 8
+
+offline0: i4pc------------ TCP [L] 10.140.80.204:49757 --> [OR] 203.205.224.48:1935
+    : RTMP
+    : CT ID: 0: MARK: 0
+    : VLAN: 113
+    : DP: 5
+
+offline0: i4pc-------r---- TCP [L] 10.140.74.206:59509 --> [OR] 193.118.47.46:6002
+    : RTMP
+    : CT ID: 0: MARK: 0
+    : VLAN: 113
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 5
+

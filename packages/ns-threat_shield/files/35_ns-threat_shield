@@ -1,0 +1,22 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Undo the banIP dedicated-log setup from a previous release: banIP goes
+# back to scanning the full system log instead of a curated subset.
+RSYSLOG_CONF="/etc/rsyslog.d/banip-services.conf"
+
+if [ "$(uci -q get banip.global.ban_logreadfile)" = "/var/log/banip.log" ]; then
+    uci -q delete banip.global.ban_logreadfile
+    uci commit banip
+fi
+
+if uci -q get rsyslog.syslog.includes | grep -qF "${RSYSLOG_CONF}"; then
+    uci -q del_list rsyslog.syslog.includes="${RSYSLOG_CONF}"
+    uci commit rsyslog
+fi
+
+rm -f "${RSYSLOG_CONF}"

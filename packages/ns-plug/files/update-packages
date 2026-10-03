@@ -1,0 +1,35 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+#
+# Update packages and log everything to syslog
+#
+
+error_exit() {
+    echo "$1" | logger -s -t update-packages
+    exit 1
+}
+
+# Update metadata, make sure to output even if in case of error
+output=$(apk-official update 2>&1)
+status=$?
+echo "$output" | logger -s -t update-packages
+[ $status -ne 0 ] && error_exit "Failed to update metadata"
+
+error_count=0
+# Upgrade each package individually and capture output
+apk-official list --upgradable 2>/dev/null | grep -o '{[^}]*}' | tr -d '{}' | sed 's|.*/||' | while read -r package; do
+    output=$(apk-official upgrade "$package" 2>&1)
+    status=$?
+    [ $status -ne 0 ] && error_count=$((error_count + 1))
+    echo "$output" | logger -s -t update-packages
+done
+
+# Check if there were any errors
+[ $error_count -ne 0 ] && error_exit "Failed to upgrade $error_count packages"
+
+echo "Update successful" | logger -s -t update-packages

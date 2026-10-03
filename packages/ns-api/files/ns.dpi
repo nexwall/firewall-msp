@@ -1,0 +1,215 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import json
+import sys
+
+from euci import EUci
+from nethsec import dpi, utils, performance, engine_metrics
+from nethsec import license as nx_license
+from nethsec.license import enforcement
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        'list-applications': {
+            'search': 'str',
+            'limit': 32,
+            'page': 32
+        },
+        'list-rules': {},
+        'add-rule': {
+            'enabled': False,
+            'device': 'str',
+            'applications': 'str',
+            'protocols': 'str',
+            'source': 'str',
+            'description': 'str',
+            'log': False
+        },
+        'delete-rule': {
+            'config-name': 'str'
+        },
+        'edit-rule': {
+            'config-name': 'str',
+            'enabled': False,
+            'device': 'str',
+            'applications': 'str',
+            'protocols': 'str',
+            'source': 'str',
+            'description': 'str',
+            'log': False
+        },
+        'set-rules-enabled': {
+            'config-names': 'str',
+            'enabled': False
+        },
+        'add-exemption': {
+            'criteria': 'str',
+            'description': 'str',
+            'enabled': False
+        },
+        'delete-exemption': {
+            'config-name': 'str'
+        },
+        'edit-exemption': {
+            'config-name': 'str',
+            'criteria': 'str',
+            'description': 'str',
+            'enabled': False
+        },
+        'list-exemptions': {},
+        'get-catalog-status': {},
+        'get-catalog-settings': {},
+        'set-catalog-settings': {
+            'auto_update': True,
+            'interval': 24
+        },
+        'update-catalog': {},
+        'get-engine-settings': {},
+        'get-performance': {},
+        'get-engine-metrics': {},
+        'set-performance': {
+            'dpi_threads': 'auto',
+            'fastpath': False,
+            'packet_steering': False,
+            'ring_buffers': False
+        },
+        'get-enforcement-status': {},
+        'set-engine-settings': {
+            'overload_action': 'allow',
+            'queue_limit': 256
+        },
+        'list-devices': {},
+        'list-popular': {
+            'limit': 32,
+            'page': 32
+        },
+        'list-application-categories': {},
+        'list-application-catalog': {},
+        'list-protocol-categories': {},
+        'list-protocol-catalog': {}
+    }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    e_uci = EUci()
+    try:
+        if action == 'list-application-categories':
+            try:
+                with open('/etc/netifyd/netify-application-categories.json', 'r') as f:
+                    content = json.load(f)
+                print(json.dumps({'values': content}))
+            except Exception:
+                print(json.dumps({}))
+        elif action == 'list-application-catalog':
+            try:
+                with open('/etc/netifyd/netify-application-catalog.json', 'r') as f:
+                    content = json.load(f)
+                print(json.dumps({'values': content}))
+            except Exception:
+                print(json.dumps({}))
+        elif action == 'list-protocol-categories':
+            try:
+                with open('/etc/netifyd/netify-protocol-categories.json', 'r') as f:
+                    content = json.load(f)
+                print(json.dumps({'values': content}))
+            except Exception:
+                print(json.dumps({}))
+        elif action == 'list-protocol-catalog':
+            try:
+                with open('/etc/netifyd/netify-protocol-catalog.json', 'r') as f:
+                    content = json.load(f)
+                print(json.dumps({'values': content}))
+            except Exception:
+                print(json.dumps({}))
+        elif action == 'list-applications':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            result = dpi.list_applications(data.get('search', None), data.get('limit', None), data.get('page', 1))
+            print(json.dumps({'values': result}))
+        elif action == 'list-rules':
+            print(json.dumps({'values': dpi.list_rules(e_uci)}))
+        elif action == 'add-rule':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            if data['enabled']:
+                nx_license.require('security_services')
+            dpi.add_rule(e_uci, data['enabled'], data.get('device', ''), 'block', data['applications'], data['protocols'],
+                         data.get('source', []), data.get('description', ''), bool(data.get('log', False)))
+            print(json.dumps({'message': 'success'}))
+        elif action == 'set-rules-enabled':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            if data['enabled']:
+                nx_license.require('security_services')
+            dpi.set_rules_enabled(e_uci, data['config-names'], bool(data['enabled']))
+            print(json.dumps({'message': 'success'}))
+        elif action == 'delete-rule':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            dpi.delete_rule(e_uci, data['config-name'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'edit-rule':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            if data['enabled']:
+                nx_license.require('security_services')
+            dpi.edit_rule(e_uci, data['config-name'], data['enabled'], data.get('device', ''), 'block', data['applications'],
+                          data['protocols'], data.get('source', []), data.get('description'),
+                          None if data.get('log') is None else bool(data['log']))
+            print(json.dumps({'message': 'success'}))
+        elif action == 'add-exemption':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            dpi.add_exemption(e_uci, data['criteria'], data['description'], data['enabled'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'delete-exemption':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            dpi.delete_exemption(e_uci, data['config-name'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'edit-exemption':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            dpi.edit_exemption(e_uci, data['config-name'], data['criteria'], data['description'], data['enabled'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'list-exemptions':
+            print(json.dumps({'values': dpi.list_exemptions(e_uci)}))
+        elif action == 'get-catalog-status':
+            print(json.dumps(dpi.get_catalog_status()))
+        elif action == 'get-catalog-settings':
+            print(json.dumps(dpi.get_catalog_settings(e_uci)))
+        elif action == 'set-catalog-settings':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            dpi.set_catalog_settings(e_uci, bool(data['auto_update']), data['interval'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'update-catalog':
+            print(json.dumps(dpi.update_catalog()))
+        elif action == 'get-enforcement-status':
+            print(json.dumps(enforcement.dpi_enforcement()))
+        elif action == 'get-engine-settings':
+            print(json.dumps(dpi.get_engine_settings(e_uci)))
+        elif action == 'set-engine-settings':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            dpi.set_engine_settings(e_uci, data['overload_action'], data['queue_limit'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'get-engine-metrics':
+            print(json.dumps(engine_metrics.collect()))
+        elif action == 'get-performance':
+            print(json.dumps({**performance.get_settings(e_uci), 'fastpath_status': performance.fastpath_status()}))
+        elif action == 'set-performance':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            performance.set_settings(e_uci, data.get('dpi_threads'), data.get('fastpath'), data.get('packet_steering'),
+                                 data.get('ring_buffers'))
+            print(json.dumps({'message': 'success'}))
+        elif action == 'list-devices':
+            print(json.dumps({'values': dpi.list_devices(e_uci)}))
+        elif action == 'list-popular':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            result = dpi.list_popular(e_uci, data.get('limit', None), data.get('page', 1))
+            print(json.dumps({'values': result}))
+    except KeyError as e:
+        print(json.dumps(utils.validation_error(e.args[0], 'required')))
+    except json.JSONDecodeError:
+        print(json.dumps(utils.generic_error("json given is invalid")))
+    except utils.ValidationError as e:
+        print(json.dumps(utils.validation_error(e.parameter, e.message, e.value)))
+    except ValueError as e:
+        print(json.dumps(utils.generic_error(e)))

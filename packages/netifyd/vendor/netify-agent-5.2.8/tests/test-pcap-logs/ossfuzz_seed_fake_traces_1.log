@@ -1,0 +1,66 @@
+offline0: i4pc------------ UDP [L] 127.0.0.1:1 <-- [OL] 127.0.0.1:2
+    : HalfLife2
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc-------r---- UDP [L] 127.0.0.1:1119 <-- [OL] 127.0.0.1:1120
+    : Protobuf
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 4
+
+offline0: i4pc-------r---- TCP [OR] 1.2.3.4:10 --> [L] 192.168.1.128:1
+    : Gnutella
+    : CT ID: 0: MARK: 0
+    : RID 42: Unsafe Protocol
+    : RID 46: Unidirectional Traffic
+    : RID 51: TCP Connection Issues
+    : DP: 2
+
+offline0: i4pc-------r---- TCP [OR] 1.2.3.4:11 --> [L] 192.168.1.128:1
+    : Gnutella
+    : CT ID: 0: MARK: 0
+    : RID 42: Unsafe Protocol
+    : RID 46: Unidirectional Traffic
+    : RID 51: TCP Connection Issues
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [L] 192.168.1.128:1 <-- [OR] 202.9.66.76:1119
+    : TODO.netify.activision-blizzard
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : RID 51: TCP Connection Issues
+    : DP: 1
+
+offline0: i4pc-gx----r---- UDP [L] 127.0.0.1:17788 <-- [OL] 127.0.0.1:17788
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-gx----r---- TCP [OR] 121.254.200.130:1119 --> [L] 192.168.1.128:1
+    : TODO
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : RID 51: TCP Connection Issues
+    : DP: 1
+
+offline0: i4pc-gx--------- UDP [L] 127.0.0.1:100 <-- [OL] 127.0.0.1:200
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [OR] 12.129.236.254:1119 --> [L] 192.168.1.128:1
+    : TODO
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : RID 51: TCP Connection Issues
+    : DP: 1
+
+offline0: i4pc-gx----r---- TCP [OR] 12.129.206.130:1119 --> [L] 192.168.1.128:1
+    : TODO
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : RID 51: TCP Connection Issues
+    : DP: 1
+

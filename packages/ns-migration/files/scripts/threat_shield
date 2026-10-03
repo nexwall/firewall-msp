@@ -1,0 +1,37 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import sys
+import nsmigration
+
+(u, data, nmap) = nsmigration.init("threat_shield.json")
+
+if not data:
+    sys.exit(0)
+
+# Migrate threat shield IP configuration to banip
+u.set('banip', 'global', 'ban_enabled', data['ts-ip']['status'])
+u.set('banip', 'global', 'ban_feed', data['ts-ip']['categories'])
+if data["ts-ip"]["allow"]:
+    with open("/etc/banip/banip.allowlist", 'w') as file:
+        for item in data["ts-ip"]["allow"]:
+            file.write(str(item) + '\n')
+
+# Setup static configuration
+u.set('banip', 'global', 'ban_fetchcmd', 'curl')
+u.set('banip', 'global', 'ban_protov4', '1')
+u.set('banip', 'global', 'ban_protov6', '1')
+
+# Fix wan configuration
+changes = ["banip"]
+exec(open("/usr/libexec/ns-api/pre-commit/configure-banip-wans.py").read())
+
+# Save banip configuration
+u.commit("banip")
+
+# Do not migrate threat shield DNS because there is no UI for it
+

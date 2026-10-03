@@ -1,0 +1,1166 @@
+<html>
+<head><title>Time Zones in C++</title></head>
+<body>
+<center>
+<h1>Time Zones in C++</h1>
+<h3>Bill Seymour<br>2024-03-31</h3>
+</center>
+
+<p><hr size=5>
+<h2>0.&nbsp;&nbsp;Contents</h2>
+
+<ul>
+<li><a href="#intro">1.&nbsp;&nbsp;Introduction</a>
+<li><a href="#syn">2.&nbsp;&nbsp;Synopsis</a>
+<li><a href="#TZvar">3.&nbsp;&nbsp;The <tt><b>TZ</b></tt> and <tt><b>TZ_ROOT</b></tt> Environment Variables</a>
+<li><a href="#tzdata">4.&nbsp;&nbsp;The <tt>tz_data</tt> Type</a>
+<ul>
+<li><a href="#dms">4.1.&nbsp;&nbsp;Data Members</a>
+<ul>
+<li><a href="#hed">4.1.1.&nbsp;&nbsp;The Header</a>
+<li><a href="#data">4.1.2.&nbsp;&nbsp;Data Arrays</a>
+</ul>
+<li><a href="#mfs">4.2.&nbsp;&nbsp;Member Functions</a>
+<ul>
+<li><a href="#tzspec">4.2.1.&nbsp;&nbsp;Special Member Functions and <tt>swap()</tt></a>
+<li><a href="#clear">4.2.2.&nbsp;&nbsp;Cleanup</a>
+<li><a href="#create">4.2.3.&nbsp;&nbsp;Creating the Data</a>
+</ul>
+</ul>
+<li><a href="#timezone">5.&nbsp;&nbsp;The <tt>timezone</tt> Type</a>
+<ul>
+<li><a href="#spec">5.1.&nbsp;&nbsp;Special Member Functions and <tt>swap()</tt></a>
+<li><a href="#ctor">5.2.&nbsp;&nbsp;Other Constructors</a>
+<li><a href="#obs">5.3.&nbsp;&nbsp;Observers</a>
+<ul>
+<li><a href="#anytime">5.3.1.&nbsp;&nbsp;Observers Known Regardless of the Current Time</a>
+<li><a href="#onetime">5.3.2.&nbsp;&nbsp;Observers That Make Sense Only for a Particular Time</a>
+</ul>
+<li><a href="#mut">5.4.&nbsp;&nbsp;Mutators</a>
+<ul>
+<li><a href="#newzone">5.4.1.&nbsp;&nbsp;Changing the Time Zone</a>
+<li><a href="#settime">5.4.2.&nbsp;&nbsp;Setting the Time</a>
+</ul>
+</ul>
+<li><a href="#appa">Appendix&nbsp;A:&nbsp;&nbsp;Configuration</a>
+<ul>
+<li><a href="#whereat">A.1.&nbsp;&nbsp;Where to Find the Data</a>
+<li><a href="#dotinc">A.2.&nbsp;&nbsp;The Two <tt>.inc</tt> Files</a>
+</ul>
+<li><a href="#appb">Appendix&nbsp;B:&nbsp;&nbsp;The Structure of Zoneinfo&rsquo;s Binary Files</a>
+</ul>
+
+<p><a name="intro"><hr size=5></a>
+<h2>1.&nbsp;&nbsp;Introduction</h2>
+
+<p>This paper describes an open-source C++ class called <tt>timezone</tt> that could be useful
+when dealing with, you guessed it, civil time zones.&nbsp;&nbsp;It&rsquo;s distributed under
+the <a href="http://www.boost.org/LICENSE_1_0.txt">Boost Software License</a>.&nbsp;&nbsp;(This
+is not part of <a href="http://www.boost.org/">Boost</a>; the author just likes their open-source
+license.)
+
+<p>This class is part of a larger civil time library that the author is developing, but it&rsquo;s documented
+separately because there&rsquo;s no compelling reason why it couldn&rsquo;t be a stand-alone type in its own right.
+
+<p>There&rsquo;s also a class called <tt>tz_data</tt> an instance of which is intended to be one of
+<tt>timezone</tt>&rsquo;s <tt>private</tt> data members, but it&rsquo;s documented herein just in case
+some user wants to live dangerously and use <i>it</i> as a stand-alone type.
+
+<p>There&rsquo;s a strong assumption that you have access to <a href="https://en.wikipedia.org/wiki/Tz_database">Zoneinfo</a>&rsquo;s
+compiled binary data files.&nbsp;&nbsp;If you have a POSIX system, including a Mac, you almost certainly do.&nbsp;&nbsp;On Windows it might be
+more &ldquo;interesting&rdquo;, although a <tt>timezone</tt> can be constructed from a POSIX-style TZ environment variable
+(e.g., <nobr>&ldquo;<tt>CST6CDT,M3.2.0,M11.1.0</tt>&rdquo;)</nobr> instead of a Zoneinfo <tt>Zone</tt> name
+<nobr>(e.g.,&nbsp;&ldquo;<tt>America/Chicago</tt>&rdquo;).</nobr>
+(<a href="https://www.cstdbill.com/civil-time/tzwin.html">A&nbsp;&nbsp;separate paper</a> describes one way
+to get the Zoneinfo binaries on Windows.)
+
+<p><table border=0><tr><td bgcolor=lightgrey>
+<a name="TZif">For the sake of brevity elsewhere in this paper, Zoneinfo&rsquo;s compiled binaries are called &ldquo;TZif files&rdquo;</a>
+because the first four bytes in such files are always &ldquo;<tt>TZif</tt>&rdquo;.&nbsp;&nbsp;That&rsquo;s short for
+&ldquo;<a href="https://datatracker.ietf.org/doc/rfc8536/">Time Zone Information Format</a>&rdquo;.
+</td></tr></table>
+
+<p><table border=0><tr><td bgcolor=yellow>
+<b>The code requires 64-bit <tt>time_t</tt>s (fixing the <a href="https://en.wikipedia.org/wiki/Year_2038_problem">Y2038 issue</a>),
+and it requires at least a <a href="https://en.cppreference.com/w/cpp/11">C++11</a> compiler and standard library with
+<a href="https://en.cppreference.com/w/cpp/types/integer"><tt>int32_t</tt> and <tt>int64_t</tt></a>
+defined in <tt>&lt;cstdint&gt;</tt>.</b>
+</td></tr></table>
+
+<p>The code is distributed in
+<a href="https://www.cstdbill.com/civil-time/timezone.zip">https://www.cstdbill.com/civil-time/timezone.zip</a>
+which contains:
+<ul>
+<li><tt>timezone.html</tt>&nbsp;&ndash;&nbsp;this paper
+<li><tt>timezone_config.hpp</tt>&nbsp;&ndash;&nbsp;some C-style macros that depend on what operating system you&rsquo;re compiling for
+<li><tt>timezone.hpp</tt>&nbsp;&ndash;&nbsp;the header file that users <tt>#include</tt>
+<li><tt>timezone.cpp</tt>&nbsp;&ndash;&nbsp;the <tt>timezone</tt> class&rsquo; implementation
+<li><tt>tz_data.cpp</tt>&nbsp;&ndash;&nbsp;most of the <tt>tz_data</tt> class&rsquo; implementation
+<li><tt>tzdata_make_posix.cpp</tt>&nbsp;&ndash;&nbsp;the <tt>tz_data::make_posix()</tt> function
+<li><tt>tz_names_xlate.inc</tt>&nbsp;&ndash;&nbsp;a cross reference of Zoneinfo <tt>Zone</tt> names to POSIX&nbsp;TZ environment variable values
+<li><tt>tz_links_xlate.inc</tt>&nbsp;&ndash;&nbsp;a cross reference of Zoneinfo <tt>Link</tt> names to <tt>Zone</tt> names
+<li><tt>xlate-tz-names.cpp</tt>&nbsp;&ndash;&nbsp;a program that creates the two <tt>.inc</tt> files from Zoneinfo data
+<li><tt>LICENSE_1_0.txt</tt>&nbsp;&ndash;&nbsp;the Boost license
+</ul>
+
+<p><a name="syn"><hr size=5></a>
+<h2>2.&nbsp;&nbsp;Synopsis</h2>
+
+<pre>
+static_assert(sizeof(std::time_t) * CHAR_BIT &gt;= 64, "64-bit time_t required");
+
+namespace civil_time {
+
+const std::string& get_tz() noexcept;
+void set_tz(const char*);
+void set_tz(std::string&amp;&amp;);
+void set_tz(const std::string&amp;);
+
+const std::string& get_tz_root() noexcept;
+void set_tz_root(const char*);
+void set_tz_root(std::string&amp;&amp;);
+void set_tz_root(const std::string&amp;);
+
+namespace zoneinfo {
+
+typedef std::int32_t tz_int;
+typedef std::int64_t tz_time;
+
+struct tz_data final
+{
+  #pragma pack(4)
+    struct header
+    {
+        char   version[20];
+        tz_int tzh_ttisgmtcnt;
+        tz_int tzh_ttisstdcnt;
+        tz_int tzh_leapcnt;
+        tz_int tzh_timecnt;
+        tz_int tzh_typecnt;
+        tz_int tzh_charcnt;
+    };
+    header hdr;
+  #pragma pack()
+
+    tz_time* trans_times;
+    unsigned char* info_idx;
+
+  #pragma pack(2)
+    struct ttinfo
+    {
+        tz_int        tt_gmtoff;
+        unsigned char tt_isdst;
+        unsigned char tt_abbrind;
+    };
+  #pragma pack()
+    ttinfo* info;
+    char* abbrv;
+
+  #pragma pack(4)
+    struct leapsecs
+    {
+        tz_time leap;
+        tz_int  cnt;
+    };
+  #pragma pack()
+    leapsecs* leaps;
+
+    char* stdind;
+    char* utcind;
+    char* tzenv;
+
+    struct tzrule
+    {
+        int mo, wc, wd, jd, hr, mn, sc;
+        tzrule() noexcept;
+        tzrule(const std::tm&amp;) noexcept;
+        int compare(const tzrule&amp;) const noexcept;
+    };
+    tzrule* tzrules;
+
+    tz_data() noexcept;
+    ~tz_data() noexcept;
+
+    tz_data(const tz_data&amp;);
+    tz_data(tz_data&amp;&amp;) noexcept;
+
+    tz_data&amp; operator=(const tz_data&amp;);
+    tz_data&amp; operator=(tz_data&&amp;) noexcept;
+
+    void swap(tz_data&amp;) noexcept;
+
+    void clear() noexcept;
+    void all_clear() noexcept;
+
+    tz_data&amp; read(const std::string&amp;);
+    std::string make_posix(const std::string&amp;);
+
+    static std::string get_posix_tz(const std::string&amp;);
+};
+
+using std::swap;
+void swap(tz_data&amp;, tz_data&amp;) noexcept;
+
+} // namespace zoneinfo
+
+class timezone
+{
+public:
+    timezone();
+    explicit timezone(int, int = 0, int = 0);
+    explicit timezone(const std::string&amp;);
+    explicit timezone(std::string&amp;&amp;);
+
+    virtual ~timezone();
+
+    timezone(const timezone&amp;);
+    timezone(timezone&amp;&amp;);
+
+    timezone&amp; operator=(const timezone&amp;);
+    timezone&amp; operator=(timezone&amp;&amp;);
+
+    void swap(timezone&amp;);
+
+    const std::string&amp; name() const noexcept;
+
+    std::string posix_tz_env_var() const noexcept;
+    static std::string posix_tz_env_var(const std::string&amp;);
+
+    std::time_t effective_time() const noexcept;
+
+    int std_offset() const noexcept;
+    int dst_offset() const noexcept;
+
+    const zoneinfo::tz_data&amp; raw_data() const noexcept;
+
+    int utc_offset() const noexcept;
+    bool is_dst() const noexcept;
+    const char* abbrv() const noexcept;
+
+    enum class trans_type { unknown = -1, wall, std, utc };
+    trans_type transition_type() const noexcept;
+
+    timezone&amp; switch_to_local();
+    timezone&amp; switch_to_utc();
+    timezone&amp; switch_to_offset(int, int = 0, int = 0);
+    timezone&amp; switch_to(const std::string&amp;);
+    timezone&amp; switch_to(std::string&amp;&amp;);
+
+    timezone&amp; for_time(std::time_t) noexcept;
+};
+
+using std::swap;
+void swap(timezone&amp;, timezone&amp;);
+
+} // namespace civil_time
+</pre>
+
+<p><a name="TZvar"><hr size=5></a>
+<h2>3.&nbsp;&nbsp;The <tt><b>TZ</b></tt> and <tt><b>TZ_ROOT</b></tt> Environment Variables</h2>
+
+<p>These functions are declared in the <tt>civil_time</tt> namespace.
+
+<pre>
+const std::string& get_tz() noexcept;
+void set_tz(const char*);
+void set_tz(std::string&amp;&amp;);
+void set_tz(const std::string&amp;);
+</pre>
+<blockquote>
+This is a string that mimics the POSIX-style <b>TZ</b> environment variable.&nbsp;&nbsp;Both the
+<tt>'M'</tt>-<tt> </tt>and <tt>'J'</tt>-style &ldquo;daylight saving time&rdquo; (DST) rules are
+supported.
+
+<p><a href="#named">When constructing a <tt>timezone</tt> object</a>, if the string begins with a colon,
+or if it lacks a comma (introducing DST rules), it will be taken to be a Zoneinfo <tt>Zone</tt> name
+initially (minus the optional leading colon); but if reading a TZif file fails, the constructor will
+try again treating the string as a POSIX <b>TZ</b> value.
+</blockquote>
+
+<pre>
+const std::string& get_tz_root() noexcept;
+void set_tz_root(const char*);
+void set_tz_root(std::string&amp;&amp;);
+void set_tz_root(const std::string&amp;);
+</pre>
+<blockquote>
+This string contains the full path to the directory where the TZif files reside.&nbsp;&nbsp;It
+defaults to <nobr><tt>/usr/share/zoneinfo</tt></nobr> on POSIX systems; or it can be an empty
+string if you&rsquo;re compiling for Windows and haven&rsquo;t installed the TZif files anywhere.
+</blockquote>
+
+<p><b>You don&rsquo;t actually need to have the TZ and TZ_ROOT variables defined in your
+environment:</b>&nbsp;&nbsp;by default, these values are defined as macros in <tt>timezone_config.hpp</tt>
+(see <a href="#appa">Appendix&nbsp;A</a>).&nbsp;&nbsp;If the defaults are wrong for your
+system, you can call any of the <nobr><tt>set_tz()</tt></nobr> or <nobr><tt>set_tz_root()</tt></nobr>
+functions before you make any use of the <tt>timezone</tt> or <tt>tz_data</tt> classes (e.g., at the
+beginning of <nobr><tt>main()</tt>),</nobr> or you can explicitly define the <tt>CIVIL_TIME_TZ</tt>
+and <tt>CIVIL_TIME_TZ_ROOT</tt> macros yourself when compiling <tt>timezone.cpp</tt>.
+
+<p>If you <i>do</i> have these environment variables, you can compile <tt>timezone.cpp</tt>
+with the <tt>CIVIL_TIME_USE_GETENV</tt> macro defined.&nbsp;&nbsp;This will cause the values
+to be initialized by calls to <nobr><tt>std::getenv()</tt></nobr> before anything in
+<tt>timezone.cpp</tt> is used.
+
+<p><a name="tzdata"><hr size=5></a>
+<h2>4.&nbsp;&nbsp;The <tt>tz_data</tt> Type</h2>
+
+<p>This type is declared in the <tt>civil_time::zoneinfo</tt> namespace.
+
+<p>An instance of this class holds all the data in a single <a href="#TZif">TZif</a> file.&nbsp;&nbsp;See
+<a href="#appb">Appendix B</a> for a description of such a file.
+
+<p><b>Note that <tt>tz_int</tt> is a typedef for <tt>std::int32_t</tt> and <tt>tz_time</tt>
+is a typedef for <tt>std::int64_t</tt>.</b>&nbsp;&nbsp;We need to be picky about these
+because <a href="https://datatracker.ietf.org/doc/rfc8536/">RFC&nbsp;8536</a> requires
+that all the integers in a TZif file be four-octet objects, and all <tt>time_t</tt>s
+be eight-octet objects, with negative values having <nobr>two&rsquo;s-complement</nobr>
+representation.&nbsp;&nbsp;You&rsquo;ll also see some <tt>#pragma</tt>&nbsp;<tt>pack</tt>s
+below because everything in a TZif file is packed on arbitrary byte boundaries.
+
+<p><a name="dms"><hr size=3></a>
+<h3>4.1.&nbsp;&nbsp;Data Members</h3>
+
+This class is declared to be a <tt>struct</tt> rather than a <tt>class</tt>, so basically
+everything is <tt>public</tt> (except for a couple of undocumented member functions
+that manage allocated memory).&nbsp;&nbsp;It&rsquo;s intended to be a <tt>private</tt>
+data member of the <tt>timezone</tt> class described below, but it could be a stand-alone class
+<i>as long as users never do anything except</i>:
+<ul>
+<li><b>read</b> the data members,
+<li>construct the object initially,
+<li>copy it, move it or swap it, or
+<li>call the <nobr><tt>read()</tt>,</nobr> <nobr><tt>make_posix()</tt>,</nobr>
+    or <nobr><tt>get_posix_tz()</tt></nobr> member functions.
+</ul>
+
+<p><a name="hed"><hr></a>
+<h4>4.1.1.&nbsp;&nbsp;The header</h4>
+
+<pre>
+#pragma pack(4)
+struct header
+{
+    char   version[20];
+    tz_int tzh_ttisgmtcnt;
+    tz_int tzh_ttisstdcnt;
+    tz_int tzh_leapcnt;
+    tz_int tzh_timecnt;
+    tz_int tzh_typecnt;
+    tz_int tzh_charcnt;
+};
+header hdr;
+#pragma pack()
+</pre>
+<blockquote>
+This is what the author thinks of as the &ldquo;header&rdquo; portion of a TZif file:
+<ul>
+<li><tt>version[]</tt> will contain a <tt>'\0'</tt>-terminated C-style string that begins with &ldquo;<tt>TZif</tt>&rdquo;
+    followed by one of <tt>'2'</tt>, <tt>'3'</tt> or <tt>'4'</tt>.&nbsp;&nbsp;The
+    rest will be all <tt>'\0'</tt>s and are reserved for future use.&nbsp;&nbsp;(It&rsquo;s shown as three fields
+    in Zoneinfo documentation (see <a href="#appb">Appendix B</a>), but the three are grouped together herein
+    for brevity.&nbsp;&nbsp;Think of it as a C-style string that doesn&rsquo;t completely fill the whole array.)
+    <br><table border=0><tr><td bgcolor=yellow>
+    There&rsquo;s also a &ldquo;Version&nbsp;1&rdquo; where <nobr><tt>hdr.version[4]</tt></nobr> is <tt>'\0'</tt>,
+    but this library requires at least Version&nbsp;2 for the <nobr>64-bit</nobr> <tt>time_t</tt>s.
+    </td></tr></table>
+<p><li>The six integers will contain the sizes of the array elements described below.
+</ul>
+</blockquote>
+
+<p><a name="data"><hr></a>
+<h4>4.1.2.&nbsp;&nbsp;Data Arrays</h4>
+
+There are nine pointers that will all point to memory allocated on the free store (a.k.a., &ldquo;heap&rdquo;), or they&rsquo;ll be <tt>nullptr</tt>.
+
+<pre>
+tz_time* trans_times;
+unsigned char* info_idx;
+</pre>
+<blockquote>
+The number of elements in each of these arrays is given by <tt>hdr.tzh_timecnt</tt>.
+<ul>
+<li><tt>trans_times</tt> contains <tt>time_t</tt>s, sorted ascending, corresponding to a time when civil time observance
+    changes in the zone (e.g., between summer and winter time).
+<li><tt>info_idx</tt> is an array of indices to the array of <tt>ttinfo</tt>s described next.
+</ul>
+The idea is that, to find the time that&rsquo;s observed for a given <tt>time_t</tt>, search the <tt>trans_times</tt>
+array for the largest value not greater than the <tt>time_t</tt> that you&rsquo;re interested in.&nbsp;&nbsp;At that same
+position in the <tt>info_idx</tt> array will be an index to the array that follows.
+
+<p><table border=0><tr><td bgcolor=yellow>
+If there&rsquo;s only one element in the array that follows (e.g., when the object refers to
+a fixed offset from UTC), <tt>hdr.tzh_timecnt</tt> can be zero (since there&rsquo;s never been
+a transition), and so both <tt>trans_times</tt> and <tt>info_idx</tt> can be <tt>nullptr</tt>.
+</td></tr></table>
+</blockquote>
+
+<pre>
+#pragma pack(2)
+struct ttinfo
+{
+    tz_int        tt_gmtoff;
+    unsigned char tt_isdst;
+    unsigned char tt_abbrind;
+};
+#pragma pack()
+ttinfo* info;
+</pre>
+<blockquote>
+A <tt>ttinfo</tt> structure contains interesting information about the current time observance.
+<ul>
+<li><tt>tt_gmtoff</tt> is the current signed offset in seconds from UTC.
+<li><tt>tt_isdst</tt> is effectively a boolean (either <tt>'\0'</tt> or <tt>'\1'</tt>)
+    that indicates whether DST is being observed.
+<li><tt>tt_abbrind</tt> contains an index to the array of abbreviations that follows.
+</ul>
+The number of elements in the array of <tt>ttinfo</tt>s that <tt>info</tt> points to is given by
+<tt>hdr.tzh_typecnt</tt> which will always be at least 1, so <tt>info</tt> will never be <tt>nullptr</tt>.
+
+<p><b>Note the <tt>#pragma</tt>&nbsp;<tt>pack(2)</tt> business:</b>&nbsp;&nbsp;the TZif files
+pack everything on arbitrary byte boundaries, and we need <nobr><tt>sizeof(ttinfo)</tt></nobr>
+to be 6, not 8 as it would be if we allowed the compiler to create a structure with padding bytes.
+</blockquote>
+
+<pre>
+char* abbrv;
+</pre>
+<blockquote>
+This contains one or more <tt>'\0'</tt>-terminated C-style strings packed into a single array
+of <tt>char</tt>.&nbsp;&nbsp;The strings are the usual abbreviations (e.g., &ldquo;<tt>CST</tt>&rdquo;,
+&ldquo;<tt>CDT</tt>&rdquo;) used to identify the time zone.&nbsp;&nbsp;The particular abbreviation of interest
+begins at <nobr><tt>abbrv</tt> <tt>+</tt> <tt>info[info_idx[<i>trans_pos</i>]].tt_abbrind</tt></nobr>
+where <tt><i>trans_pos</i></tt> is the position in the <tt>trans_times</tt> array where the <tt>time_t</tt>
+of interest was found.
+
+<p>The total number of <tt>char</tt>s in the array including the <tt>'\0'</tt> terminator(s) is given by
+<tt>hdr.tzh_charcnt</tt>.&nbsp;&nbsp;There will always be at least one abbreviation, so <tt>abbrv</tt>
+will never be <tt>nullptr</tt>.
+</blockquote>
+
+<pre>
+#pragma pack(4)
+struct leapsecs
+{
+    tz_time leap;
+    tz_int  cnt;
+};
+#pragma pack()
+leapsecs* leaps;
+</pre>
+<blockquote>
+<nobr><tt>leapsecs::leap</tt></nobr> contains the <nobr><tt>time()</tt></nobr> when a leap second happened,
+and <nobr><tt>leapsecs::cnt</tt></nobr> contains the number of leap seconds that have been added
+prior to <nobr><tt>leapsecs::leap</tt></nobr>.&nbsp;&nbsp;Note that, although it has never happened yet,
+a leap second can be subtracted instead of added; so it&rsquo;s possible for <tt>leapsecs::cnt</tt>
+to get smaller.&nbsp;&nbsp;It doesn&rsquo;t necessarily become greater (and note that
+<a href="https://dagnew.scrippsprofiles.ucsd.edu/">Duncan Agnew</a> of Scripps Oceanography
+at UCSD <a href="https://www.nature.com/articles/s41586-024-07170-0">has predicted</a> that,
+because of changes to the Earth&rsquo;s  rotation due to global warming, a negative leap second
+will be required by 2029 at the latest).
+
+<p>The number of <tt>leapsecs</tt> structures is given by <tt>hdr.tzh_leapcnt</tt>.
+
+<p><table border=0><tr><td bgcolor=yellow>
+None of the TZif files in the 2024a release has any leap second information (so <tt>leaps</tt>
+will always be <tt>nullptr</tt> and <tt>hdr.tzh_leapcnt</tt> will always be zero); but this library
+allows for leap seconds because RFC&nbsp;8536 does, and so they might show up in the future.
+</td></tr></table>
+</blockquote>
+
+<pre>
+<a name="stdwall">char* stdind;</a>
+char* utcind;
+</pre>
+<blockquote>
+These are effectively arrays of booleans (either <tt>'\0'</tt> or <tt>'\1'</tt>) that together
+indicate whether the published times of transitions (e.g., winter to summer time) specify
+the local wall clock time, the local standard time, or UTC.&nbsp;&nbsp;<tt>*stdind</tt>
+is local standard or wall clock time; <tt>*utcind</tt> is UTC or local time.
+
+<p>The sizes of these arrays are given by <tt>hdr.tzh_ttisstdcnt</tt> and <tt>hdr.tzh_ttisgmtcnt</tt>,
+respectively.&nbsp;&nbsp;The author observes that both of these have the same value as does <tt>hdr.tzh_typecnt</tt>
+for all zones in Zoneinfo&rsquo;s 2024a release, but he has seen no documentation (or guarantee) of that.
+</blockquote>
+
+<pre>
+char* tzenv;
+</pre>
+<blockquote>
+This is the <tt>'\0'</tt>-terminated string that&rsquo;s the value of the POSIX&nbsp;TZ
+environment variable (e.g., &ldquo;<tt>CST6CDT,M3.2.0,M11.1.0</tt>&rdquo;).&nbsp;&nbsp;Its length
+isn&rsquo;t given by any of the integers in the header:&nbsp;&nbsp;it&rsquo;s just an ordinary
+C-style string.
+
+<p><table border=0><tr><td bgcolor=yellow>
+In the TZif files, this string begins and ends with <tt>'\n'</tt> characters; but this library doesn&rsquo;t store those.
+</td></tr></table>
+</blockquote>
+
+<pre>
+struct tzrule
+{
+    int mo /*month*/, wc /*week count*/, wd /*weekday*/;
+    int jd /*Julian day*/;
+    int hr, mn, sc; // time of day
+
+    tzrule() noexcept;
+    tzrule(const std::tm&amp;) noexcept;
+    int compare(const tzrule&amp;) const noexcept;
+};
+tzrule* tzrules;
+</pre>
+<blockquote>
+This array is created only by the <tt>make_posix()</tt> member function which initializes <tt>*this</tt>
+given a POSIX TZ string instead of by reading a TZif file.&nbsp;&nbsp;<tt>tzrules</tt> will be <tt>nullptr</tt>
+if the data <i>were</i> read from a TZif file or if the zone doesn&rsquo;t observe DST.&nbsp;&nbsp;If
+it <i>does</i> observe DST, there will be two array elements with <nobr><tt>tzrules[0]</tt></nobr>
+being the rule for moving to DST , <nobr><tt>tzrules[1]</tt></nobr>the rule for returning to standard time.
+
+<p>In the <tt>tzrules</tt> array, in an <tt>'M'</tt>-style rule (month, week count and weekday),
+<tt>tzrule::jd</tt> will be <tt>INT_MIN</tt>; if <tt>jd</tt>&nbsp;<tt>!=</tt>&nbsp;<tt>INT_MIN</tt>,
+it&rsquo;s a <tt>'J'</tt>-style rule and <tt>mo</tt>, <tt>wc</tt> and <tt>wd</tt> will be <tt>INT_MIN</tt>.
+
+<p>In <tt>tzrule</tt> objects constructed elsewhere from a <tt>struct</tt>&nbsp;<tt>tm</tt>,
+all of <tt>mo</tt>, <tt>wc</tt>, <tt>wd</tt> and <tt>jd</tt> will be the values taken from the <tt>tm</tt>.
+
+<p><tt>tzrule::compare()</tt> compares a <tt>tzrules</tt> array element with some other <tt>tzrule</tt>
+object.&nbsp;&nbsp;It returns a value less than zero if the array element represents a time before
+the passed argument, zero if they&rsquo;re the same time, or a value greater than zero if it&rsquo;s
+after the passed argument.&nbsp;&nbsp;If the array element&rsquo;s <tt>jd</tt>&nbsp;<tt>!=</tt>&nbsp;<tt>INT_MIN</tt>,
+<tt>jd</tt> will be compared; otherwise <tt>mo</tt>, <tt>wc</tt> and <tt>wd</tt> will be compared.
+
+<p><table border=0>
+<tr><td bgcolor=yellow>
+Note that <tt>compare()</tt> may be called only on a <tt>tzrules</tt> array element.&nbsp;&nbsp;The
+passed argument may be the other array element or a <tt>tzrule</tt> object constructed from a <tt>std::tm</tt>.
+</td></tr>
+<tr><td bgcolor="#FF7777">
+If both are array elements, both must be <tt>'M'</tt>-style rules or both must be <tt>'J'</tt>-style rules;
+and a debug build will <tt>assert</tt> if they&rsquo;re different.&nbsp;&nbsp;We might fix that
+<a href="http://www.catb.org/jargon/html/R/Real-Soon-Now.html">Real Soon Now</a>.
+</td></tr>
+</table>
+</blockquote>
+
+<p><a name="mfs"><hr size=3></a>
+<h3>4.2.&nbsp;&nbsp;Member Functions</h3>
+
+This class doesn&rsquo;t have much behavior associated with it beyond reading a TZif file
+or creating the data from a POSIX-like TZ environment variable.
+
+<p>The copy constructor, the copy assignment operator, and the <nobr><tt>read()</tt></nobr>
+and <nobr><tt>make_posix()</tt></nobr> functions all allocate memory and so can throw a
+<tt>bad_alloc</tt> exception.&nbsp;&nbsp;The <nobr><tt>read()</tt></nobr> and
+<nobr><tt>get_posix_tz()</tt></nobr> functions can also throw an <tt>invalid_argument</tt>
+exception or a <tt>runtime_error</tt> exception; and <nobr><tt>make_posix()</tt></nobr>
+can throw an <tt>invalid_argument</tt>.
+
+<p><a name="tzspec"><hr></a>
+<h4>4.2.1.&nbsp;&nbsp;Special Member Functions and <tt>swap()</tt></h4>
+
+<pre>
+tz_data() noexcept;
+</pre>
+<blockquote>
+The default constructor just constructs an object with all the member pointers set to
+<tt>nullptr</tt>, and with all the non-pointer data members set to zero.
+</blockquote>
+
+<pre>
+~tz_data() noexcept;
+</pre>
+<blockquote>
+The destructor is non-trivial.
+</blockquote>
+
+<pre>
+tz_data(const tz_data&amp;);
+tz_data(tz_data&amp;&amp;) noexcept;
+
+tz_data&amp; operator=(const tz_data&amp;);
+tz_data&amp; operator=(tz_data&&amp;) noexcept;
+
+void swap(tz_data&amp;) noexcept;
+</pre>
+<blockquote>
+Instances of the <tt>tz_data</tt> class are freely copyable, moveable, and swappable.&nbsp;&nbsp;There&rsquo;s
+also a non-member <nobr><tt>swap(tz_data&amp;,tz_data&amp;)</tt>.</nobr>
+</blockquote>
+
+<p><a name="clear"><hr></a>
+<h4>4.2.2.&nbsp;&nbsp;Cleanup</h4>
+
+<pre>
+void clear() noexcept;
+void all_clear() noexcept;
+</pre>
+<blockquote>
+<tt>clear()</tt> frees all allocated memory and sets all the pointers to <tt>nullptr</tt>.
+
+<p><tt>all_clear()</tt> sets the <tt>version</tt> array and all integers in the header to zero
+and then calls <nobr><tt>clear()</tt></nobr>, effectively wiping out all the information
+in the object.
+</blockquote>
+
+<p><a name="create"><hr></a>
+<h4>4.2.3.&nbsp;&nbsp;Creating the Data</h4>
+
+<pre>
+tz_data&amp; read(const std::string&amp; <i>zone_name</i>);
+</pre>
+<blockquote>
+This is the function that reads a TZif file and initializes all the data members
+described above.&nbsp;&nbsp;The argument is Zoneinfo&rsquo;s name for the time zone
+(e.g., &ldquo;<tt>America/Chicago</tt>&rdquo;).
+
+<p>In addition to throwing a <tt>bad_alloc</tt> if memory allocation fails,
+<ul>
+<li>if it can&rsquo;t open the file, or if the first few bytes in the file aren&rsquo;t
+    what&rsquo;s expected, it will throw an <tt>invalid_argument</tt> exception indicating
+    that the function&rsquo;s argument doesn&rsquo;t resolve to a proper TZif file.
+<li>any other error reading the input stream will cause a <tt>runtime_error</tt> to be thrown.
+</ul>
+
+<p>This function returns <tt>*this</tt>.
+</blockquote>
+
+<pre>
+std::string make_posix(const std::string&amp; <i>tz_env_var</i>);
+</pre>
+<blockquote>
+This function doesn&rsquo;t try to read a TZif file, but instead tries to infer the data
+from a string that might be found in a POSIX-like TZ environment variable.&nbsp;&nbsp;It
+returns the passed TZ string minus any DST rules (which is probably a reasonable name
+for the zone).
+
+<p>It will throw an <tt>invalid_argument</tt> exception if it can&rsquo;t parse the passed TZ string.
+</blockquote>
+
+<pre>
+static std::string get_posix_tz(const std::string&amp; <i>zone_name</i>);
+</pre>
+<blockquote>
+This <tt>static</tt> member function reads a TZif file without modifying any <tt>tz_data</tt>
+data members and returns the POSIX TZ environment variable.&nbsp;&nbsp;It&rsquo;s a member
+of the <tt>tz_data</tt> class because it shares some code with <nobr><tt>tz_data::read()</tt>,</nobr>
+but the intent is that it be called only by <tt>timezone</tt>&rsquo;s <tt>static</tt>
+<nobr><tt>posix_tz_env_var(const std::string&amp;)</tt>.</nobr>
+</blockquote>
+
+<p><a name="timezone"><hr size=5></a>
+<h2>5.&nbsp;&nbsp;The <tt>timezone</tt> Type</h2>
+
+<p>This type is declared in the <tt>civil_time</tt> namespace.
+
+<p>The <tt>timezone</tt> class represents an offset from UTC and rules for going on and off
+&ldquo;daylight saving time&rdquo; (DST).&nbsp;&nbsp;Depending on how it&rsquo;s constructed,
+it can represent a fixed offset that never changes, an offset that changes only when going
+on and off DST, or historical offsets read from the Zoneinfo database.&nbsp;&nbsp;You can
+change which civil time zone the <tt>timezone</tt> object represents after construction.
+
+<p>All the special member functions, other constructors, and <tt>swap()</tt> allocate memory
+and so can throw a <tt>bad_alloc</tt> exception.&nbsp;&nbsp;Those that might read
+a TZif file or construct a <tt>timezone</tt> from a POSIX-like TZ environment variable
+(all except <nobr><tt>timezone(int,int,int)</tt></nobr>) can also throw
+<tt>invalid_argument</tt> or <tt>runtime_error</tt> exceptions.
+
+<p>It&rsquo;s intended that this class be inherited by another class in a larger
+civil time library, so it&rsquo;s not declared <tt>final</tt> and it has a virtual destructor.
+
+<p><a name="spec"><hr size=3></a>
+<h3>5.1.&nbsp;&nbsp;Special Member Functions and <tt>swap()</tt></h3>
+
+<pre>
+<a name="local">timezone();</a>
+</pre>
+<blockquote>
+The default constructor attempts to create the local time zone the name of which will be
+whatever is returned by <nobr><tt>civil_time::get_tz()</tt></nobr> (on a POSIX box probably
+&ldquo;<tt>/etc/localtime</tt>&rdquo;).&nbsp;&nbsp;Note that this could be a name that looks like
+a POSIX-style TZ environment variable if you&rsquo;re not using the <a href="#TZif">TZif files</a>.
+</blockquote>
+
+<pre>
+virtual ~timezone();
+</pre>
+<blockquote>
+The destructor is non-trivial; and it&rsquo;s <tt>virtual</tt> so that the class can be safely inherited.
+</blockquote>
+
+<pre>
+timezone(const timezone&amp;);
+timezone(timezone&amp;&amp;);
+
+timezone&amp; operator=(const timezone&amp;);
+timezone&amp; operator=(timezone&amp;&amp;);
+
+void swap(timezone&amp;);
+</pre>
+<blockquote>
+Instances of the <tt>timezone</tt> class are freely copyable, moveable, and swappable.&nbsp;&nbsp;There&rsquo;s
+also a non-member <nobr><tt>swap(timezone&amp;,timezone&amp;)</tt>.</nobr>
+</blockquote>
+
+<p><a name="ctor"><hr size=3></a>
+<h3>5.2.&nbsp;&nbsp;Other Constructors</h3>
+
+<pre>
+<a name="fix">explicit timezone(int <i>hours</i>, int <i>minutes</i> = 0, int <i>seconds</i> = 0);</a>
+</pre>
+<blockquote>
+This creates a <tt>timezone</tt> with a fixed offset from UTC that doesn&rsquo;t observe DST.&nbsp;&nbsp;The
+sign of the offset will be that of the <tt><i>hours</i></tt> argument.&nbsp;&nbsp;The signs of the
+<tt><i>minutes</i></tt> and </tt><tt><i>seconds</i></tt> arguments will be adjusted to match <tt><i>hours</i></tt>
+if they&rsquo;re non-zero, so they can both be absolute values in the call.
+
+<p>Both the name and the abbreviation will be &ldquo;<tt>UTC<i>&plusmn;n</i></tt>&rdquo;
+where <tt><i>n</i></tt> is the offset from UTC.&nbsp;&nbsp;The offset can be just hours,
+hours<b>:</b>minutes, hours<b>:</b>minutes<b>:</b>seconds, or entirely absent if
+<tt><i>n</i></tt> would be zero.
+
+<p>The TZ environment variable will follow the Zoneinfo convention of
+&ldquo;<tt>&lt;&plusmn;<i>n</i>&gt;&plusmn;<i>n</i></tt>&rdquo;
+where the offset between the angle brackets is the actual offset and the value after the closing
+<tt>'>'</tt> will have the opposite sign (like in a TZ environment variable).&nbsp;&nbsp;It
+can also be just &ldquo;<tt>&lt;+0&gt;0</tt>&rdquo; for UTC exactly.
+<table border=0><tr><td bgcolor=yellow>
+Note that time zones west of the prime meridian have negative offsets from UTC; but in the legacy
+TZ environment variables, the offsets have the wrong sign.
+</td></tr></table>
+</blockquote>
+
+<pre>
+<a name="named">explicit timezone(const std::string&amp;);</a>
+explicit timezone(std::string&amp;&amp;);
+</pre>
+<blockquote>
+The argument can be a Zoneinfo <tt>Zone</tt> name (e.g., &ldquo;<tt>America/Chicago</tt>&rdquo;) or a POSIX-style
+TZ string, possibly with DST rules (e.g., &ldquo;<tt>CST6CDT,M3.2.0,M11.1.0</tt>&rdquo;).&nbsp;&nbsp;If the string
+doesn&rsquo;t have the DST rules (e.g., just &ldquo;<tt>CST6CDT</tt>&rdquo;), it will be taken to be a Zoneinfo
+name initially.&nbsp;&nbsp;In any event, if reading the TZif file fails for some reason, we&rsquo;ll try again
+treating the argument as a TZ string.&nbsp;&nbsp;If the argument gets treated as a TZ string and has a DST
+abbreviation but lacks the DST rules, the rules will default to the U.S. rules in effect at the time of this
+writing (DST is standard time plus one hour changing at 02:00 local wall clock time on the second Sunday in March
+or the first Sunday in November).
+
+<p><table border=0><tr><td bgcolor=yellow>
+Objects constructed from a POSIX-style TZ string will be correct only for times not far from the
+present.&nbsp;&nbsp;You&rsquo;ll get transitions to and from DST if they apply, but you
+won&rsquo;t have any of the history because you won&rsquo;t have read a TZif file.
+</td></tr></table>
+</blockquote>
+
+<p><a name="obs"><hr size=3></a>
+<h3>5.3.&nbsp;&nbsp;Observers</h3>
+
+Some make sense only relative to a particular <tt>time_t</tt> value.&nbsp;&nbsp;Except for the
+<nobr><tt>static</tt>&nbsp;<tt>posix_tz_env_var()</tt>,</nobr> none will ever throw an exception.
+
+<p><a name="anytime"><hr></a>
+<h4>5.3.1.&nbsp;&nbsp;Observers Known Regardless of the Current Time</h4>
+
+<pre>
+const std::string&amp; name() const noexcept;
+</pre>
+<blockquote>
+This returns the name of the time zone, which could be the Zoneinfo name (e.g., &ldquo;<tt>America/Chicago</tt>&rdquo;),
+an offset for which DST rules apply (e.g., &ldquo;<tt>CST6CDT</tt>&rdquo;), or a fixed offset from UTC
+<nobr>(e.g., &ldquo;<tt>UTC+1</tt>&rdquo;, &ldquo;<tt>&lt;+1&gt;-1</tt>&rdquo;).</nobr>
+</blockquote>
+
+<pre>
+std::string posix_tz_env_var() const noexcept;
+static std::string posix_tz_env_var(const std::string&amp;);
+</pre>
+<blockquote>
+This returns what would be the POSIX <b>TZ</b> environment variable,
+which will probably look something like &ldquo;<tt>CST6CDT,M3.2.0,M11.1.0</tt>&rdquo;, but could also be
+one of Zoneinfo&rsquo;s extensions (e.g.,&nbsp;&ldquo;<tt>&lt;+07&gt;-7</tt>&rdquo; or maybe even
+&ldquo;<tt>&lt;+1030&gt;-10:30&lt;+11&gt;-11,M10.1.0,M4.1.0</tt>&rdquo;).
+
+<p>The <tt>static</tt> version looks up a <b>TZ</b> string given a Zoneinfo <tt>Zone</tt> name
+without modifying <tt>*this</tt>.&nbsp;&nbsp;It can throw an <tt>invalid_argument</tt> exception
+if the argument isn&rsquo;t a valid <tt>Zone</tt> name, and it can throw a <tt>runtime_error</tt>
+exception if there&rsquo;s some error reading the TZif file.&nbsp;&nbsp;(<a href="#dotinc">If
+you&rsquo;re using the <tt>tz_names_xlate.inc</tt> file</a>, it&rsquo;ll do an in-memory search
+and won&rsquo;t throw a <tt>runtime_error</tt>; but it can still throw an <tt>invalid_argument</tt>
+if it can&rsquo;t find the name.)
+</blockquote>
+
+<pre>
+std::time_t effective_time() const noexcept;
+</pre>
+<blockquote>
+This returns the <tt>time_t</tt> that was most recently passed to the
+<nobr><tt>for_time()</tt></nobr> function described below.&nbsp;&nbsp;If
+<nobr><tt>for_time()</tt></nobr> hasn&rsquo;t been called yet since
+the object was originally constructed, this function returns the value
+returned by <nobr><tt>std::time()</tt></nobr> when the object was constructed.
+</blockquote>
+
+<pre>
+int std_offset() const noexcept;
+int dst_offset() const noexcept;
+</pre>
+<blockquote>
+These two functions return the offsets in seconds from UTC for standard time and daylight saving
+time.&nbsp;&nbsp;They don&rsquo;t care whether the zone is currently observing DST;
+but calling <nobr><tt><a href="#settime">for_time()</a></tt></nobr> can change the values 
+if the new <tt>time_t</tt> reflects some significantly different time observance
+other than just the regular <nobr>winter<b>/</b>summer</nobr> transitions.
+
+<p><b><tt>dst_offset()</tt> will return <tt>INT_MIN</tt> for zones that don&rsquo;t observe DST.</b>
+
+<p>Note that the difference might not be exactly 3600 seconds (i.e., exactly 1 hour,
+<nobr>e.g., on Australia&rsquo;s Lord Howe Island</nobr> which currently moves forward in the summer
+by only half an hour); and the DST offset might even be <i>less than</i> the STD offset
+<nobr>(e.g., in the Republic of Ireland</nobr> which treats summer time as the standard time
+and winter time as the adjusted one).
+</blockquote>
+
+<pre>
+const <a href="#tzdata">zoneinfo::tz_data</a>&amp; raw_data() const noexcept;
+</pre>
+<blockquote>
+This returns a <tt>const</tt> reference to the <tt>tz_data</tt> object
+that was initialized by reading from a TZif file or inferred from a TZ string.
+</blockquote>
+
+<p><a name="onetime"><hr></a>
+<h4>5.3.2.&nbsp;&nbsp;Observers That Make Sense Only for a Particular Time</h4>
+
+<pre>
+int utc_offset() const noexcept;
+</pre>
+<blockquote>
+This returns the current offset from UTC in seconds including the additional offset for DST if that applies.
+</blockquote>
+
+<pre>
+bool is_dst() const noexcept;
+</pre>
+<blockquote>
+This returns whether DST is in effect.
+</blockquote>
+
+<pre>
+const char* abbrv() const noexcept;
+</pre>
+<blockquote>
+This returns the customary abbreviation for the time zone (e.g. &ldquo;<tt>CST</tt>&rdquo;).&nbsp;&nbsp;This
+could be a Zoneinfo extension like &ldquo;<tt>&lt;-7&gt;</tt>&rdquo;.
+</blockquote>
+
+<pre>
+enum class trans_type { unknown = -1, wall, std, utc };
+trans_type transition_type() const noexcept;
+</pre>
+<blockquote>
+This returns whether the times that transitions happen (e.g., between summer and winter time)
+are relative to the local wall clock time, the local standard time, or UTC.
+</blockquote>
+
+<p><a name="mut"><hr size=3></a>
+<h3>5.4.&nbsp;&nbsp;Mutators</h3>
+
+<p>All of these return <tt>*this</tt>.
+
+<p><a name="newzone"><hr></a>
+<h4>5.4.1.&nbsp;&nbsp;Changing the Time Zone</h4>
+
+<pre>
+timezone&amp; switch_to_local();
+</pre>
+<blockquote>
+This switches to <a href="#local">the local time zone</a>.
+</blockquote>
+
+<pre>
+timezone&amp; switch_to_offset(int <i>hours</i>, int <i>minutes</i> = 0, int <i>seconds</i> = 0);
+timezone&amp; switch_to_utc() { return switch_to_offset(0); }
+</pre>
+<blockquote>
+This switches to a time zone with <a href="#fix">a fixed offset from UTC</a> that never observes DST.
+</blockquote>
+
+<pre>
+timezone&amp; switch_to(const std::string&amp;);
+timezone&amp; switch_to(std::string&amp;&amp;);
+</pre>
+<blockquote>
+This switches to <a href="#named">a named time zone</a>.
+</blockquote>
+
+<p>All of these allocate memory and so can throw a <tt>bad_alloc</tt> exception.&nbsp;&nbsp;Those
+that might read a TZif file or infer the data from a TZ string (all except <nobr><tt>switch_to_offset()</tt></nobr>)
+can also throw <tt>invalid_argument</tt> or <tt>runtime_error</tt>.
+
+<p><a name="settime"><hr></a>
+<h4>5.4.2.&nbsp;&nbsp;Setting the Time</h4>
+
+<pre>
+timezone&amp; for_time(std::time_t) noexcept;
+</pre>
+<blockquote>
+This sets the <tt>time_t</tt> that will be used by <a href="#onetime">those observers that return
+values relative to a particular point in time</a>.&nbsp;&nbsp;It will never throw an exception.
+</blockquote>
+
+<p><a name="appa"><hr size=5></a>
+<h2>Appendix A:&nbsp;&nbsp;Configuration</h2>
+
+The assumption out of the box is that <tt>timezone.cpp</tt> is being compiled for either POSIX
+(including a Mac) or Microsoft Windows, and in either case, that there&rsquo;s no <tt><b>TZ</b></tt>
+or <tt><b>TZ_ROOT</b></tt> environment variable and that the <a href="#TZif">TZif files</a>
+are available somewhere.
+
+<p><table border=0><tr><td bgcolor=yellow>
+It&rsquo;s possible to use this library without the TZif files, but the <tt>timezone</tt> class will give correct
+answers only for times not far from the present:&nbsp;&nbsp;you&rsquo;ll get the <nobr>winter-summer</nobr>
+transitions, but you won&rsquo;t have any of the history.&nbsp;&nbsp;See
+<a href="https://www.cstdbill.com/civil-time/tzwin.html">this paper</a>
+if you&rsquo;d like to have the TZif files on your Windows box.
+</td></tr></table>
+
+<p>All the macros described in this section are defined in <tt>timezone_config.hpp</tt>
+and control only how <tt>timezone.cpp</tt> gets compiled.
+
+<p><a name="whereat"><hr size=3></a>
+<h3>A.1.&nbsp;&nbsp;Where to Find the Data</h3>
+
+<p>There are four macros that you can define to control how <tt>timezone.cpp</tt> finds time zone information:
+<ul>
+<li><tt>CIVIL_TIME_TZ</tt>&nbsp;&ndash;&nbsp;your local time zone
+<li><tt>CIVIL_TIME_TZ_ROOT</tt>&nbsp;&ndash;&nbsp;the directory where the TZif files reside
+<li><tt>CIVIL_TIME_NO_ZONEINFO</tt>&nbsp;&ndash;&nbsp;if you don&rsquo;t have the TZif files on Windows
+<li><tt>CIVIL_TIME_USE_GETENV</tt>&nbsp;&ndash;&nbsp;get the <tt>TZ</tt> and <tt>TZ_ROOT</tt> environment variables
+    by calling <nobr><tt>std::getenv()</tt></nobr>
+</ul>
+
+<p>Neither of the last two gets defined by default, but <tt>timezone_config.hpp</tt> will define the first two
+if you haven&rsquo;t defined them already.
+
+<p>If you&rsquo;re not compiling for Windows, your local time zone will default to &ldquo;<tt>/etc/localtime</tt>&rdquo;
+and your Zoneinfo directory will default to <nobr>&ldquo;<tt>/usr/share/zoneinfo</tt>&rdquo;.</nobr>&nbsp;&nbsp;This
+is probably correct for POSIX, but some older systems might use <nobr>&ldquo;<tt>/etc/timezone</tt>&rdquo;</nobr>
+for the local zone instead.
+
+<p>If you <i>are</i> compiling for Windows, you&rsquo;ll get defaults that reflect how the author set up his own system,
+<i>which are probably not what you want</i>:
+<ul>
+<li>If <tt>CIVIL_TIME_NO_ZONEINFO</tt> is defined, your Zoneinfo directory will be an empty string
+    and your local time zone will be <nobr>&ldquo;<tt>CST6CDT,M3.2.0,M11.1.0</tt>&rdquo;.</nobr>
+<li>If <tt>CIVIL_TIME_NO_ZONEINFO</tt> is <i>not</i> defined, your Zoneinfo directory will be
+    <nobr>&ldquo;<tt>c:\Users\Public\Zoneinfo</tt>&rdquo;</nobr> and your local time zone will be
+    <nobr>&ldquo;<tt>America/Chicago</tt>&rdquo;.</nobr>
+    
+</ul>
+So if you&rsquo;re compiling for Windows, you&rsquo;ll probably want to explicitly define <tt>CIVIL_TIME_TZ</tt>
+and either <tt>CIVIL_TIME_NO_ZONEINFO</tt> or <tt>CIVIL_TIME_TZ_ROOT</tt> (or maybe
+<tt>CIVIL_TIME_USE_GETENV</tt> if you&rsquo;ve created the TZ and TZ_ROOT environment variables).
+
+<p>These values can be changed programmatically at run time, so you don&rsquo;t need worry about this
+at all if you call one or both of the <nobr><tt>set_tz()</tt></nobr> and <nobr><tt>set_tz_root()</tt></nobr>
+functions before you make any use of the <tt>timezone</tt> class (e.g., at the beginning of
+<nobr><tt>main()</tt>).</nobr>
+
+<p><table border=0><tr><td bgcolor="#FF7777">
+The author observed that actually setting a <tt>TZ</tt> environment variable on Windows 10 Home
+build 19045.4170 caused the <tt>&lt;ctime&gt;</tt> functions to misbehave; so approach statements
+about <tt>CIVIL_TIME_USE_GETENV</tt> with some trepidation if compiling for Windows.&nbsp;&nbsp;It
+might be best, on Windows, to just set the local time zone programmatically at the beginning of
+<nobr><tt>main()</tt>.</nobr>
+</td></tr></table>
+
+<p><a name="dotinc"><hr size=3></a>
+<h3>A.2.&nbsp;&nbsp;The Two <tt>.inc</tt> Files</h3>
+
+<p>There are also four macros any two of which you can define (if you want to) that control whether
+the two <tt>.inc</tt> files are used.&nbsp;&nbsp;On POSIX, you don&rsquo;t get either by default;
+on Windows, you get both by default.
+
+<p><tt>tz_names_xlate.inc</tt> is a cross reference of Zoneinfo <tt>Zone</tt> names to POSIX&nbsp;TZ
+environment variable values.&nbsp;&nbsp;You can <i>opt in</i> on POSIX by defining <tt>CIVIL_TIME_USE_NAME_XLATE</tt>
+or <i>opt out</i> on Windows by defining <tt>CIVIL_TIME_NO_NAME_XLATE</tt>.&nbsp;&nbsp;This might be useful on POSIX
+if you do lots of lookup of TZ environment variables and don&rsquo;t want to have to read TZif files
+to find them; it&rsquo;s necessary on Windows if you don&rsquo;t have the TZif files installed
+but still want to allow your software to use the Zoneinfo <tt>Zone</tt> names.
+
+<p><tt>tz_links_xlate.inc</tt> is a cross reference of Zoneinfo <tt>Link</tt> names to <tt>Zone</tt>
+names.&nbsp;&nbsp;You can opt in by defining <tt>CIVIL_TIME_USE_LINK_XLATE</tt> or opt out by defining
+<tt>CIVIL_TIME_NO_LINK_XLATE</tt>.&nbsp;&nbsp;It might be useful on POSIX if for some reason you
+don&rsquo;t want to follow the filesystem&rsquo;s symlinks; it&rsquo;s necessary on Windows if you
+don&rsquo;t have the TZif files installed or you haven&rsquo;t set up Windows symlinks.
+
+<p><table border=0><tr><td bgcolor=yellow>
+<a name="winsym">Even on Windows, you don&rsquo;t really need either one</a>
+<a href="https://www.cstdbill.com/civil-time/tzwin.html">if you have the TZif files installed
+and you&rsquo;ve created all the Windows symlinks</a>.
+</td></tr></table>
+
+<p>Both files are just sorted lists of initializers for
+<tt>char</tt>&nbsp;<tt>const</tt>&nbsp;<tt>*</tt>&nbsp;<tt>const[][2]</tt> arrays,
+such initializers having the form:
+<blockquote>
+<pre>
+{"<i>some-name</i>","<i>translated-name</i>"},
+</pre>
+</blockquote>
+and allow doing an in-memory binary search instead of traversing the filesystem.
+
+<p>They can be generated with the <tt>xlate-tz-names</tt> program on any box, POSIX or Windows, where
+the TZif files have been installed.&nbsp;&nbsp;The one (optional) command line argument is the
+full path to the Zoneinfo directory; and it defaults to <nobr><tt>/usr/share/zoneinfo</tt></nobr>
+which is probably correct for POSIX.&nbsp;&nbsp;On the author&rsquo;s Windows box, he had to supply
+the command line argument, <nobr><tt>c:\Users\Public\Zoneinfo</tt></nobr> which is the directory
+he created.
+
+<p>These files probably won&rsquo;t change from one Zoneinfo release to another; but if they do change,
+and you&rsquo;re using them, you&rsquo;ll want to run <nobr><tt>xlate-tz-names</tt></nobr> again
+and recompile <tt>timezone.cpp</tt>.&nbsp;&nbsp;The two <tt>.inc</tt> files supplied with this distribution
+are correct for Zoneinfo&rsquo;s 2024a release.
+
+<p><a name="appb"><hr size=5></a>
+<h2>Appendix&nbsp;B:&nbsp;&nbsp;The Structure of Zoneinfo&rsquo;s Binary Files</h2>
+
+<h3>For a complete description, see <a href="https://datatracker.ietf.org/doc/rfc8536/">RFC 8536</a>.</h3>
+
+<p><table border>
+<tr>
+  <th colspan=3>
+    Version 1:<br>all <tt>int</tt>s and <tt>time_t</tt>s are 32 bits, big endian, packed on arbitrary byte boundaries
+  </th>
+</tr>
+<tr>
+  <th>Type</th>
+  <th>Name</th>
+  <th>Use</th>
+</tr>
+<tr align=center>
+<td><tt>char[4]</tt></td>
+<td>header</td>
+<td align=left>always <tt>"TZif"</tt></td>
+</tr>
+<tr align=center>
+  <td><tt>char</tt></td>
+  <td>version</td>
+  <td align=left><tt>'\0'</tt>, <tt>'2'</tt> or <tt>'3'</tt></td>
+</tr>
+<tr align=center>
+
+  <td><tt>char[15]</tt></td>
+  <td>[future use]</td>
+  <td align=left>all <tt>'\0'</tt></td>
+</tr>
+<tr align=center>
+  <td><tt>int32_t</tt></td>
+  <td><tt>tzh_ttisgmtcnt</tt></td>
+  <td align=left>count of UTC/local indicators</td>
+</tr>
+<tr align=center>
+  <td><tt>int32_t</tt></td>
+  <td><tt>tzh_ttisstdcnt</tt></td>
+  <td align=left>count of standard/wall indicators</td>
+</tr>
+<tr align=center>
+  <td><tt>int32_t</tt></td>
+  <td><tt>tzh_leapcnt</tt></td>
+  <td align=left>count of leap seconds</td>
+</tr>
+<tr align=center>
+  <td><tt>int32_t</tt></td>
+  <td><tt>tzh_timecnt</tt></td>
+  <td align=left>count of transition times</td>
+</tr>
+<tr align=center>
+  <td><tt>int32_t</tt></td>
+  <td><tt>tzh_typecnt</tt></td>
+  <td align=left>count of local time types (never zero)</td>
+</tr>
+<tr align=center>
+  <td><tt>int32_t</tt></td>
+  <td><tt>tzh_charcnt</tt></td>
+  <td align=left>total characters in all abbreviation strings</td>
+</tr>
+<tr align=center>
+  <td bgcolor=yellow><tt>time_t[tzh_timecnt]</tt></td>
+  <td rowspan=7>&ndash;</td>
+  <td align=left>transition times as returned by <nobr><tt>std::time()</tt></nobr></td>
+</tr>
+<tr align=center>
+  <td><tt>unsigned char[tzh_timecnt]</tt></td>
+  <td align=left>indices into the following <tt>ttinfo</tt> array</td>
+</tr>
+<tr align=center>
+  <td align=left>
+    <tt>struct ttinfo {<br>
+    &nbsp;&nbsp;int32_t&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tt_gmtoff;<br>
+    &nbsp;&nbsp;unsigned char tt_isdst;<br>
+    &nbsp;&nbsp;unsigned char tt_abbrind;<br>
+    } [tzh_typecnt]</tt>
+  </td>
+  <td align=left>
+    <tt>tt_gmtoff</tt> is total ISO 8601 offset (std&nbsp;+&nbsp;dst);<br>
+    <tt>tt_isdst</tt> is a boolean indicating DST;<br>
+    <tt>tt_abbrind</tt> is an index to abbreviations.
+  </td>
+</tr>
+<tr align=center>
+  <td><tt>char[tzh_charcnt]</tt></td>
+  <td align=left>packed <tt>'\0'</tt>-terminated abbreviations</td>
+</tr>
+<tr align=center>
+  <td align=left bgcolor=yellow>
+    <tt>struct leaps {<br>
+    &nbsp;&nbsp;<tt>time_t</tt>&nbsp;&nbsp;leap;</br>
+    &nbsp;&nbsp;<tt>int32_t</tt>&nbsp;cnt;<br>
+  } [tzh_leapcnt];</tt>
+  </td>
+  <td align=left>
+    <tt>leaps::leap</tt> is <nobr><tt>time()</tt></nobr> at a leap second;<br>
+    <tt>leaps::cnt</tt> is the number of leap seconds<br>
+    that have been added before <tt>leaps::leap</tt>.
+  </td>
+</tr>
+<tr align=center>
+  <td><tt>char[tzh_ttisstdcnt]</tt></td>
+  <td align=left>whether local transitions are standard or wall</td>
+</tr>
+<tr align=center>
+  <td><tt>char[tzh_ttisgmtcnt]</tt></td>
+  <td align=left>whether transition times are UTC or local</td>
+</tr>
+<tr bgcolor=lightgreen>
+  <th colspan=3>
+    Version 2:<br>additional copy of all the above,
+    but with 64-bit <tt>time_t</tt>s (in yellow above), plus:
+  </th>
+</tr>
+<tr align=center bgcolor=lightgreen>
+  <td><tt>char[]</tt></td>
+  <td>&ndash;</td>
+  <td align=left>
+    <nobr><tt>'\n'</tt> <i><tt>POSIX</tt> <tt>TZ</tt> environment variable</i> <tt>'\n'</tt></nobr>
+  </td>
+</tr>
+<tr bgcolor=lightgrey>
+  <th colspan=3>
+    Version 3 adds no data, but allows some extensions<br>to the
+    &ldquo;<i><tt>POSIX</tt> <tt>TZ</tt> environment variable</i>&rdquo;.
+  </th>
+</tr>
+<tr bgcolor="#FF7777">
+  <td colspan=3>
+    There&rsquo;s also a &ldquo;Version 4&rdquo; that mostly has to do with how the TZif files
+    are compiled from the Zoneinfo<br>sources.&nbsp;&nbsp;The author has seen no examples of
+    Version&nbsp;4 binaries and doesn&rsquo;t believe that they&rsquo;ve been<br>released yet;
+    and this library treats all of Versions 2, 3 and 4 the same.
+  </td>
+</tr>
+</table>
+
+<p><hr size=5>
+All suggestions and corrections will be welcome; all flames will be amusing.&nbsp;&nbsp;Mail to <tt>was@pobox.com</tt>
+</body>
+</html>

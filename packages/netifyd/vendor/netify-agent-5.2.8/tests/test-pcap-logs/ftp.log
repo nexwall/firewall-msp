@@ -1,0 +1,17 @@
+offline0: i4pc-------r--F- TCP [OR] 90.130.70.73:21 <-- [L] 192.168.1.212:50694
+    : FTP/C
+    : CT ID: 0: MARK: 0
+    : RID  3: Clear-Text Credentials
+    : RID 42: Unsafe Protocol
+    : DP: 12
+
+offline0: i4pc----------F- TCP [OR] 90.130.70.73:25685 <-- [L] 192.168.1.212:50695
+    : FTP/D
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc-g---------- TCP [OR] 90.130.70.73:24523 <-- [L] 192.168.1.212:50696
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 32
+

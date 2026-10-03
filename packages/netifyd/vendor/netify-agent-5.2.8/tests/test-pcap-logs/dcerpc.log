@@ -1,0 +1,28 @@
+offline0: i4pc-------r---- UDP [L] 192.168.1.11:49155 --> [OL] 192.168.1.20:34964
+    : DCE/RPC
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.11:49155 <-- [OL] 192.168.1.20:49161
+    : DCE/RPC
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.11:34964 <-- [OL] 192.168.1.20:49162
+    : DCE/RPC
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.11:49154 <-- [OL] 192.168.1.20:49162
+    : DCE/RPC
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

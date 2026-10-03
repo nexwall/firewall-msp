@@ -1,0 +1,172 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Reboot and shutdown
+
+import sys
+import json
+import subprocess
+from subprocess import CalledProcessError
+from nethsec import utils
+from euci import EUci
+
+def run(cmd):
+    try:
+        subprocess.run(cmd.split(" "), check=True, capture_output=True)
+        return {"result": "success"}
+    except:
+        return utils.generic_error("command_failed")
+
+def get_storage_info(u):
+    ret = None
+    for section in utils.get_all_by_type(u, 'fstab', 'mount'):
+        if u.get('fstab', section, 'target', default='') == '/mnt/data':
+            ret = u.get_all('fstab', section)
+            if section != 'ns_data':
+                # Fix section name that get lost during the upgrade:
+                # the section name is used by remove-storage script
+                u.rename('fstab', section, 'ns_data')
+                u.commit('fstab')
+            break
+    return ret
+
+def list_devices():
+    devices = []
+    p = subprocess.run(["/usr/bin/lsblk", "--json", "-b", "--output-all"], check=True, capture_output=True, text=True)
+    data = json.loads(p.stdout)
+    for device in data["blockdevices"]:
+        if device['type'] == 'disk':
+            mounted = False
+            if 'children' in device:
+                for child in device['children']:
+                    for mount in child['mountpoints']:
+                        if mount is not None:
+                            mounted = True
+            if not mounted and not device['ro']:
+                item = {"name": device['name'], "size": int(device["size"]), "path": device["path"], "type": "disk", "model": None, "vendor": None}
+                if device["model"] is not None:
+                    item["model"] = device["model"].strip()
+                else:
+                    item["model"] = device.get("tran")
+                if device["vendor"] is not None:
+                    item["vendor"] = device["vendor"].strip()
+                devices.append(item)
+    try:
+        p = subprocess.run(["/usr/libexec/ns-storage-has-free-space"], check=True, capture_output=True, text=True)
+        device = json.loads(p.stdout)
+        item = {"name": device['name'], "size": device["size"], "path": device["path"], "type": "partition", "model": None, "vendor": None}
+        devices.append(item)
+    except:
+        pass
+
+    return {"devices": devices}
+
+
+def get_configuration():
+    u = EUci()
+    os_device = ''
+    try:
+        proc = subprocess.run("mount | grep /boot | uniq | awk '{print $1}'", shell=True, check=True, capture_output=True, text=True)
+        os_device = proc.stdout.strip()[:-1]
+    except:
+        return utils.generic_error("os_device_not_found")
+
+    ret = {"name": None, "size": None, "path": None, "model": None, "vendor": None}
+    try:
+        info = get_storage_info(u)
+        p = subprocess.run(["/usr/bin/lsblk", "--json", "-b", "--output-all"], check=True, capture_output=True, text=True)
+        data = json.loads(p.stdout)
+        cur = None
+        for device in data["blockdevices"]:
+            if 'children' in device:
+                for child in device['children']:
+                    if child['label'] == info["label"]:
+                        #print(f'{os_device} vs {child["path"]}')
+                        if os_device == device['path']:
+                            cur = child
+                        else:
+                            cur = device
+        if cur:
+            ret["name"] = cur['name']
+            ret["size"] = cur["size"]
+            ret["path"] = cur["path"]
+            ret["type"] = cur["type"]
+            if cur["model"] is not None:
+                ret["model"] = cur["model"].strip()
+            else:
+                ret["model"] = cur.get("tran")
+            if cur["vendor"] is not None:
+                ret["vendor"] = cur["vendor"].strip()
+    except:
+        pass
+    return ret
+
+def add_storage(device, dtype):
+    if dtype == "partition":
+        try:
+            subprocess.run(["/usr/libexec/ns-storage-has-free-space"], check=True, capture_output=True)
+        except Exception as e:
+            print(e, file=sys.stderr)
+            return utils.generic_error("no_free_space")
+        try:
+            p = subprocess.run("/usr/libexec/ns-storage-setup-partition", check=True, capture_output=True, text=True)
+            device = json.loads(p.stdout)['device']
+        except Exception as e:
+            print(e, file=sys.stderr)
+            return utils.generic_error("setup_partition_failed")
+    elif dtype == "disk":
+        try:
+            p = subprocess.run(["/usr/libexec/ns-storage-setup-disk", device], check=True, capture_output=True)
+            device = json.loads(p.stdout)['device']
+        except Exception as e:
+            print(e, file=sys.stderr)
+            return utils.generic_error("disk_setup_failed")
+    else:
+        return utils.validation_error("type", "bad_device_type", dtype)
+
+    try:
+        subprocess.run(["/usr/sbin/add-storage", device], check=True, capture_output=True)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        return utils.generic_error("failed_to_add_storage")
+    return {"result": "success"}
+
+
+def storage_health_check():
+    try:
+        response = subprocess.run('/usr/sbin/storage-status', check=True, capture_output=True, text=True)
+        return {
+            "status": response.stdout.strip()
+        }
+    except CalledProcessError:
+        return utils.generic_error('process_failed_to_run')
+
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        "list-devices": {},
+        "add-storage": {"device": "/dev/sdb", "type": "disk"},
+        "remove-storage": {},
+        "get-configuration": {},
+        "health-check": {}
+    }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    if action == "list-devices":
+        ret = list_devices()
+    elif action == "add-storage":
+        args = json.loads(sys.stdin.read())
+        ret = add_storage(args.get('device'), args.get('type', 'disk'))
+    elif action == "remove-storage":
+        ret = run("/usr/sbin/remove-storage")
+    elif action == "get-configuration":
+        ret = get_configuration()
+    elif action == "health-check":
+        ret = storage_health_check()
+    print(json.dumps(ret))

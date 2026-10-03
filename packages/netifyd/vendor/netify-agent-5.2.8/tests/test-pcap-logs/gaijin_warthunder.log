@@ -1,0 +1,13 @@
+offline0: i4pc-------r---- UDP [OR] 185.253.20.249:20021 <-- [L] 192.168.88.231:36929
+    : Gaijin
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 95.211.246.178:20011 <-- [L] 192.168.88.231:37333
+    : Gaijin
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

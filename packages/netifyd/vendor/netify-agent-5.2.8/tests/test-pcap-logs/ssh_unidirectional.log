@@ -1,0 +1,6 @@
+offline0: i4pcugx-------F- TCP [L] 192.168.2.1:22 <-- [OL] 192.168.2.198:50306
+    : SSH
+    : CT ID: 0: MARK: 0
+    : SSH/SA: SSH-2.0-OpenSSH_7.4p1 Debian-10+deb9u7
+    : DP: 13
+

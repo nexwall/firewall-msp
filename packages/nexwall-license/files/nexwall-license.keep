@@ -1,0 +1,8 @@
+/etc/config/nexwall-license
+/etc/nexwall-license/hwid
+/etc/nexwall-license/serial
+/etc/nexwall-license/device_token
+/etc/nexwall-license/device.key
+/etc/nexwall-license/license.json
+/etc/nexwall-license/first_seen
+/etc/nexwall-license/feed_serial

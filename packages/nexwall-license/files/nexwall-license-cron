@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# The license core (daemon) schedules its own check-ins, enforcement and updates. Older images ran them from
+# cron: remove those entries on upgrade, and make sure the service is enabled.
+
+touch /etc/crontabs/root
+sed -i '/nexwall-license-register/d' /etc/crontabs/root
+sed -i '/nexwall-license-enforce/d' /etc/crontabs/root
+
+/etc/init.d/nexwall-license enable 2>/dev/null
+
+exit 0

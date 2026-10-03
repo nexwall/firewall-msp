@@ -1,0 +1,211 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Manage the unit's license, validated against the Nexwall license server
+
+import sys
+import json
+import os
+import re
+import subprocess
+from datetime import datetime, timezone
+from nethsec import utils
+from nethsec import license as nx_license
+
+LICENSE_FILE = '/etc/nexwall-license/license.json'
+LICENSE_CLIENT = '/usr/sbin/nexwall-license-register'
+
+
+def log(message):
+    subprocess.run(['logger', '-t', 'ns.subscription', message], check=False)
+
+
+def parse_license_key(secret):
+    # The UI has a single field, the license server needs two credentials: the
+    # license key is "<partner_id>:<unlock_key>". Unlock keys are URL-safe base64
+    # (never contain ':'), partner ids are chosen by an admin, so split on the last ':'.
+    partner_id, sep, unlock_key = secret.strip().rpartition(':')
+    if not sep or not partner_id or not unlock_key:
+        return None
+    return partner_id, unlock_key
+
+
+def load_license():
+    # signature-verified payload only; a hand-edited or forged file reads as nothing
+    return nx_license.load()
+
+def register(args):
+    if "secret" not in args or not args["secret"]:
+        return utils.validation_error("secret", "required")
+
+    parsed = parse_license_key(args["secret"])
+    if parsed is None:
+        return utils.validation_error("secret", "invalid_license_key_format")
+
+    try:
+        subprocess.run([LICENSE_CLIENT, *parsed], check=True, capture_output=True, text=True, timeout=60)
+        return {"result": "success"}
+    except subprocess.CalledProcessError as e:
+        # the client's message says why (expired, suspended, device limit, revoked,
+        # unreachable, bad signature) - keep it for support, the UI shows a generic error
+        log((e.stderr or '').strip() or 'registration failed')
+    except Exception as e:
+        log(f'registration failed: {e}')
+    return utils.generic_error("invalid_secret_or_server_not_found")
+
+
+def unregister():
+    try:
+        if os.path.exists(LICENSE_FILE):
+            os.remove(LICENSE_FILE)
+        subprocess.run(['uci', '-q', 'set', 'nexwall-license.main.partner_id='], check=True)
+        subprocess.run(['uci', '-q', 'set', 'nexwall-license.main.unlock_key='], check=True)
+        subprocess.run(['uci', 'commit', 'nexwall-license'], check=True)
+        return {"result": "success"}
+    except Exception as e:
+        log(f'unregister failed: {e}')
+        return utils.generic_error("unregister_failure")
+
+
+def get_serial():
+    try:
+        with open('/etc/nexwall-license/serial') as f:
+            serial = f.read().strip()
+            if serial:
+                return serial
+    except OSError:
+        pass
+    try:
+        return subprocess.run(['/usr/sbin/nexwall-serial'], capture_output=True, text=True, timeout=10).stdout.strip()
+    except Exception:
+        return ''
+
+
+def _ts(value):
+    """ISO timestamp -> aware datetime or None."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def evaluate(lic, now=None):
+    """Effective license state right now. Evaluated locally, so a unit that is offline past its
+    trial or subscription end stops being licensed without needing the server to say so."""
+    now = now or datetime.now(timezone.utc)
+    if not lic or not lic.get("hwid"):
+        return "not_registered"
+    lease = _ts(lic.get("valid_until"))
+    if lease is None or lease <= now:
+        return "unlicensed"  # lease not renewed: same rule as nethsec.license
+    state = lic.get("license_state")
+    if state is None:  # license issued before the trial model existed
+        state = "subscribed" if lic.get("status") == "active" else "unlicensed"
+    if state == "subscribed":
+        end = _ts(lic.get("subscription_end"))
+        return "subscribed" if end and end > now and lic.get("status") == "active" else "unlicensed"
+    if state == "trial":
+        end = _ts(lic.get("trial_end"))
+        return "trial" if end and end > now else "unlicensed"
+    return "unlicensed"
+
+
+def info():
+    serial = get_serial()
+    lic = load_license()
+    state = nx_license.state()  # what the license core decides: subscribed, trial or unlicensed
+    registered = bool(lic and lic.get("hwid"))
+    mods = nx_license.modules()
+    modules = [{"code": code, "name": name, "kind": kind, "active": bool(mods.get(code))}
+               for code, name, kind in nx_license.MODULES]
+    now = datetime.now(timezone.utc)
+    trial_end = _ts(lic.get("trial_end")) if lic else None
+    sub_end = _ts(lic.get("subscription_end")) if lic else None
+    assigned = bool(lic) and lic.get("status") not in ("unassigned", None)
+    return {
+        "serial": serial,
+        "state": state,
+        "registered": registered,
+        "assigned": assigned,
+        # non-empty only while a subscription is active: kept for the pages that read it as "subscribed"
+        "systemd_id": lic["hwid"] if (registered and state == "subscribed") else "",
+        "plan": (lic.get("partner_name") or "-") if lic else "-",
+        "company": (lic.get("partner_name") or "") if assigned else "",
+        "expiration": int(sub_end.timestamp()) * 1000 if sub_end else 0,
+        "trial_end": int(trial_end.timestamp()) * 1000 if trial_end else 0,
+        "trial_days_left": max(0, (trial_end - now).days) if trial_end and state == "trial" else None,
+        "active": state == "subscribed",
+        "modules": modules,
+        "entitlements": nx_license.entitlements(),
+        "sync": inventory_status(),
+    }
+
+
+def inventory_status():
+    try:
+        # edit this path also in send-inventory
+        with open('/tmp/inventory-sent.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        # sync not attempted yet, return default values
+        return {"status": "not attempted"}
+
+
+def sync():
+    """Check in with the license server now (registers the unit by itself the first time) and report how it went."""
+    code = ''
+    message = ''
+    ok = False
+    try:
+        proc = subprocess.run([LICENSE_CLIENT], capture_output=True, text=True, timeout=90)
+        ok = proc.returncode == 0
+        message = (proc.stderr or '').strip()
+        m = re.search(r'\(([A-Z_]{4,})\)\s*$', message)
+        code = m.group(1) if m else ''
+    except Exception as e:  # noqa: BLE001 - the UI shows a generic error, the log has the reason
+        message = str(e)
+    status = {"status": "success" if ok else "error", "last_attempt": datetime.now(timezone.utc).isoformat(),
+              "code": code, "message": message[:300]}
+    try:
+        with open('/tmp/inventory-sent.json', 'w') as f:
+            json.dump(status, f)
+    except OSError:
+        pass
+    if not ok:
+        log(f'synchronization failed: {message}')
+    return status
+
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        "register": {"secret": "<partner_id>:<unlock_key>"},
+        "unregister": {},
+        "info": {},
+        "inventory-status": {},
+        "send-inventory": {},
+        "sync": {}
+    }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    if action == "register":
+        args = json.loads(sys.stdin.read())
+        ret = register(args)
+    elif action == "unregister":
+        ret = unregister()
+    elif action == "info":
+        ret = info()
+    elif action == "inventory-status":
+        ret = inventory_status()
+    elif action in ("send-inventory", "sync"):
+        ret = sync()
+
+    print(json.dumps(ret))

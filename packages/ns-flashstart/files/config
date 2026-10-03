@@ -1,0 +1,7 @@
+config main 'global'
+    option user ''
+    option password ''
+    option enabled '0'
+    option proplus '0'
+    list zones ''
+    list bypass ''

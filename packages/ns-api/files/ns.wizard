@@ -1,0 +1,160 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2025 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import json
+import subprocess
+import sys
+
+from euci import EUci
+from nethsec import utils
+from nethsec.utils import ValidationError
+
+def ubus(obj, method, payload=None):
+    """Call another ns.* object (the same code the pages use, license checks included). Returns (data, error code)."""
+    proc = subprocess.run(["ubus", "call", obj, method, json.dumps(payload or {})], capture_output=True, text=True, timeout=120)
+    if proc.returncode != 0:
+        return None, (proc.stderr or "failed").strip()[:200]
+    try:
+        data = json.loads(proc.stdout or "{}")
+    except ValueError:
+        return None, "invalid_answer"
+    if isinstance(data, dict) and "validation" in data:
+        errors = data["validation"].get("errors") or [{}]
+        return data, errors[0].get("message") or "validation_error"
+    if isinstance(data, dict) and data.get("error"):
+        return data, str(data.get("message") or data.get("error"))
+    return data, None
+
+
+def apply_ips(enabled):
+    data, err = ubus("ns.snort", "settings")
+    if err:
+        return err
+    settings = {
+        "enabled": enabled,
+        "ns_policy": data.get("ns_policy") if data.get("ns_policy") in ("connectivity", "balanced", "security") and data.get("enabled") else "balanced",
+        "home_net": data.get("home_net") or ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8"],
+        "max_inspect_bytes": data.get("max_inspect_bytes", 1048576),
+        "mode": "block",
+        "log_alerts": bool(data.get("log_alerts")),
+    }
+    _out, err = ubus("ns.snort", "save-settings", settings)
+    return err
+
+
+def apply_dns(enabled):
+    _out, err = ubus("ns.threatshield", "dns-edit-settings",
+                     {"enabled": enabled, "zones": ["lan"], "ports": ["53", "853"]} if enabled else {"enabled": False})
+    if err or not enabled:
+        return err
+    _out, err = ubus("ns.threatshield", "dns-edit-all-blocklists", {"enabled": True})
+    return err
+
+
+def apply_ip(enabled):
+    if not enabled:
+        _out, err = ubus("ns.threatshield", "edit-settings", {"enabled": False})
+        return err
+    data, err = ubus("ns.threatshield", "list-settings")
+    if err:
+        return err
+    cur = (data or {}).get("data", {})
+    payload = {"enabled": True}
+    for key in ("ban_logprerouting", "ban_loginbound", "ban_logoutbound", "ban_loglimit", "ban_logcount", "ban_logterm",
+                "ban_icmplimit", "ban_synlimit", "ban_udplimit", "ban_nftexpiry"):
+        if key in cur:
+            payload[key] = cur[key]
+    if "ban_logcount" in payload:
+        try:
+            payload["ban_logcount"] = int(payload["ban_logcount"])  # reported as text, expected as a number
+        except (TypeError, ValueError):
+            payload["ban_logcount"] = 3
+    _out, err = ubus("ns.threatshield", "edit-settings", payload)
+    if err:
+        return err
+    _out, err = ubus("ns.threatshield", "edit-all-blocklists", {"enabled": True})
+    return err
+
+
+cmd = sys.argv[1]
+
+if cmd == "list":
+    json.dump({
+        "get": {},
+        "set": {
+            "complete": False,
+            "password_changed": False,
+        },
+        "set-password-unauth": {
+            "password": "str",
+            "password_confirm": "str",
+        },
+        "apply-security": {"ips": True, "dns": True, "ip": True},
+    }, sys.stdout)
+elif cmd == "call":
+    action = sys.argv[2]
+    e_uci = EUci()
+    if action == "get":
+        json.dump({
+            "complete": e_uci.get("ns-wizard", "config", "complete", dtype=bool, default=False),
+            "password_changed": e_uci.get("ns-wizard", "config", "password_changed", dtype=bool, default=False),
+        }, sys.stdout)
+    elif action == "set":
+        try:
+            data = json.loads(sys.stdin.read())
+            if "complete" in data:
+                if not isinstance(data["complete"], bool):
+                    raise ValidationError("complete", "invalid")
+                e_uci.set("ns-wizard", "config", "complete", data["complete"])
+            if "password_changed" in data:
+                if not isinstance(data["password_changed"], bool):
+                    raise ValidationError("password_changed", "invalid")
+                e_uci.set("ns-wizard", "config", "password_changed", data["password_changed"])
+            e_uci.save("ns-wizard")
+            json.dump({"message": "successful"}, sys.stdout)
+        except ValidationError as ex:
+            json.dump(utils.validation_error(ex.parameter, ex.message, ex.value), sys.stdout)
+    elif action == "apply-security":
+        # switches the security services on (or off) from the setup wizard; only what is sent is touched.
+        # Every service answers on its own: one that the license does not include does not stop the others.
+        data = json.loads(sys.stdin.read() or "{}")
+        results = {}
+        for name, func in (("ips", apply_ips), ("dns", apply_dns), ("ip", apply_ip)):
+            if name in data:
+                err = func(bool(data[name]))
+                results[name] = {"ok": err is None, "error": err}
+        json.dump({"results": results}, sys.stdout)
+    elif action == "set-password-unauth":
+        # Reachable without a session, deliberately - see nexwall-ui's StandaloneApp.vue and
+        # ns-api-server's UnauthWizardSetPassword. The ONLY thing that makes this safe is the
+        # check immediately below: once complete is true, this whole branch refuses every call,
+        # forever, regardless of what the caller sends. There is no other gate on this action.
+        try:
+            if e_uci.get("ns-wizard", "config", "complete", dtype=bool, default=False):
+                raise ValidationError("password", "wizard_already_complete")
+
+            data = json.loads(sys.stdin.read())
+            password = data.get("password", "")
+            password_confirm = data.get("password_confirm", "")
+            if not password:
+                raise ValidationError("password", "required")
+            if password != password_confirm:
+                raise ValidationError("password_confirm", "password_mismatch")
+
+            # same mechanism ns.account set-password already uses for the root user
+            subprocess.run(["ubus", "call", "luci", "setPassword", json.dumps({
+                "username": "root",
+                "password": password,
+            })], capture_output=True, check=True)
+
+            e_uci.set("ns-wizard", "config", "password_changed", True)
+            e_uci.save("ns-wizard")
+            json.dump({"message": "successful"}, sys.stdout)
+        except ValidationError as ex:
+            json.dump(utils.validation_error(ex.parameter, ex.message, ex.value), sys.stdout)
+        except subprocess.CalledProcessError:
+            json.dump(utils.generic_error("failed_to_set_password"), sys.stdout)

@@ -1,0 +1,41 @@
+offline0: i4pc-------r---- UDP [OR] 96.78.208.202:29195 <-- [L] 207.246.88.254:56857
+    : RIPE/Atlas
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 23.57.157.60:36137 --> [L] 152.246.227.169:4712
+    : RIPE/Atlas
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 19.132.223.32:36467 --> [L] 168.139.124.224:11476
+    : RIPE/Atlas.netify.ford
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ UDP [OR] 9.160.203.32:41059 --> [L] 68.90.0.255:38409
+    : RIPE/Atlas
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 127.251.0.38:26625 --> [OR] 250.175.205.18:20715
+    : RIPE/Atlas
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 128.53.92.31:2164 <-- [L] 147.63.105.185:48224
+    : RIPE/Atlas.netify.barclays
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 252.216.99.208:15422 --> [L] 255.103.25.63:5081
+    : RIPE/Atlas
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

@@ -1,0 +1,29 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import nsmigration
+from nethsec import firewall, utils
+
+(u, data, nmap) = nsmigration.init("rules.json")
+
+def by_position(e):
+    return e["position"]
+
+data['rules'].sort(key=by_position)
+
+for rule in data['rules']:
+    rname = utils.get_id(rule.pop('key'))
+    rule['name'] = utils.sanitize(rule['name'])
+    del rule['position']
+    nsmigration.vprint(f"Creating firewall rule {rname}")
+    u.set("firewall", rname, "rule")
+
+    for o in rule:
+        u.set("firewall", rname, o, rule[o])
+
+# Save configuration
+u.commit("firewall")

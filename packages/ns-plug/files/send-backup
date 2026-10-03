@@ -1,0 +1,60 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Execute the backup.
+# If the backup has changes since last run, upload it to remote server
+
+set -e
+
+WORK_DIR="/var/backup"
+BACKUP="$WORK_DIR/backup-$(date +%s).tar.gz"
+EXTRACTED_BACKUP="$WORK_DIR/extracted"
+MD5="$WORK_DIR/md5"
+MD5_LAST="/etc/backup.md5"
+PASSPHRASE="/etc/backup.pass"
+
+cleanup() {
+    ret=$?
+    rm -f "$BACKUP" "$BACKUP.gpg" "$MD5"
+    rm -rf "$EXTRACTED_BACKUP"
+    exit "$ret"
+}
+trap cleanup EXIT
+
+send() {
+    if [ -s "$PASSPHRASE" ]; then
+        # send encrypted backup
+        gpg --batch -c --yes --passphrase-file "$PASSPHRASE" "$BACKUP"
+        remote-backup upload "$BACKUP.gpg"
+        mv "$MD5" "$MD5_LAST"
+    else
+        # password not set, abort upload
+        exit 4
+    fi
+}
+
+SYSTEM_ID=$(uci -q get ns-plug.config.system_id)
+SYSTEM_SECRET=$(uci -q get ns-plug.config.secret)
+
+if [ -z "$SYSTEM_ID" ] || [ -z "$SYSTEM_SECRET" ]; then
+    # System ID and System secret not found, configure ns-plug to enable it
+    exit 0
+fi
+
+# Create the backup
+mkdir -p "$WORK_DIR"
+sysupgrade -q -k -b "$BACKUP"
+
+rm -rf "$EXTRACTED_BACKUP"
+mkdir -p "$EXTRACTED_BACKUP"
+tar -zxf "$BACKUP" -C "$EXTRACTED_BACKUP"
+find "$EXTRACTED_BACKUP" -type f -exec md5sum {} \; | sort > "$MD5"
+
+# Send backup if there is no md5 list saved, or if the md5 list changed
+if [ ! -f "$MD5_LAST" ] || ! cmp -s "$MD5" "$MD5_LAST"; then
+    send
+fi

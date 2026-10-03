@@ -1,0 +1,87 @@
+offline0: i4pc------------ UDP [L] 192.168.0.16:53 <-- [OL] 192.168.0.123:55566
+    : DNS.netify.microsoft
+    : CT ID: 0: MARK: 0
+    : H: checkappexec.microsoft.com
+    : DP: 2
+
+offline0: i4pcu------r---- TCP [OR] 172.211.159.152:443 <-- [L] 192.168.0.123:64613
+    : HTTP/S.netify.microsoft
+    : CT ID: 0: MARK: 0
+    : D: prod-agic-we-7.westeurope.cloudapp.azure.com H: checkappexec.microsoft.com
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: checkappexec.microsoft.com TLS/CN: smartscreen.microsoft.com
+    : TLS/IDN: C=US, O=Microsoft Corporation, CN=Microsoft Azure RSA TLS Issuing CA 04 TLS/SDN: C=US, ST=WA, L=Redmond, O=Microsoft Corporation, CN=smartscreen.microsoft.com
+    : JA4: t12d1909h2_d83cc789557e_7af1ed941c26
+    : RID 30: TLS Certificate Expired
+    : DP: 13
+
+offline0: i4pc-------r---- ICMP [L] 192.168.0.16:0 --> [OL] 192.168.0.123:0
+    : ICMP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pcu------r---- TCP [OR] 86.3.18.251:443 <-- [L] 192.168.0.123:64623
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.sodinn6.com
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: www.sodinn6.com
+    : JA4: t13d181100_6c2ba73853a4_d41ae481755e
+    : RID 42: Unsafe Protocol
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+
+offline0: i4pcu------r---- TCP [OR] 178.17.170.254:443 <-- [L] 192.168.0.123:64624
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.2xik.com
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: www.2xik.com
+    : JA4: t13d181100_6c2ba73853a4_d41ae481755e
+    : RID 42: Unsafe Protocol
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+
+offline0: i4pc--x----r---- TCP [OR] 86.3.18.251:443 <-- [L] 192.168.0.123:64621
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.w2f34byk6sroic.com
+    : V: 0x0303
+    : TLS/SNI: www.w2f34byk6sroic.com
+    : JA4: t13d181100_6c2ba73853a4_d41ae481755e
+    : RID 27: Suspicious DGA Domain name
+    : RID 42: Unsafe Protocol
+    : RID 47: TLS ALPN Not Found
+    : DP: 11
+
+offline0: i4pc--x----r---- TCP [L] 192.168.0.123:64625 --> [OR] 194.164.197.45:443
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.raww4onzy3tam7cip372snd.com
+    : V: 0x0303
+    : TLS/SNI: www.raww4onzy3tam7cip372snd.com
+    : JA4: t13d181100_6c2ba73853a4_d41ae481755e
+    : RID 27: Suspicious DGA Domain name
+    : RID 42: Unsafe Protocol
+    : RID 47: TLS ALPN Not Found
+    : DP: 7
+
+offline0: i4pc--x----r---- TCP [OR] 178.17.170.254:443 <-- [L] 192.168.0.123:64622
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.v2trefdg62xsck3upw2iad5y.com
+    : V: 0x0303
+    : TLS/SNI: www.v2trefdg62xsck3upw2iad5y.com
+    : JA4: t13d181100_6c2ba73853a4_d41ae481755e
+    : RID 27: Suspicious DGA Domain name
+    : RID 42: Unsafe Protocol
+    : RID 47: TLS ALPN Not Found
+    : DP: 13
+
+offline0: i4pc--x--------- TCP [OR] 155.133.248.43:443 <-- [L] 192.168.0.123:64282
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : DP: 2
+

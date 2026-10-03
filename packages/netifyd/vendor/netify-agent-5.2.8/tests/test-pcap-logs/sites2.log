@@ -1,0 +1,45 @@
+offline0: i4pcu----------- TCP [OR] 2.23.155.106:443 <-- [L] 192.168.12.67:46892
+    : HTTP/S.netify.shein
+    : CT ID: 0: MARK: 0
+    : H: img.shein.com
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: img.shein.com
+    : JA4: t13d1513h2_8daaf6152771_eca864cca44a
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 20.15.0.9:443 <-- [L] 192.168.12.67:47694
+    : HTTP/S.netify.temu
+    : CT ID: 0: MARK: 0
+    : H: gtm.temu.com
+    : V: 0x0303 CS: 0x1302
+    : TLS/SNI: gtm.temu.com
+    : JA4: t13d1712h2_5b57614c22b0_3f5d972527c0
+    : DP: 7
+
+offline0: i4pcu----------- TCP [OR] 59.82.122.224:443 <-- [L] 192.168.12.67:43446
+    : HTTP/S.netify.taobao
+    : CT ID: 0: MARK: 0
+    : H: umdc.taobao.com
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: umdc.taobao.com TLS/CN: alibabachengdun.com
+    : TLS/IDN: C=BE, O=GlobalSign nv-sa, CN=GlobalSign Organization Validation CA - SHA256 - G3 TLS/SDN: C=CN, ST=ZheJiang, L=HangZhou, O=Alibaba (China) Technology Co., Ltd., CN=*.alibabachengdun.com
+    : JA4: t13d1713ht_5b57614c22b0_eca864cca44a
+    : DP: 8
+
+offline0: i4pc----------F- TCP [L] 192.168.0.100:52124 --> [OR] 213.180.193.9:80
+    : HTTP.netify.yandex
+    : CT ID: 0: MARK: 0
+    : H: scbh.yandex.net
+    : HTTP/UA: yandexmini_2/0.270.1.48.2683694502.20241115.199
+    : URL: scbh.yandex.net/generate_204
+    : DP: 6
+
+offline0: i4pc--x--------- TCP [OR] 151.101.1.233:443 <-- [L] 192.168.12.67:39974
+    : HTTP/S.netify.cbs
+    : CT ID: 0: MARK: 0
+    : H: vod-gcs-cedexis.cbsaavideo.com
+    : V: 0x0303
+    : TLS/SNI: vod-gcs-cedexis.cbsaavideo.com
+    : JA4: t13d1513ht_8daaf6152771_eca864cca44a
+    : DP: 4
+

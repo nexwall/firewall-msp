@@ -1,0 +1,11 @@
+offline0: i4pc-g---------- UDP [OR] 93.33.47.58:57604 --> [L] 192.168.12.169:49207
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 32
+
+offline0: i4pc-g-----r---- UDP [OR] 185.155.137.30:36535 <-- [L] 192.168.12.169:49207
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 32
+

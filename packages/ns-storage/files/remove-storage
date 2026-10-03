@@ -1,0 +1,64 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+set -e
+
+rom_part=$(lsblk -l --json | jq -r '.blockdevices[] | select(any(.mountpoints[]; . == "/boot")) | .name')
+rom_disk=$(lsblk -lno pkname /dev/$rom_part)
+
+# Both stay empty when no storage is mounted, e.g. on factory reset
+data_part=$(lsblk -l --json | jq -r '.blockdevices[] | select(any(.mountpoints[]; . == "/mnt/data")) | .name')
+data_disk=''
+[ -n "$data_part" ] && data_disk=$(lsblk -lno pkname "/dev/$data_part")
+
+# Removing auto-mount
+uci -q delete fstab.ns_data || :
+uci commit fstab
+
+# Configuring rsyslog
+uci -q delete rsyslog.ns_data || :
+uci commit rsyslog
+/etc/init.d/rsyslog restart
+
+# Removing sync-data cron job
+(crontab -l 2>/dev/null || :) | grep -v "/usr/sbin/sync-data" | sort | uniq | crontab -
+/etc/init.d/cron restart
+
+# Stop process that will prevent umount
+/etc/init.d/dnsmasq stop
+/etc/init.d/victoria-metrics stop
+/etc/init.d/victoria-logs stop 2>/dev/null || :
+# Sync and wait for the disk to be free
+sync && sleep 5
+
+# Umounting data device
+if grep -q " /mnt/data " /proc/mounts; then
+    umount -f /mnt/data
+fi
+rm -rf /mnt/data
+
+# Release the partition being removed. Only one partition may carry the
+# ns_data label, otherwise a storage created later would be mounted over
+# /mnt/data alongside this one.
+if [ -z "$data_part" ]; then
+    : # no storage was mounted, nothing to release
+elif [ "$rom_disk" == "$data_disk" ]; then
+    # Partition carved out of the OS disk: give the space back
+    parted -s "/dev/${data_disk}" rm "$(cat "/sys/class/block/${data_part}/partition")"
+else
+    # Secondary drive: keep the partition so its logs can still be
+    # inspected, just drop the label
+    tune2fs -L "" "/dev/${data_part}" >/dev/null
+fi
+
+# Restore dnsmasq to /tmp before the storage disappears.
+/usr/libexec/ns-storage-dhcp-leases
+
+# Start services
+/etc/init.d/dnsmasq start
+/etc/init.d/victoria-metrics start
+/etc/init.d/victoria-logs start 2>/dev/null || :

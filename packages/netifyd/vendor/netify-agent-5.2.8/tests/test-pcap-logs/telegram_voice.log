@@ -1,0 +1,66 @@
+offline0: i4pc------------ UDP [L] 192.168.12.1:53 <-- [OL] 192.168.12.67:44574
+    : DNS.netify.crashlytics
+    : CT ID: 0: MARK: 0
+    : H: crashlyticsreports-pa.googleapis.com
+    : DP: 2
+
+offline0: i4pcu----------- UDP [OR] 91.108.9.68:596 <-- [L] 192.168.12.67:41011
+    : Telegram/VoIP.netify.telegram
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 91.108.9.68:596
+    : DP: 7
+
+offline0: i4pcu------r---- UDP [OR] 91.108.9.34:1400 <-- [L] 192.168.12.67:42567
+    : Telegram/VoIP.netify.telegram
+    : CT ID: 0: MARK: 0
+    : H: telegram.org
+    : STUN/MAPPED: 93.35.170.144:39263
+    : STUN/PEER: 91.108.9.34:47026
+    : STUN/RELAYED: 91.108.9.34:51052
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 91.108.17.41:1400 <-- [L] 192.168.12.67:44405
+    : Telegram/VoIP.netify.telegram
+    : CT ID: 0: MARK: 0
+    : H: telegram.org
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pcu----------- UDP [OR] 91.108.13.51:597 <-- [L] 192.168.12.67:39027
+    : Telegram/VoIP.netify.telegram
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 91.108.13.51:597
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 91.108.13.52:1400 <-- [L] 192.168.12.67:46013
+    : Telegram/VoIP.netify.telegram
+    : CT ID: 0: MARK: 0
+    : H: telegram.org
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------r---- ICMP [OR] 91.108.9.34:0 <-- [L] 192.168.12.67:0
+    : ICMP.netify.telegram
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc--x--------- UDP [OR] 91.108.17.7:597 <-- [L] 192.168.12.67:46868
+    : Telegram.netify.telegram
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i6pc--x--------- UDP [L] fe80::76da:38ff:feed:5332:5353 --> [OM] ff02::fb:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _ipps._tcp.local
+    : DP: 1
+
+offline0: i4pc--x--------- UDP [L] 192.168.12.1:5353 --> [OM] 224.0.0.251:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _ipps._tcp.local
+    : DP: 1
+

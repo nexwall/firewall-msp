@@ -1,0 +1,73 @@
+offline0: i4pc-------r---- TCP [OR] 87.240.132.78:443 <-- [L] 192.168.1.249:60436
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 13
+
+offline0: i4pc-------r---- TCP [OR] 87.240.169.10:443 <-- [L] 192.168.1.249:32990
+    : HTTP/S.netify.vk
+    : CT ID: 0: MARK: 0
+    : H: sun9-87.userapi.com
+    : V: 0x0303
+    : TLS/SNI: sun9-87.userapi.com
+    : JA4: t13d1715h2_5b57614c22b0_3d5424432f57
+    : RID 46: Unidirectional Traffic
+    : DP: 15
+
+offline0: i4pc-------r---- TCP [OR] 87.240.185.137:443 <-- [L] 192.168.1.249:59154
+    : HTTP/S.netify.vk
+    : CT ID: 0: MARK: 0
+    : H: sun9-10.userapi.com
+    : V: 0x0303
+    : TLS/SNI: sun9-10.userapi.com
+    : JA4: t13d1715h2_5b57614c22b0_3d5424432f57
+    : RID 46: Unidirectional Traffic
+    : DP: 15
+
+offline0: i4pc-------r---- TCP [OR] 87.240.129.140:443 <-- [L] 192.168.1.249:40344
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 13
+
+offline0: i4pc-------r---- TCP [OR] 87.240.129.131:443 <-- [L] 192.168.1.249:33904
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 13
+
+offline0: i4pc-------r---- TCP [OR] 87.240.169.3:443 <-- [L] 192.168.1.249:47934
+    : HTTP/S.netify.vk
+    : CT ID: 0: MARK: 0
+    : H: sun9-80.userapi.com
+    : V: 0x0303
+    : TLS/SNI: sun9-80.userapi.com
+    : JA4: t13d1715h2_5b57614c22b0_3d5424432f57
+    : RID 46: Unidirectional Traffic
+    : DP: 15
+
+offline0: i4pc-------r---- TCP [OR] 87.240.169.11:443 <-- [L] 192.168.1.249:59722
+    : HTTP/S.netify.vk
+    : CT ID: 0: MARK: 0
+    : H: sun9-88.userapi.com
+    : V: 0x0303
+    : TLS/SNI: sun9-88.userapi.com
+    : JA4: t13d1715h2_5b57614c22b0_3d5424432f57
+    : RID 46: Unidirectional Traffic
+    : DP: 15
+
+offline0: i4pc--x--------- TCP [OR] 87.240.129.135:443 <-- [L] 192.168.1.249:43938
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc--x--------- TCP [OR] 87.240.129.135:443 <-- [L] 192.168.1.249:56504
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc--x--------- TCP [OR] 87.240.132.67:443 <-- [L] 192.168.1.249:43644
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : DP: 2
+

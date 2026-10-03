@@ -1,0 +1,234 @@
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:57970
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:61201
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:60835
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:62775
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:56581
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:56765
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:50581
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:61107
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:64954
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:59621
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:52485
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:54938
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:56839
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:58155
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:64487
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:49704
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:55311
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:56111
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:64494
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:51415
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:63776
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:50008
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:49737
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:51887
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:60127
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:54546
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:64432
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:59613
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:65063
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:51929
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:52417
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:59474
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:53839
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:55948
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:51383
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:64700
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:54549
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:54760
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 181.214.35.149:443 <-- [L] 192.168.2.100:49152
+    : AVAST/SecureDNS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

@@ -1,0 +1,86 @@
+config defaults 'ns_defaults'
+	option input		REJECT
+	option output		ACCEPT
+	option forward		REJECT
+
+config zone 'ns_lan'
+	option name		lan
+	list   network		'lan'
+	option input		ACCEPT
+	option output		ACCEPT
+	option forward		ACCEPT
+
+config zone 'ns_wan'
+	option name		wan
+	list   network		'wan'
+	option input		REJECT
+	option output		ACCEPT
+	option forward		REJECT
+	option masq		1
+	option mtu_fix		1
+
+config forwarding 'ns_lan2wan'
+	option src		lan
+	option dest		wan
+
+config rule 'ns_allow_https'
+	option name 'Allow-HTTPS-from-WAN'
+	option proto 'tcp'
+	option src 'wan'
+	option dest_port '443'
+	option target 'ACCEPT'
+
+config rule 'ns_allow_ui'
+	option name 'Allow-UI-from-WAN'
+	option proto 'tcp'
+	option src 'wan'
+	option dest_port '9090'
+	option target 'ACCEPT'
+
+# We need to accept udp packets on port 68,
+# see https://dev.openwrt.org/ticket/4108
+config rule 'ns_dhcp_wan'
+	option name		Allow-DHCP-Renew
+	option src		wan
+	option proto		udp
+	option dest_port	68
+	option target		ACCEPT
+	option family		ipv4
+
+# Allow IPv4 ping
+config rule 'ns_ping_wan'
+	option name		Allow-Ping
+	option src		wan
+	option proto		icmp
+	option icmp_type	echo-request
+	option family		ipv4
+	option target		ACCEPT
+
+# Forward rules every unit starts with. The first one lets the LAN reach the internet; the
+# second one is the closing rule for that path and cannot be deleted (tag "protected").
+# New forward rules are always placed before it.
+config rule 'ns_lan_to_wan'
+	option name 'LAN -> WAN'
+	option src 'lan'
+	option dest 'wan'
+	option target 'ACCEPT'
+	option ns_service '*'
+	option proto 'all'
+	option enabled '1'
+
+config rule 'ns_default_drop'
+	option name 'DROP DEFAULT'
+	option src 'lan'
+	option dest 'wan'
+	option target 'DROP'
+	option ns_service '*'
+	option proto 'all'
+	option enabled '1'
+	option log '1'
+	option log_limit '1/s'
+	list ns_tag 'protected'
+
+# include a file with users custom iptables rules
+config include 'ns_user_include'
+	option path /etc/firewall.user
+	option fw4_compatible 1

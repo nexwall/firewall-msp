@@ -1,0 +1,35 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Renew server certificate for the specified OpenVPN instance
+instance=$1
+if [ -z $instance ]; then
+    exit 1
+fi
+
+cn=$(uci get system.@system[0].hostname | cut -d '.' -f 1)
+if [ -z "$cn" ]; then
+    cn=NethSec
+fi
+
+# Set environment variables for EasyRSA
+export EASYRSA_BATCH=1
+export EASYRSA_CERT_EXPIRE=3650
+export EASYRSA_CRL_DAYS=3650
+export EASYRSA_REQ_CN=$cn
+
+if [ -f /etc/openvpn/$instance/pki/ca.crt ]; then
+    cd /etc/openvpn/$instance
+    (
+        /usr/bin/easyrsa revoke server
+        /usr/bin/easyrsa gen-crl
+        /usr/bin/easyrsa build-server-full server nopass
+    )
+    # change server key path in migrated systems
+    uci set openvpn.$instance.key="/etc/openvpn/$instance/pki/private/server.key"
+    uci commit openvpn
+fi

@@ -1,0 +1,6 @@
+offline0: i4pc-------r---- UDP [OR] 35.207.67.68:10000 <-- [L] 192.168.1.117:59446
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+

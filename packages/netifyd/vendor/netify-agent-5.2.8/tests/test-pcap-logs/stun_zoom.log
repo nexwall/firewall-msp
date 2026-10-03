@@ -1,0 +1,11 @@
+offline0: i4pc-------r---- UDP [OR] 134.224.90.111:8801 <-- [L] 192.168.43.169:48854
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 30: TLS Certificate Expired
+    : DP: 17
+
+offline0: i4pc------------ UDP [OR] 134.224.90.111:8801 <-- [L] 192.168.43.169:53065
+    : STUN
+    : CT ID: 0: MARK: 0
+    : DP: 17
+

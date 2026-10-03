@@ -1,0 +1,27 @@
+offline0: i4pcu----------- TCP [OR] 52.84.223.58:443 <-- [L] 192.168.1.128:54020
+    : HTTP/S.netify.dazn
+    : CT ID: 0: MARK: 0
+    : H: www.dazn.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: www.dazn.com
+    : JA4: t13d1715h2_5b57614c22b0_3d5424432f57
+    : DP: 4
+
+offline0: i4pcu----------- TCP [OR] 13.226.244.27:443 <-- [L] 192.168.1.128:46036
+    : HTTP/S.netify.dazn
+    : CT ID: 0: MARK: 0
+    : H: user-profile.ar.indazn.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: user-profile.ar.indazn.com
+    : JA4: t13d1715h2_5b57614c22b0_3d5424432f57
+    : DP: 4
+
+offline0: i4pcu----------- TCP [OR] 13.226.244.30:443 <-- [L] 192.168.1.128:40882
+    : HTTP/S.netify.dazn
+    : CT ID: 0: MARK: 0
+    : H: subscriptions-service.dazn-api.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: subscriptions-service.dazn-api.com
+    : JA4: t13d1715h2_5b57614c22b0_3d5424432f57
+    : DP: 4
+

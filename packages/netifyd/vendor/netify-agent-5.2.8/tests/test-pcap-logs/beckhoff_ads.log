@@ -1,0 +1,5 @@
+offline0: i4pc------------ TCP [L] 192.168.1.8:48898 <-- [OL] 192.168.1.99:49201
+    : Beckhoff/ADS
+    : CT ID: 0: MARK: 0
+    : DP: 4
+

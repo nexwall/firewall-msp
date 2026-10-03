@@ -1,0 +1,6 @@
+offline0: i4pc-------r---- OSPFIGP [L] 10.1.10.1:0 <-- [OL] 10.1.10.10:0
+    : OSPF
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

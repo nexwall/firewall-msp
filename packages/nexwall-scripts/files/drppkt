@@ -1,0 +1,68 @@
+#!/bin/sh
+# drppkt - live packet trace for Nexwall (nftables/fw4): "why was THIS packet dropped or allowed?"
+#
+# Like fwtrace, but it also hooks the INPUT chain (traffic to the firewall itself) and prints, for each
+# new flow, the decision, the deciding rule's name, the reason AND every named rule the packet crossed
+# on the way (including DPI / IP & Geo Blocking / IPS hand-off in their own tables).
+# Non-invasive: only a non-terminating `meta nftrace set 1` probe is inserted, removed on exit.
+# Engine: lib/trace.awk (shared with fwtrace), shell helpers: lib/common.sh.
+
+NX_NAME=drppkt
+NX_LIBDIR=${NX_LIBDIR:-/usr/lib/nexwall-scripts}
+[ -r "$NX_LIBDIR/common.sh" ] || NX_LIBDIR=$(dirname "$0")/../lib
+. "$NX_LIBDIR/common.sh"
+
+# prerouting first: every packet crosses it BEFORE the DPI chain, while dstnat only sees the first
+# packet of a connection - without it a DPI reject on an established flow is never traced
+CHAINS="prerouting dstnat input forward"
+
+usage() {
+	cat <<USAGE
+Usage: drppkt [options] <filter...>
+       drppkt --cleanup
+
+Filter tokens (join multiple with "and"):
+  host <ip>              match as destination         src host <ip>   as source
+  net <cidr>             match as destination network  src net <cidr>  as source
+  port <n>               match as destination port     src port <n>    as source
+  proto <tcp|udp|icmp>   restrict to a protocol        (IPv4 and IPv6 addresses accepted)
+
+Options:
+  -b, --both    also trace the reverse direction
+  -i SECS       stop by itself after SECS seconds
+  -j            one JSON object per line, with the full rule path (used by the log viewer)
+  --cleanup     remove leftover probe rules and exit
+  -h, --help    this help
+
+Examples:
+  drppkt host 10.10.10.1 and port 21
+  drppkt --both src host 192.168.1.102 -i 30
+  drppkt dst host 192.168.1.1 and dst port 443
+USAGE
+	exit 1
+}
+
+NX_BOTH=0; NX_TIMEOUT=0; JSON=0
+_args=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--cleanup) nx_remove_probes "DRPPKT" $CHAINS; echo "drppkt: removed $NX_REMOVED leftover probe rule(s)"; exit 0 ;;
+		-h|--help) usage ;;
+		-b|--both) NX_BOTH=1; shift ;;
+		-j) JSON=1; shift ;;
+		-i) [ $# -ge 2 ] || usage; NX_TIMEOUT=$2; shift 2 ;;
+		*) _args="$_args $1"; shift ;;
+	esac
+done
+[ -n "$_args" ] || usage
+case "$NX_TIMEOUT" in ''|*[!0-9]*) nx_die "-i needs a number of seconds" ;; esac
+
+set -- $_args
+nx_parse_filter "$@"
+NX_TAG="DRPPKT$$"
+nx_insert_probes $CHAINS
+if [ "$JSON" != 1 ]; then
+	echo "drppkt: filter:$(nx_match 0)$( [ "$NX_BOTH" = 1 ] && echo '  (+ reverse direction)')"
+	echo "drppkt: tracing on:$NX_INSERTED  (Ctrl-C to stop)"
+fi
+nx_stream path "$JSON" $NX_INSERTED

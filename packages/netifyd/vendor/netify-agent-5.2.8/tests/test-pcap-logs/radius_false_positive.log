@@ -1,0 +1,6 @@
+offline0: i6pc-------r---- UDP [OR] 2bc6:b5ac:cb3b:676b::18:443 <-- [L] 3dba:3762:c186:e122:89b0:5170:a86c:ecff:53129
+    : QUIC
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

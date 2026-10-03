@@ -1,0 +1,117 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Merge OpenVPN connection records from /var into storage (/mnt/data).
+# Called on storage mount (via add-storage script on /usr/sbin/add-storage)
+
+import os
+import sqlite3
+import subprocess
+import syslog
+
+STORAGE_BASE = '/mnt/data'
+VAR_BASE = '/var'
+
+def log(msg):
+    syslog.syslog(syslog.LOG_INFO, f"openvpn-merge-connections-db: {msg}")
+
+def _count_records(db):
+    try:
+        conn = sqlite3.connect(db)
+        count = conn.execute("SELECT COUNT(*) FROM connections").fetchone()[0]
+        conn.close()
+        return count
+    except Exception:
+        return 0
+
+def _merge_var_into_storage(var_db, storage_db):
+    # Returns the number of records actually written to storage
+    moved = 0
+    try:
+        src = sqlite3.connect(var_db)
+        dst = sqlite3.connect(storage_db)
+        src_rows = src.execute(
+            "SELECT common_name, virtual_ip_addr, remote_ip_addr, start_time, "
+            "duration, bytes_received, bytes_sent FROM connections"
+        ).fetchall()
+        for (common_name, virtual_ip_addr, remote_ip_addr, start_time,
+             duration, bytes_received, bytes_sent) in src_rows:
+            if not duration:
+                # client still connected
+                dst.execute(
+                    "INSERT INTO connections "
+                    "(common_name, virtual_ip_addr, remote_ip_addr, start_time, "
+                    "duration, bytes_received, bytes_sent) VALUES (?,?,?,?,?,?,?)",
+                    (common_name, virtual_ip_addr, remote_ip_addr, start_time,
+                     duration, bytes_received, bytes_sent)
+                )
+                moved += 1
+            else:
+                # complete record on /var, could be a client connected from storage or from /var itself
+                # try to make an update on the storage first (client connected from storage and disconnected from /var)
+                dst.execute(
+                    "UPDATE connections SET duration=?, bytes_received=?, bytes_sent=? "
+                    "WHERE common_name=? AND start_time=? AND (duration IS NULL OR duration=0)",
+                    (duration, bytes_received, bytes_sent, common_name, start_time)
+                )
+                if dst.execute("SELECT changes()").fetchone()[0] == 0:
+                    # no record on storage, insert full record copying from /var
+                    dst.execute(
+                        "INSERT INTO connections "
+                        "(common_name, virtual_ip_addr, remote_ip_addr, start_time, "
+                        "duration, bytes_received, bytes_sent) "
+                        "SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS "
+                        "(SELECT 1 FROM connections WHERE common_name=? AND start_time=?)",
+                        (common_name, virtual_ip_addr, remote_ip_addr, start_time,
+                         duration, bytes_received, bytes_sent, common_name, start_time)
+                    )
+                    moved += dst.execute("SELECT changes()").fetchone()[0]
+                else:
+                    moved += 1
+        dst.commit()
+        dst.close()
+        src.execute("DELETE FROM connections")
+        src.commit()
+        src.close()
+        return moved
+    except Exception:
+        return 0
+
+if not os.path.isdir(STORAGE_BASE):
+    raise SystemExit(0)
+
+var_openvpn = os.path.join(VAR_BASE, 'openvpn')
+if not os.path.isdir(var_openvpn):
+    raise SystemExit(0)
+
+for instance in os.listdir(var_openvpn):
+    var_db = os.path.join(var_openvpn, instance, 'connections.db')
+    if not os.path.isfile(var_db):
+        continue
+
+    storage_dir = os.path.join(STORAGE_BASE, 'openvpn', instance)
+    storage_db = os.path.join(storage_dir, 'connections.db')
+
+    if not os.path.exists(storage_db):
+        # db on storage not existing, copy /var DB to storage and clear /var
+        merged = _count_records(var_db)
+        os.makedirs(storage_dir, exist_ok=True)
+        subprocess.run(['cp', '-a', var_db, storage_db], check=True)
+        try:
+            src = sqlite3.connect(var_db)
+            src.execute("DELETE FROM connections")
+            src.commit()
+            src.close()
+        except Exception:
+            pass
+    else:
+        # Storage DB exists: merge any /var rows that arrived while storage was absent
+        merged = _merge_var_into_storage(var_db, storage_db)
+
+    # Log only when connection records have actually been moved to storage
+    if merged:
+        log(f"instance {instance}: moved {merged} connection record(s) from {var_db} to {storage_db}")

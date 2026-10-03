@@ -1,0 +1,12 @@
+offline0: i4pc-------r---- UDP [OR] 82.243.113.43:64969 --> [L] 192.168.1.5:40959
+    : BitTorrent
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 4
+
+offline0: i4pc-------r---- UDP [L] 127.0.0.1:33333 <-- [OL] 127.0.0.1:49861
+    : BitTorrent
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 4
+

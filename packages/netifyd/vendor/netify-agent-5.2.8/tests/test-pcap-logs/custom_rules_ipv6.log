@@ -1,0 +1,37 @@
+offline0: i6pc-------r---- UDP [OR] 21bc:b273:7f68:88d7:77a8:585:3990:927b:1991 --> [L] 247f:855b:5e16:3caf:3f2c:4134:9592:661b:100
+    : DTLS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc-------r---- UDP [OR] 21bc:b273:7f68:88d7:77a8:585:3990:927b:50621 --> [L] 247f:855b:5e16:3caf:3f2c:4134:9592:661b:36098
+    : DTLS
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc-gx--------- UDP [L] fe80::76ac:b9ff:fe6c:c124:12717 <-- [OM] ff02::1:64315
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i6pc-gx--------- UDP [L] fe80::76ac:b9ff:fe6c:c124:12719 <-- [OM] ff02::1:26993
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i6pc-gx--------- UDP [L] fe80::76ac:b9ff:fedd:a1e2:12719 <-- [OM] ff02::1:26993
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i6pc-gx--------- UDP [OR] 3ffe:501:4819::42:5333 <-- [L] 3ffe:507:0:1:200:86ff:fe05:80da:21554
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i6pc-gx--------- UDP [L] fe80::76ac:b9ff:fe6c:c124:12718 <-- [OM] ff02::1:26993
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 1
+

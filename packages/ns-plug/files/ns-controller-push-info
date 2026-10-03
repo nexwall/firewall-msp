@@ -1,0 +1,71 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2024 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import json
+import subprocess
+import os
+
+from euci import EUci
+
+e_uci = EUci()
+unit_id = e_uci.get('ns-plug', 'config', 'unit_id', default=None)
+token = e_uci.get('ns-plug', 'config', 'token', default=None)
+server = e_uci.get('ns-plug', 'config', 'server', default=None)
+tls_verify = e_uci.get('ns-plug', 'config', 'tls_verify', default=None)
+vpn_address = e_uci.get('ns-plug', 'config', 'vpn_address', default=None)
+api_port = e_uci.get('ns-plug', 'config', 'api_port', default=None)
+if vpn_address and api_port:
+    url = f'http://{vpn_address}:{api_port}/ingest/info'
+else:
+    url = f'{server}/api/ingest/info'
+
+if not unit_id or not token or not server:
+    exit(0)
+
+try:
+    info_result = subprocess.run(['/usr/libexec/rpcd/ns.controller', 'call', 'info'], check=True, capture_output=True,
+                                 text=True)
+    update_result = subprocess.run(['/usr/libexec/rpcd/ns.update', 'call', 'check-system-update'], check=True,
+                                   capture_output=True, text=True)
+except subprocess.CalledProcessError as e:
+    print('Cannot execute command: %s' % e)
+    exit(0)
+
+data = json.loads(info_result.stdout)
+data['scheduled_update'] = json.loads(update_result.stdout).get('scheduledAt', -1)
+data['version_update'] = json.loads(update_result.stdout).get('lastVersion')
+
+# making a curl request due to `requests` missing from python modules
+curl_opts = ['-s', '-S', '-L', '--retry', '3', '--retry-max-time', '60']
+if tls_verify == '0':
+    curl_opts.append('-k')
+
+# send the update and info data to the server, joining them in a single json
+curl_opts.extend([
+    '-X', 'POST',
+    '-H', 'Content-Type: application/json',
+    '-u', f'{unit_id}:{token}',
+    '-o', '/dev/null',
+    url,
+    '--data', json.dumps(data)
+])
+
+# start curl in background
+subprocess.Popen(['curl', *curl_opts])
+
+# Configure telegraf prometheus exporter for controller
+try:
+    ifconfig_local = os.environ.get('ifconfig_local')
+    if ifconfig_local and os.path.isdir('/etc/telegraf.conf.d'):
+        telegraf_config = f"""# Controller prometheus exporter
+[[outputs.prometheus_client]]
+  listen = \"{ifconfig_local}:9273\"
+"""
+        with open('/etc/telegraf.conf.d/controller-prometheus.conf', 'w') as f:
+            f.write(telegraf_config)
+except Exception:
+    pass  # Fail silently if telegraf is not installed or config dir missing

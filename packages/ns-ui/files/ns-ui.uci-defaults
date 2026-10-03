@@ -1,0 +1,17 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+if ! uci -q get ns-ui.config.server_tokens; then
+    uci set ns-ui.config.server_tokens='on'
+    uci commit ns-ui
+fi
+
+# been asked to remove entirely the access log, too much verbose
+if [ "$(uci -q get nginx._lan.access_log)" = "syslog:server=unix:/dev/log,nohostname" ]; then
+    uci set nginx._lan.access_log=off
+    uci commit nginx
+fi

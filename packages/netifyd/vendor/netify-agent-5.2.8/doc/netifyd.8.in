@@ -1,0 +1,259 @@
+.TH NETIFYD 8
+.SH NAME
+@PACKAGE_TARNAME@ \- The @PACKAGE_NAME@ v@PACKAGE_VERSION@
+.SH DESCRIPTION
+The @PACKAGE_NAME@ (The Agent) is a high-performance, multi-threaded passive network traffic analyzer that leverages deep-packet inspection (DPI) to identify network protocols and applications in near realtime. It is designed to provide comprehensive network visibility by capturing traffic from multiple network capture sources simultaneously.
+
+Key features and capabilities include:
+.IP \(bu 2
+\fBProtocol & Application Detection\fR: Utilizing the nDPI engine, the Agent accurately classifies thousands of protocols and applications in real-time, including support for encrypted traffic analysis.
+.IP \(bu 2
+\fBMetadata Extraction\fR: Beyond simple classification, the Agent extracts rich flow metadata, including network statistics, connection durations, protocol-specific details, and flow risk analysis.
+.IP \(bu 2
+\fBDevice Identification\fR: Analyzes traffic patterns to identify and categorize devices on the network, distinguishing between IoT devices, workstations, mobile devices, and more.
+.IP \(bu 2
+\fBFlexible Data Export\fR: Classification and flow data are JSON-encoded and can be exported to local files, served over UNIX or TCP sockets, or pushed to remote endpoints via HTTP/S POST requests.
+.IP \(bu 2
+\fBPlugin Architecture\fR: Supports a modular plugin system that allows for extending functionality, such as custom data sinks, integration with local databases, or specialized analysis modules.
+.IP \(bu 2
+\fBInformatics Integration\fR: Optionally integrates with the Netify Informatics cloud platform for advanced machine-learning analysis, historical reporting, event notifications, and long-term storage.
+.IP \(bu 2
+\fBActive Control Support\fR: On supported platforms, the Agent can be configured to take an active role in network policing, bandwidth shaping, and policy enforcement based on real-time DPI results.
+
+The Agent is built with C++17 and optimized for efficiency, making it suitable for deployment on a wide range of hardware, from embedded gateways and IoT devices to high-performance servers.
+.SH SYNOPSIS
+.B @PACKAGE_TARNAME@
+\fB\-p\fR, \fB\-\-provision\fR
+.IR
+
+.B @PACKAGE_TARNAME@
+\fB\-\-enable/disable-sink\fR | \fB\-\-enable/disable-informatics\fR
+.IR
+
+.B @PACKAGE_TARNAME@
+\fB\-s\fR, \fB\-\-status\fR
+.IR
+
+.B @PACKAGE_TARNAME@
+\fB\-P\fR, \fB\-\-dump-all\fR | \fB\-\-dump-apps/protos/categories/risks\fR | \fB\-\-lookup-ip\fR=\fIADDRESS\fR
+.IR
+
+.B @PACKAGE_TARNAME@
+\fB\-U\fR, \fB\-\-uuidgen\fR
+.IR
+
+.B @PACKAGE_TARNAME@
+[\fB\-v\fR, \fB\-\-verbose\fR]
+[\fB\-d\fR, \fB\-\-debug\fR]
+[\fB\-n\fR, \fB\-\-debug-ndpi\fR]
+[\fB\-D\fR, \fB\-\-debug-curl\fR]
+[\fB\-L\fR, \fB\-\-debug-log\fR=\fIFILENAME\fR]
+[\fB\-x\fR, \fB\-\-debug-flow-expression\fR=\fIEXPR\fR]
+[\fB\-T\fR, \fB\-\-debug-flow-log\fR=\fIFILENAME\fR]
+[\fB\-t\fR, \fB\-\-disable-conntrack\fR]
+[\fB\-l\fR, \fB\-\-disable-netlink\fR]
+[\fB\-R\fR, \fB\-\-remain-in-foreground\fR]
+[\fB\-r\fR, \fB\-\-replay-delay\fR]
+[\fB\-c\fR, \fB\-\-config\fR=\fICONFIG\fR]
+[\fB\-u\fR, \fB\-\-uuid\fR=\fIUUID\fR]
+[\fB\-f\fR, \fB\-\-ndpi-config\fR=\fIFILENAME\fR]
+[\fB\-j\fR, \fB\-\-export-json\fR=\fIFILENAME\fR]
+[\fB\-i\fR, \fB\-\-interval\fR=\fISECONDS\fR]
+\fB\-I\fR, \fB\-\-internal\fR=\fIINTERFACE\fR [capture device opts...] [\fB\-I\fR, \fB\-\-internal\fR=\fIINTERFACE\fR]...
+\fB\-E\fR, \fB\-\-external\fR=\fIINTERFACE\fR [capture device opts...] [\fB\-E\fR, \fB\-\-external\fR=\fIINTERFACE\fR]...
+.IR
+
+.B Capture device options:
+[\fB\-A\fR, \fB\-\-device-address\fR=\fIADDRESS\fR]
+[\fB\-F\fR, \fB\-\-device-filter\fR=\fIBPF\fR]
+[\fB\-N\fR, \fB\-\-device-peer\fR=\fIINTERFACE\fR]
+.IR
+.SH OPTIONS
+.BR \-p ", " \-\-provision
+.TP
+Generate a new client UUID if one hasn't already been set.  Display the URL used to provision this Agent.
+.TP
+.BR \-\-enable-informatics ", " \-\-disable-informatics
+Automatically configure and enable the plugins required for Netify Informatics.  When enabled, flow metadata and DPI detection information will be uploaded to Netify Informatics for further processing and analysis.  A
+.UR https://www.netify.ai/products/netify-informatics
+Netify Informatics Subscription
+.UE
+is required.  This option is disabled by default.
+.TP
+.BR \-s ", " \-\-status
+Display the latest service status.
+.TP
+.BR \-P ", " \-\-dump-all
+Display the current protocol and service ID list (all protocols and applications).
+.TP
+.BR \-\-dump-apps ", " \-\-dump-protos
+Display the current application or protocol list.
+.TP
+.BR \-\-dump-categories ", " \-\-dump-category " " \fITYPE\fR
+Display application and protocol categories.  The \fITYPE\fR can be either 'application' or 'protocol'.
+.TP
+.BR \-\-dump-risks
+Display flow security risks.
+.TP
+.BR \-\-dump-sort-by-tag
+Sort dump entries by tag (default: sort by ID).
+.TP
+.BR \-\-dump-with-categories
+When dumping applications or protocols, also include category information.
+.TP
+.BR \-\-export-apps
+Export the application list to stdout in JSON format.
+.TP
+.BR \-\-export-legacy
+Export the application list to stdout in legacy (nDPI) format.
+.TP
+.BR \-\-lookup-ip=\fIADDRESS\fR
+Perform application and category query by IP address.
+.TP
+.BR \-U ", " \-\-uuidgen
+Generate a client UUID.
+.TP
+.BR \-v ", " \-\-verbose
+When running in foreground mode, enabling verbose mode will display each flow detection as they complete.  Specify multiple times to increase verbosity.
+.TP
+.BR \-\-verbose-flag " " \fIFLAG\fR
+In debug mode, display or hide specified flow event types: [no-]event-dpi-new, [no-]event-dpi-update, or [no-]event-dpi-complete.  Can be specified multiple times.
+.TP
+.BR \-d ", " \-\-debug
+Enable debug mode.  Remain in the foreground and emit debug messages.
+.TP
+.BR \-n ", " \-\-debug-ndpi
+In debug mode, display nDPI debug messages when enabled (compile-time).
+.TP
+.BR \-D ", " \-\-debug-curl
+In debug mode, display debug output from libCURL.
+.TP
+.BR \-L ", " \-\-debug-log=\fIFILENAME\fR
+In debug mode, write debug messages to \fIFILENAME\fR.
+.TP
+.BR \-x ", " \-\-debug-flow-expression=\fIEXPR\fR
+In debug mode, filter flow detections by expression.
+.TP
+.BR \-T ", " \-\-debug-flow-log=\fIFILENAME\fR
+In debug mode, write flow debug messages to \fIFILENAME\fR.
+.TP
+.BR \-R ", " \-\-remain-in-foreground
+Remain in the foreground, do not daemonize.
+.TP
+.BR \-\-allow-unprivileged
+Allow executing the Agent as a non-root user.
+.TP
+.BR \-\-run-without-sources
+Continue running with no capture sources.
+.TP
+.BR \-\-no-restart
+Prevent the Agent from being restarted.
+.TP
+.BR \-\-enable-coredumps
+Enable coredumps.
+.TP
+.BR \-\-force-reset
+Reset global sink configuration options.
+.TP
+.BR \-\-enable-plugin ", " \-\-disable-plugin ", " \-\-edit-plugin " " \fIPLUGIN\fR
+Enable, disable, or edit the configuration for the specified \fIPLUGIN\fR.
+.TP
+.BR \-t ", " \-\-disable-conntrack
+Disable connection tracking support.  This option will disable IP NAT detection for flows captured from external interfaces.
+.TP
+.BR \-l ", " \-\-disable-netlink
+Disable netlink support.  This option will disable the detection of IP address and routing changes.  The address and routing configuration for an interface must be supplied using the \-\-device-address=\fIADDRESS\fR option (described below).
+.TP
+.BR \-A ", " \-\-device-address=\fIADDRESS\fR
+For interfaces receiving mirrored traffic, or when netlink is disabled or unavailable, use this to specify the addresses local to the previous interface (-I, or -E) parameter.  Can be specified more than once for multiple addresses.
+.TP
+.BR \-F ", " \-\-device-filter=\fIBPF\fR
+Interface/device option: attach a BPF filter expression to the interface.
+.TP
+.BR \-N ", " \-\-device-peer=\fIINTERFACE\fR
+Interface/device option: associate the interface with a peer (e.g., PPPoE interface, pppX).
+.TP
+.BR \-c ", " \-\-config=\fICONFIG\fR
+Specify an alternate configuration file.  Default: /etc/@PACKAGE_TARNAME@.conf
+.TP
+.BR \-u ", " \-\-uuid=\fIUUID\fR
+Specify a client serial number (UUID).  Used for device identification with Netify Informatics.  Normally, the auto-generated client UUID is used for this purpose.
+.TP
+.BR \-f ", " \-\-ndpi-config=\fIFILENAME\fR
+Specify an alternate legacy (nDPI) application configuration file.
+.TP
+.BR \-j ", " \-\-export-json=\fIFILENAME\fR
+JSON encode flow and application state and write it to this file every update interval.  \fBNOTE:\fR the \fIjson_export\fR option must be enabled in @PACKAGE_TARNAME@.conf(5) for this payload to be written.
+.TP
+.BR \-i ", " \-\-interval=\fISECONDS\fR
+Specify the update interval in seconds.
+.TP
+.BR \-\-capture-delay=\fISECONDS\fR
+Wait \fISECONDS\fR before starting capture thread(s).
+.TP
+.BR \-\-ignore-interface-configs
+Don't load capture interface configuration file entries.  Only configure capture interfaces set using command-line options.
+.TP
+.BR \-\-disable-auto-flow-expiry
+Don't auto-expire flows on exit.
+.TP
+.BR \-I ", " \-\-internal=\fIINTERFACE\fR
+Capture packets on this internal (LAN) interface.  Can be specified more than once for multiple interfaces.
+.TP
+.BR \-E ", " \-\-external=\fIINTERFACE\fR
+Capture packets on this external (WAN) interface.  Can be specified more than once for multiple interfaces.
+.TP
+.BR \-r ", " \-\-replay-delay
+Simulate packet-to-packet arrival times in offline playback mode.
+.TP
+.BR \-\-thread-capture-base=\fIOFFSET\fR
+Specify a thread affinity base or offset for capture threads.
+.TP
+.BR \-\-thread-detection-base=\fIOFFSET\fR
+Specify a thread affinity base or offset for detection (DPI) threads.
+.TP
+.BR \-\-thread-detection-cores=\fICOUNT\fR
+Specify the number of detection (DPI) threads to start.
+.TP
+.BR \-S ", " \-\-hash-file=\fIFILENAME\fR
+Calculate and display the SHA1 hash of \fIFILENAME\fR.
+.TP
+.BR \-V ", " \-\-version
+Display version information and features.
+.TP
+.BR \-h ", " \-\-help
+Display help information.
+.SH SIGNALS
+.TP
+.BR SIGHUP
+Reload the run-time configuration and capture threads.
+.TP
+.BR SIGINT ", " SIGTERM ", " SIGPWR
+Initiate a clean shutdown of the Agent.  Send twice to shutdown immediately.
+.TP
+.BR SIGUSR1
+Save the DNS hint and flow hash caches to disk.  If Netify API updates are enabled, force an update.
+.TP
+.BR SIGUSR2
+Toggle debug logging between the configured debug log file and stderr.
+.SH ONLINE DOCUMENTATION
+For additional documentation, please visit:
+.UR https://www.netify.ai/documentation
+.UE
+.SH BUGS
+If you find a bug or have a feature request, please report it here:
+.UR @PACKAGE_BUGREPORT@
+.UE
+.SH SEE ALSO
+@PACKAGE_TARNAME@.conf(5)
+.SH COPYRIGHT
+Copyright (C) 2015-2026
+.UR http://www.egloo.ca
+eGloo Incorporated
+.UE
+.SH LICENSE
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+

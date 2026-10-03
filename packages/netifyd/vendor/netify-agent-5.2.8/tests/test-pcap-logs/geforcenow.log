@@ -1,0 +1,19 @@
+offline0: i4pcu------r---- TCP [OR] 80.84.167.206:49100 <-- [L] 192.168.1.245:57490
+    : TLS.netify.nvidia
+    : CT ID: 0: MARK: 0
+    : H: 80-84-167-206.cloudmatchbeta.nvidiagrid.net
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: 80-84-167-206.cloudmatchbeta.nvidiagrid.net TLS/CN: prod.cloudmatchbeta.nvidiagrid.net
+    : TLS/IDN: C=US, O=DigiCert Inc, CN=DigiCert TLS RSA SHA256 2020 CA1 TLS/SDN: C=US, ST=California, L=Santa Clara, O=NVIDIA Corporation, CN=prod.cloudmatchbeta.nvidiagrid.net
+    : JA4: t13d1516ht_8daaf6152771_e5627efa2ab1
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 30: TLS Certificate Expired
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 80.84.167.206:18452 <-- [L] 192.168.1.245:52441
+    : STUN.netify.nvidia
+    : CT ID: 0: MARK: 0
+    : RID 30: TLS Certificate Expired
+    : RID 32: TLS Certificate Validity Too Long
+    : DP: 17
+

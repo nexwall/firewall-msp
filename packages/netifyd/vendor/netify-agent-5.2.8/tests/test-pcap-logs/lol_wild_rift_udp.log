@@ -1,0 +1,27 @@
+offline0: i4pc------------ UDP [L] 10.215.173.1:47462 --> [OR] 51.20.230.207:15004
+    : LoL/WildRift
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ UDP [L] 10.215.173.1:43686 --> [OR] 13.51.213.131:15007
+    : LoL/WildRift
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ UDP [L] 10.215.173.1:46702 --> [OR] 51.20.230.207:15007
+    : LoL/WildRift
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc-------r---- UDP [L] 10.215.173.1:44513 --> [OR] 13.53.58.18:18001
+    : LoL/WildRift
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [L] 10.215.173.1:41440 --> [OR] 13.53.58.18:18001
+    : LoL/WildRift
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

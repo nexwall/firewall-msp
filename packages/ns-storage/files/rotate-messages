@@ -1,0 +1,11 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+mv -f /var/log/messages /var/log/messages.1
+rm -f /var/log/messages.1.gz
+gzip /var/log/messages.1
+exit 0

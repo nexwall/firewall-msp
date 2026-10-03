@@ -1,0 +1,47 @@
+offline0: i4pcu------rs--- UDP [OR] 142.250.82.76:19305 <-- [L] 192.168.12.156:38152
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.209:39032
+    : RID 30: TLS Certificate Expired
+    : DP: 17
+
+offline0: i4pcu-------s--- UDP [OR] 142.250.82.76:3478 <-- [L] 192.168.12.156:38152
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.209:39032
+    : DP: 17
+
+offline0: i4pcu-------s--- UDP [OR] 142.250.82.76:3478 <-- [L] 192.168.12.156:45400
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.209:39033
+    : DP: 7
+
+offline0: i4pcu------rs--- UDP [OR] 74.125.128.127:19302 <-- [L] 192.168.12.156:38152
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.209:39032
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pcu------rs--- UDP [OR] 74.125.128.127:19302 <-- [L] 192.168.12.156:45400
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.209:39033
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i6pcu------r---- UDP [OR] 2001:b07:a3d:c112:48a1:1094:1227:281e:45572 --> [L] 2001:4860:4864:6::81:19305
+    : Google/Call.netify.google
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 2001:b07:a3d:c112:::45572
+    : RID 30: TLS Certificate Expired
+    : DP: 17
+
+offline0: i4pcu-x----rs--- UDP [OR] 142.250.82.76:19305 <-- [L] 192.168.12.156:45400
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : STUN/MAPPED: 93.35.171.209:39033
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 4
+

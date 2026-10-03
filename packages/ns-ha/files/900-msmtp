@@ -1,0 +1,7 @@
+#!/bin/sh
+
+. /lib/functions/keepalived/hotplug.sh
+
+set_service_name msmtp
+
+keepalived_hotplug

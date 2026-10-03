@@ -1,0 +1,336 @@
+.TH @PACKAGE_TARNAME@.conf 5
+.SH NAME
+@PACKAGE_TARNAME@.conf - @PACKAGE_NAME@ Configuration File Format v@PACKAGE_VERSION@
+.SH DESCRIPTION
+The @PACKAGE_TARNAME@.conf file...
+.IP \(bu 2
+follows the standard INI-style format.
+.IP \(bu 2
+contains configuration parameters for \fB@PACKAGE_TARNAME@(8)\fR, a deep-packet inspection server.
+.IP \(bu 2
+contains configuration parameters for the
+.UR https://www.netify.ai/products/netify-informatics
+Netify Informatics
+.UE service.
+.SS Main
+The main server options are defined within the [\fB@PACKAGE_TARNAME@\fR] section.
+.PP
+\fBauto_informatics\fR=\fIBOOLEAN\fR
+.PP
+Enable automatic Netify Informatics integration.  This option is intended to be managed exclusively by the \-\-enable/disable\-informatics command\-line parameters.
+.PP
+\fBprofile\fR=\fIPATH\fR
+.PP
+Configuration profile to load from \fIPATH\fR.  This is typically used to override defaults set in the main configuration file.
+.PP
+\fBpath_state_persistent\fR=\fIPATH\fR
+.PP
+Where to store "persistent" data (configuration files, etc).  The default is /etc/@PACKAGE_TARNAME@
+.PP
+\fBpath_state_volatile\fR=\fIPATH\fR
+.PP
+Where to store "volatile" data (temporary state files, etc).  The default is /var/run/@PACKAGE_TARNAME@
+.PP
+\fBuser\fR=\fIUSER\fR, \fBgroup\fR=\fIGROUP\fR
+.PP
+Switch to non-root user and/or group on start-up.  Requires Linux Capabilities support to be enabled at compile time.
+.PP
+\fBmax_capture_length\fR=\fIINTEGER\fR
+.PP
+The maximum number of bytes to capture (copy) per packet.  The maximum value is 65535, which is also the default.
+.PP
+\fBmax_detection_pkts\fR=\fIINTEGER\fR
+.PP
+This option controls the number of packets that are examined by the DPI engine before taking a guess at the type of flow.  The smaller the value the less processing overhead but the less likely enough of a conversation will be analyzed, resulting in fewer detections.  The default value is 32 packets.
+.PP
+\fBmax_flows\fR=\fIINTEGER\fR
+.PP
+The maximum number of flows to track at any given moment.  When this value has been reached, new flows will stop being tracked until old flows expire.  The default is 0 (unlimited).
+.PP
+\fBupdate_interval\fR=\fISECONDS\fR
+.PP
+How often (in seconds) to process the global flow maps.  Flow statistics are made available, idle flows are expired, and other house-keeping is performed during this update period.  The default is 15s.
+.PP
+\fBttl_idle_flow\fR=\fISECONDS\fR, \fBttl_idle_tcp_flow\fR=\fISECONDS\fR
+.PP
+How long to wait (in seconds) until an idle flow (non-TCP or TCP) is scheduled for expiry.
+.PP
+\fBauto_flow_expiry\fR=\fIBOOLEAN\fR
+.PP
+On shutdown, force flows to immediately expire.  The default is yes.
+.PP
+\fBsyn_scan_protection\fR=\fIBOOLEAN\fR
+.PP
+Don't track TCP flows until a SYN+ACK has been captured.
+.PP
+\fBsoft_dissectors\fR=\fIBOOLEAN\fR
+.PP
+Enable or disable Soft-dissectors (flow expressions defined in the application signatures).
+.PP
+\fBflow_map_buckets\fR=\fIINTEGER\fR
+.PP
+The number of "buckets" the main flow map will be divided into.  The default is 128.
+.PP
+\fBnetwork_namespace\fR=\fINAME/PID/PATH\fR
+.PP
+Attach to an alternate network namespace.
+.PP
+\fBpath_server_socket\fR=\fIPATH\fR
+.PP
+Local command/control socket.  Receive commands and control messages on a local UNIX socket.
+.PP
+\fBuse_getifaddrs\fR=\fIBOOLEAN\fR
+.PP
+Periodically call getifaddrs(3) to update the associated IP addresses of each capture source.
+.PP
+.SS Threads
+Threading options are defined within the [\fBthreads\fR] section.
+.PP
+\fBcapture_base\fR=\fIINTEGER\fR
+.PP
+Base CPU ID to start capture threads from.
+.PP
+\fBdetection_base\fR=\fIINTEGER\fR
+.PP
+Base CPU ID to start detection threads from.
+.PP
+\fBdetection_cores\fR=\fIINTEGER\fR
+.PP
+Number of detection (DPI) threads to start.
+.PP
+.SS Netlink
+Linux Netlink and Conntrack options are defined within the [\fBnetlink\fR] section.
+.PP
+\fBbuffer_size\fR=\fIINTEGER\fR
+.PP
+Set the Netlink buffer size.
+.PP
+\fBconntrack_buffer_size\fR=\fIINTEGER\fR
+.PP
+Set the Conntrack buffer size.
+.PP
+\fBconntrack_idle_ttl\fR=\fISECONDS\fR
+.PP
+In the event we miss a conntrack DESTROY event, clean-up cached flow entries that have been idle for greater than this number of seconds.
+.PP
+\fBbridge_pvid_discovery\fR=\fIBOOLEAN\fR
+.PP
+Enable Bridge PVID discovery.
+.PP
+.SS Capture Defaults
+Capture source defaults are set under a [\fBcapture-defaults\fR] section.
+.PP
+\fBcapture_type\fR=\fITYPE\fR
+.PP
+Specify the packet capture type.  Depending on the platform and compile-time options, valid capture types are: \fBpcap\fR, \fBtpv3\fR, or \fBnfqueue\fR.
+.PP
+\fBread_timeout\fR=\fIMILLISECONDS\fR
+.PP
+Packet capture timeout value (milliseconds).
+.PP
+.SS TPv3 Capture Defaults
+Linux TPv3 specific defaults are set under a [\fBcapture-defaults-tpv3\fR] section.
+.PP
+\fBfanout_mode\fR=\fIMODE\fR
+.PP
+Set the fanout mode: hash, lb, cpu, rollover, or random.
+.PP
+\fBfanout_flags\fR=\fIFLAGS\fR
+.PP
+Set the fanout flags: defrag, rollover.
+.PP
+\fBfanout_instances\fR=\fIINTEGER\fR
+.PP
+Set the number of fanout instances.
+.PP
+\fBrb_block_size\fR=\fIINTEGER\fR, \fBrb_frame_size\fR=\fIINTEGER\fR, \fBrb_blocks\fR=\fIINTEGER\fR
+.PP
+Set the ring buffer block size, frame size, and number of blocks.
+.PP
+.SS Capture Interfaces
+Individual capture interface options can be set under sections named [\fBcapture-interface-\fIINTERFACE\fR].
+.PP
+\fBenable\fR=\fIBOOLEAN\fR
+.PP
+Enable or disable capture on this interface.
+.PP
+\fBrole\fR=\fILAN | WAN\fR
+.PP
+Specify the role of the interface (internal or external).
+.PP
+\fBaddress\fR[\fIn\fR]=\fIADDRESS\fR
+.PP
+Specify local IP addresses for the interface.
+.PP
+\fBpeer\fR=\fIINTERFACE\fR
+.PP
+Associate the interface with a peer interface.
+.PP
+\fBfilter\fR=\fIBPF\fR
+.PP
+Attach a BPF filter expression to the interface.
+.PP
+.SS DNS Hint Cache
+DNS hint cache options are set within the [\fBdns_hint_cache\fR] section.
+
+The DNS hint cache stores DNS response records for a period of time.  These hints are used when application detection fails.  A cache look-up is performed and any matching hostname is used to 'hint' the application detection logic.  In most cases this significantly improves application detection.
+.PP
+\fBenable\fR=\fIBOOLEAN\fR
+.PP
+Enable or disable the DNS hint cache.  On non-embedded systems with more memory, it is highly recommended that this be enabled for more comprehensive application detection.  The default is true.
+.PP
+\fBpartial_lookups\fR=\fIBOOLEAN\fR
+.PP
+Enable or disable partial DNS lookups.
+.PP
+\fBsave\fR=\fIpersistent\fR | \fIvolatile\fR | \fIdisabled\fR
+.PP
+Enable or disable periodic saving of the DNS hint cache.  The default is: \fIpersistent\fR
+.PP
+\fBcache_size\fR=\fIINTEGER\fR
+.PP
+The maximum number of entries to store in the DNS hint cache.
+.PP
+.SS Flow Hash Cache
+Flow hash cache options are set within the [\fBflow-hash-cache\fR] section.
+.PP
+\fBenable\fR=\fIBOOLEAN\fR
+.PP
+Enable or disable the flow hash cache.
+.PP
+\fBsave\fR=\fIpersistent\fR | \fIvolatile\fR | \fIdisabled\fR
+.PP
+Enable or disable periodic saving of the flow hash cache.
+.PP
+\fBcache_size\fR=\fIINTEGER\fR
+.PP
+The maximum number of entries to store in the flow hash cache.
+.PP
+.SS Netify API
+Netify API integration options are defined within the [\fBnetify-api\fR] section.
+.PP
+\fBenable\fR=\fIBOOLEAN\fR
+.PP
+Enable or disable API integration with Netify Informatics.
+.PP
+\fBupdate_tick\fR=\fISECONDS\fR
+.PP
+Frequency of internal API housekeeping.
+.PP
+\fBupdate_interval\fR=\fISECONDS\fR
+.PP
+Interval for updating application and category data from the API server.
+.PP
+\fBbootstrap_url\fR=\fIURL\fR
+.PP
+URL for the initial API bootstrap process.
+.PP
+\fBvendor\fR=\fINAME\fR
+.PP
+Vendor name to use for API identification.
+.PP
+\fBtls_verify\fR=\fIBOOLEAN\fR
+.PP
+Verify TLS certificates for API connections.
+.PP
+\fBmtls_enable\fR=\fIBOOLEAN\fR
+.PP
+Enable or disable mTLS (mutual TLS) authentication for API connections.
+.PP
+\fBcert_file\fR=\fIPATH\fR
+.PP
+Path to the client certificate file for mTLS authentication.
+.PP
+\fBkey_file\fR=\fIPATH\fR
+.PP
+Path to the client private key file for mTLS authentication.
+.PP
+.SS Protocols
+Protocol dissector options are defined within the [\fBprotocols\fR] section.
+.PP
+\fB\fIprotocol_tag\fR\fR=\fIinclude | exclude\fR
+.PP
+Enable or disable specific DPI protocol dissectors by their tag.  Use \fBall=include\fR to enable all known dissectors.
+.PP
+.SS Privacy Filter
+The @PACKAGE_NAME@ can be configured to obfuscate flow addresses (MAC and IP) that match rules in the [\fBprivacy-filter\fR] section.
+.PP
+\fBmac\fR[\fIn\fR]\fR=\fIMAC\fR
+.PP
+Privacy filter by MAC address.
+.PP
+\fBhost\fR[\fIn\fR]\fR=\fIADDRESS\fR
+.PP
+Privacy filter by IP address.
+.PP
+\fBregex_search\fR[\fIn\fR]\fR=\fIREGEX\fR, \fBregex_replace\fR[\fIn\fR]\fR=\fISTRING\fR
+.PP
+Search for a regular expression in flow metadata and replace it with a string.
+.PP
+\fBprivate_external_addresses\fR=\fIBOOLEAN\fR
+.PP
+Obfuscate external IP addresses in flows.
+.SH SAMPLE CONFIGURATION
+The following sample configuration file contains most common options with their default values.
+
+.PP
+.in +4n
+.EX
+# @PACKAGE_NAME@ sample configuration for version @PACKAGE_VERSION@
+
+[@PACKAGE_TARNAME@]
+# profile = @persistentstatedir@/profiles.d/00-default.conf
+update_interval = 15
+max_flows = 0
+
+[capture-defaults]
+capture_type = pcap
+
+[threads]
+# capture_base = 0
+# detection_base = 1
+# detection_cores = 2
+
+[flow-hash-cache]
+enable = yes
+save = persistent
+cache_size = 1000
+
+[dns_hint_cache]
+enable = yes
+save = persistent
+cache_size = 1000
+
+[netify-api]
+enable = no
+# mtls_enable = no
+# cert_file = /etc/netifyd/client-cert.pem
+# key_file = /etc/netifyd/client-key.pem
+
+[protocols]
+all = include
+
+[netlink]
+conntrack_idle_ttl = 3600
+
+[privacy_filter]
+# host[0] = 192.168.1.1
+.EE
+.in
+.PP
+.SH SEE ALSO
+@PACKAGE_TARNAME@(8)
+.SH ONLINE DOCUMENTATION
+For additional documentation, please visit:
+.UR https://www.netify.ai/documentation
+.UE
+.SH COPYRIGHT
+Copyright (C) 2015-2026
+.UR http://www.egloo.ca
+eGloo Incorporated
+.UE
+.SH LICENSE
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.

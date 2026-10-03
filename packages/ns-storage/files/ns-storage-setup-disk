@@ -1,0 +1,47 @@
+#!/bin/sh
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+#
+# Create a single ext4 partition on the given device.
+# Parameters:
+# - device, like '/dev/sdb'
+#
+
+set -e
+
+eerror()
+{
+    echo "ERROR: $1"
+    exit 1
+}
+
+device=$1
+
+[ -z "$device" ] && eerror "Device '$device' not found"
+[ ! -e "/sys/class/block/$(basename "$device")" ] && eerror "Device '$device' is not a block device"
+mount | grep -q "$device" && eerror "Device '$device' is already mounted"
+
+# cleanup partitions
+dd if=/dev/zero of="$device" bs=512 count=1 conv=notrunc 2>/dev/null
+# create a single partition
+parted -s -a optimal "$device" mklabel gpt -- mkpart primary  1 -1 >/dev/null
+partprobe "$device" >/dev/null 2>&1 || :
+
+# the disk has just been wiped, so the partition we created is number 1:
+# look up its kernel name, without guessing the naming scheme
+disk=$(basename "$device")
+partition=''
+for pfile in /sys/block/"$disk"/*/partition; do
+    [ -e "$pfile" ] || continue
+    if [ "$(cat "$pfile")" -eq 1 ]; then
+        partition=$(basename "$(dirname "$pfile")")
+        break
+    fi
+done
+[ -z "$partition" ] && eerror "Partition 1 not found on '$device'"
+
+mkfs.ext4 -q -F -L ns_data /dev/"$partition" >/dev/null
+echo '{"device": "/dev/'$partition'"}'

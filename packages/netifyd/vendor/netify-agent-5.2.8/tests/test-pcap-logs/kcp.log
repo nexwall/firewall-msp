@@ -1,0 +1,42 @@
+offline0: i6pc-------r---- UDP [L] ::1:8000 <-- [OL] ::1:47356
+    : KCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc-------r---- UDP [L] ::1:54548 --> [OL] ::1:47988
+    : KCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc-------r---- UDP [L] ::1:52761 --> [OL] ::1:8661
+    : KCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc-------r---- UDP [L] ::1:32425 --> [OL] ::1:14077
+    : KCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc-------r---- UDP [L] ::1:61499 --> [OL] ::1:15990
+    : KCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc-------r---- UDP [L] ::1:52845 --> [OL] ::1:47270
+    : KCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i6pc-------r---- UDP [L] ::1:41488 <-- [OL] ::1:43926
+    : KCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

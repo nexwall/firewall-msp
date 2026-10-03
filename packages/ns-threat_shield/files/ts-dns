@@ -1,0 +1,36 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Threat shield DNS: give adblock the domain categories of the Nexwall threat feeds. They are downloaded by
+# nexwall-threat-feeds from the license server (signed, checked) and handed to adblock as local files.
+# Called every time adblock is started or reloaded.
+
+DEST_DIR=/etc/adblock
+CUSTOM_FEEDS="$DEST_DIR/adblock.custom.feeds"
+TS_ENABLED=$(uci -q get adblock.global.ts_enabled)
+
+if [ "$TS_ENABLED" = 1 ]; then
+    # dnsmasq is the backend
+    uci set adblock.global.adb_dns='dnsmasq'
+    uci set adblock.global.adb_dnsinstance='0'
+
+    TMP_FILE=/tmp/ts-dns.feeds
+    if /usr/sbin/nexwall-threat-feeds feeds-dns > "$TMP_FILE" 2>/dev/null && jq -e . "$TMP_FILE" >/dev/null 2>&1; then
+        mv "$TMP_FILE" "$CUSTOM_FEEDS"
+    else
+        # nothing usable now: keep what is there rather than dropping every list on a transient failure
+        rm -f "$TMP_FILE"
+        [ -f "$CUSTOM_FEEDS" ] || echo '{}' > "$CUSTOM_FEEDS"
+    fi
+else
+    # clear the custom feeds when threat shield is disabled
+    : > "$CUSTOM_FEEDS"
+fi
+
+# Save changes
+uci commit adblock

@@ -1,0 +1,24 @@
+offline0: i4pc------------ UDP [L] 10.28.168.253:1985 --> [OM] 224.0.0.2:1985
+    : Cisco/HSRP
+    : CT ID: 0: MARK: 0
+    : VLAN: 10
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 10.28.170.253:1985 --> [OM] 224.0.0.2:1985
+    : Cisco/HSRP
+    : CT ID: 0: MARK: 0
+    : VLAN: 12
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 10.28.171.253:1985 --> [OM] 224.0.0.2:1985
+    : Cisco/HSRP
+    : CT ID: 0: MARK: 0
+    : VLAN: 13
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 10.28.168.252:1985 --> [OM] 224.0.0.2:1985
+    : Cisco/HSRP
+    : CT ID: 0: MARK: 0
+    : VLAN: 10
+    : DP: 1
+

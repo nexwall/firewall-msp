@@ -1,0 +1,557 @@
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51398
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51399
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51400
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51401
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51403
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51404
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51405
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51406
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51408
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51411
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51414
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51412
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51402
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51415
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51409
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 5
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51413
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51417
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51419
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51416
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51421
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51418
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51420
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51423
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51422
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51407
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51424
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51425
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51426
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51427
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51428
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu------r---- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51429
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d151400_8daaf6152771_de4a06bb82e3
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51430
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51410
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 7
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51432
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51433
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51435
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51436
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51438
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51437
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51440
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51441
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51442
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51443
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51444
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51449
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51450
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51451
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51452
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51453
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51454
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51456
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51455
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51458
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51459
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51460
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51461
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51462
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51463
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51464
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu---------F- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51465
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pcu----------- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51466
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: eu0.sec-tunnel.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: eu0.sec-tunnel.com
+    : JA4: t13d1516h2_8daaf6152771_e5627efa2ab1
+    : DP: 6
+
+offline0: i4pc-gx----r---- TCP [OR] 77.111.247.69:443 <-- [L] 192.168.1.29:51457
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 51: TCP Connection Issues
+    : RID 56: Probing Attempt
+    : DP: 3
+

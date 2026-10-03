@@ -1,0 +1,41 @@
+offline0: i6pc------------ UDP [OR] 2001:b07:a3d:c112:b332:20d:89ab:105e:41624 --> [L] 2001:4860:4860::8844:53
+    : DNS
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc------------ UDP [OR] 8.8.4.4:53 <-- [L] 192.168.1.29:58580
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: www.ntop.org
+    : DP: 2
+
+offline0: i4pc------------ UDP [OR] 8.8.4.4:53 <-- [L] 192.168.1.29:62500
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: www.wikipedia.it
+    : DP: 2
+
+offline0: i4pc------------ UDP [OR] 8.8.4.4:53 <-- [L] 192.168.1.29:51166
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: www.wireshark.org
+    : DP: 2
+
+offline0: i6pc------------ UDP [OR] 2001:4860:4860::8888:53 <-- [L] 2a03:b0c0:2:d0::360:4001:46618
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: www.ntop.org
+    : DP: 2
+
+offline0: i6pc------------ UDP [OR] 2001:4860:4860::8888:53 <-- [L] 2a03:b0c0:2:d0::360:4001:44924
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: www.wikipedia.it
+    : DP: 2
+
+offline0: i6pc------------ UDP [OR] 2001:4860:4860::8888:53 <-- [L] 2a03:b0c0:2:d0::360:4001:43660
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: www.wireshark.org
+    : DP: 2
+

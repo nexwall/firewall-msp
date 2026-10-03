@@ -1,0 +1,20 @@
+offline0: i4pc------------ TCP [L] 192.168.88.231:36262 --> [OR] 198.50.120.150:6112
+    : PathOfExile
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc------------ TCP [L] 192.168.1.13:50808 --> [OR] 209.192.244.174:21360
+    : PathOfExile
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc------------ TCP [OR] 91.206.197.210:21360 <-- [L] 192.168.1.13:49554
+    : PathOfExile
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc------------ TCP [L] 192.168.1.13:36492 --> [OR] 203.57.83.5:21360
+    : PathOfExile
+    : CT ID: 0: MARK: 0
+    : DP: 4
+

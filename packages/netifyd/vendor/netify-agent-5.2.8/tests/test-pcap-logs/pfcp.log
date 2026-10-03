@@ -1,0 +1,6 @@
+offline0: i4pc-------r---- UDP [L] 127.0.0.1:8805 --> [OR] 127.0.0.2:8805
+    : PFCP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

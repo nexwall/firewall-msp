@@ -1,0 +1,4 @@
+uci batch <<EOI
+del_list nginx._lan.include=restrict_locally
+commit
+EOI

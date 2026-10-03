@@ -1,0 +1,13 @@
+{
+  "log-viewer": {
+    "description": "Nexwall Log Viewer (VictoriaLogs-backed)",
+    "write": {},
+    "read": {
+      "ubus": {
+        "ns.log-viewer": [
+          "*"
+        ]
+      }
+    }
+  }
+}

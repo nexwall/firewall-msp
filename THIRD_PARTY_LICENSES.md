@@ -1,0 +1,49 @@
+# Third-party components
+
+Generated from the `PKG_LICENSE` fields in `packages/*/Makefile` at upstream commit `9a60b9c`. Regenerate when
+package versions change. Components fetched from OpenWrt feeds keep the license declared by their own Makefile.
+
+## Fetched from external repositories at build time
+
+| Package | Version | Source | License |
+|---|---|---|---|
+| ns-ui | 2.24.1 | github.com/nexwall/nexwall-ui (fork of NethServer/nethsecurity-ui 2.24.1, pinned commit) | GPL-3.0-only |
+| ns-monitoring | 1.2.1 | github.com/nexwall/nexwall-monitoring (fork of nethserver/nethsecurity-monitoring v1.2.1, pinned commit) | GPL-3.0-only |
+| ns-dedalo | 0.0.4 | github.com/nexwall/captive-portal (fork of nethesis/icaro v85, pinned commit) | GPL-3.0-only |
+| ns-checkmk-utils | 1.7.7 | raw files from github.com/nexwall/checkmk-tools (fork of nethesis/checkmk-tools, pinned commit, files identical to v1.7.7) | GPL-3.0-only (declared) |
+| snort3 | 3.10.0.0 | github.com/snort3/snort3 | GPL-2.0-only |
+| telegraf | 1.39.1 | github.com/influxdata/telegraf | MIT |
+| victoria-metrics | 1.146.0 | github.com/VictoriaMetrics/VictoriaMetrics | Apache-2.0 |
+| victoria-logs | 1.51.0 | github.com/VictoriaMetrics/VictoriaLogs | Apache-2.0 |
+| acme-acmesh | 3.0.7 | github.com/acmesh-official/acme.sh | GPL-3.0-only |
+| openvpn-easy-rsa | 3.2.5 | github.com/OpenVPN/easy-rsa | GPL-2.0 |
+| keepalived | 2.3.3 | keepalived.org/software | GPL-2.0-or-later |
+| checkmk-agent | upstream Checkmk | github.com/Checkmk/checkmk | GPL-2.0-only |
+
+## Source lives in this repository (authored or forked upstream by Nethesis)
+
+| Package | License |
+|---|---|
+| ns-api, ns-api-server, ns-binding, ns-clm, ns-dedalo (glue), ns-don, ns-dpi, ns-flashstart, ns-ha, ns-migration, ns-netmap, ns-objects, ns-openvpn, ns-phonehome, ns-plug, ns-reverse-proxy, ns-storage, ns-threat_shield, python3-nethsec | GPL-3.0-only (files may also carry a GPL-2.0-only SPDX header) |
+| adblock 4.5.5, banip 1.8.10, rsyslog 8.2506.0 (forks of openwrt/packages) | GPL-3.0-or-later |
+| mwan3 2.11.17 (fork of openwrt/packages) | GPL-2.0 |
+| acme-common 1.1.2 (fork of openwrt/packages) | GPL-3.0-only |
+| python-semver 3.0.4 (fork of openwrt/packages) | BSD-3-Clause |
+
+## Traffic classification engine (`netifyd`)
+
+Netify Agent 4.4.7 (eGloo Inc.), GPL-3.0-or-later, built from source
+(`gitlab.com/netify.ai/public/netify-agent`, commit `4d8d92104e694db3115a1615106022fc28aaed0f`). The source tree pulls
+its libraries as git submodules (nDPI, LGPL-3.0, and others); each keeps its own license in its source tree. The open
+application signature list `netify-apps.conf` is Apache-2.0. The daemon `ns-dpi-bridge` is GPL-2.0-only (Nexwall).
+
+## Data files with their own terms
+
+- `packages/netifyd/files/etc/netifyd/netify-apps.conf`: Apache-2.0, eGloo Inc.
+- Blocklist definitions in `packages/ns-threat_shield/files/` point to `lists.nexwall.com.br`; the list content is
+  published by Nexwall and is not part of the source.
+
+## Base system
+
+OpenWrt `v25.12.5` and its feeds are fetched during the build. Each package carries its own license, and the build
+produces a manifest and SBOM (`config/sbom.conf`) listing what ended up in an image.

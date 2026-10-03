@@ -1,0 +1,12 @@
+offline0: i6pc------------ VRRP [L] fe80::2:0 --> [OM] ff02::12:0
+    : VRRP
+    : CT ID: 0: MARK: 0
+    : VLAN: 36
+    : DP: 1
+
+offline0: i6pc------------ VRRP [L] fe80::1:0 --> [OM] ff02::12:0
+    : VRRP
+    : CT ID: 0: MARK: 0
+    : VLAN: 36
+    : DP: 1
+

@@ -1,0 +1,16 @@
+offline0: i4pc-------r--F- TCP [L] 172.16.238.1:58395 --> [OL] 172.16.238.168:22
+    : SSH
+    : CT ID: 0: MARK: 0
+    : SSH/CA: SSH-2.0-OpenSSH_5.6 SSH/SA: SSH-2.0-OpenSSH_5.3
+    : RID 25: SSH Obsolete Client Version/Cipher
+    : RID 26: SSH Obsolete Server Version/Cipher
+    : DP: 10
+
+offline0: i4pcu------r---- TCP [L] 127.0.0.1:8000 <-- [OL] 127.0.0.1:58496
+    : SSH
+    : CT ID: 0: MARK: 0
+    : SSH/CA: SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.11 SSH/SA: SSH-2.0-APACHE-SSHD-2.5.0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 26: SSH Obsolete Server Version/Cipher
+    : DP: 9
+

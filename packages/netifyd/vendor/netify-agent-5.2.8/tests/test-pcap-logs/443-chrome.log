@@ -1,0 +1,7 @@
+offline0: i4pc-gx----r---- TCP [OR] 178.62.197.130:443 <-- [L] 192.168.1.13:53059
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

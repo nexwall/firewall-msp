@@ -1,0 +1,7 @@
+offline0: i4pcu---------F- TCP [OR] 93.184.220.29:80 <-- [L] 192.168.12.156:38291
+    : HTTP.netify.digicert
+    : CT ID: 0: MARK: 0
+    : H: ocsp.digicert.com
+    : HTTP/UA: zbtls http
+    : DP: 8
+

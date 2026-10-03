@@ -1,0 +1,340 @@
+#!/bin/bash
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+guard=0
+timeout=60
+base_dir=/var/run/don
+vpn_conf="$base_dir/don.ovpn"
+vpn_pid="$base_dir/donvpn.pid"
+sshd_pid="$base_dir/sshd.pid"
+sshd_conf="$base_dir/sshd.conf"
+auth_keys="$base_dir/authorized_keys"
+rsa_key="$base_dir/rsa_key"
+ecdsa_key="$base_dir/ecdsa_key"
+socket="$base_dir/management"
+credentials="$base_dir/credentials"
+session_expiry="$base_dir/session_expiry"
+session_extended_flag="$base_dir/session_extended_flag"
+cleanup_lock="$base_dir/.cleanup_lock"
+crontab_file="/etc/crontabs/root"
+user="nethsupport"
+password=""
+ca=$(uci -q get don.config.ca)
+server=$(uci -q get don.config.server)
+json_output=0
+
+if [ "$2" == "-j" ]; then
+    json_output=1
+fi
+
+function log_message
+{
+    # Log to /var/log/messages using logger (syslog)
+    logger -t "don" -p daemon.info "$1"
+}
+
+function log_error
+{
+    # Log errors to syslog
+    logger -t "don" -p daemon.err "$1"
+}
+
+function add_cron_expiration
+{
+    # Add cron job to check expiration every 10 minutes
+    if ! grep -q "/usr/sbin/don expire" "$crontab_file" 2>/dev/null; then
+        echo "*/10 * * * * /usr/sbin/don expire" >> "$crontab_file"
+        [ -x /etc/init.d/cron ] && /etc/init.d/cron restart
+        log_message "Expiration cron job added"
+    fi
+}
+
+function remove_cron_expiration
+{
+    # Remove cron job for expiration checking
+    if [ -f "$crontab_file" ]; then
+        sed -i '\|/usr/sbin/don expire|d' "$crontab_file"
+        [ -x /etc/init.d/cron ] && /etc/init.d/cron restart
+    fi
+}
+
+function cleanup
+{
+    # Use lock file to prevent concurrent cleanup calls
+    if [ -f "$cleanup_lock" ]; then
+        # Another cleanup is already running, skip
+        return
+    fi
+    # Create lock to prevent concurrent executions
+    touch "$cleanup_lock"
+    # Remove expiration cron job
+    remove_cron_expiration
+    # stop demons
+    [ -f "$sshd_pid" ] && kill "$(cat $sshd_pid)"
+    [ -f "$vpn_pid" ] && kill "$(cat $vpn_pid)" && sleep 3 && [ -f "$vpn_pid" ] &&  kill -9 "$(cat $vpn_pid)"
+    [ -d "$base_dir" ] && rm -rf "$base_dir"
+    # delete ubus nethsupport user
+    uci -q delete rpcd.ns_don
+    # commit rpcd changes
+    uci commit rpcd
+    # destroy ubus sessions
+    session=$(ubus call session list | jq -r '.ubus_rpc_session as $parent | .data.username | select(. == "nethsupport") | $parent')
+    if [ "$session" != "" ]; then
+        ubus call session destroy '{"ubus_rpc_session": "'"$session"'"}'
+    fi
+    log_message "Remote support session stopped"
+}
+
+function get_session_info
+{
+    local extra_status="$1"
+    # Both session_expiry and credentials must be present for a valid session
+    if [ ! -f "$session_expiry" ] || [ ! -f "$credentials" ]; then
+        if [ "$json_output" == 1 ]; then
+            echo "null"
+        fi
+        return 1
+    fi
+
+    # Read credentials file into array
+    mapfile -t creds < "$credentials"
+    local server_id="${creds[0]}"
+    local session_id="${creds[1]}"
+    
+    local expiry_time
+    expiry_time=$(cat "$session_expiry")
+
+    if [ "$json_output" == 1 ]; then
+        local status_field=""
+        if [ "$extra_status" == "already_extended" ]; then
+            status_field=", \"status\": \"$extra_status\""
+        fi
+        echo "{\"server_id\": \"$server_id\", \"session_id\": \"$session_id\", \"expiry_time\": $expiry_time$status_field}"
+     else
+         local current_time
+         current_time=$(date +%s)
+         local time_remaining=$((expiry_time - current_time))
+         local hours_remaining=$((time_remaining / 3600))
+         local minutes_remaining=$(( (time_remaining % 3600) / 60 ))
+         local formatted_expiry
+         formatted_expiry=$(date -d "@$expiry_time" -u +"%Y-%m-%d %H:%M:%S UTC" 2>/dev/null || date -u -f "%s" "$expiry_time" +"%Y-%m-%d %H:%M:%S UTC" 2>/dev/null)
+         echo "Server ID:$(printf '\t')$server_id"
+         echo "Session ID:$(printf '\t')$session_id"
+         echo "Expires in: ${hours_remaining}h ${minutes_remaining}m ($formatted_expiry)"
+      fi
+}
+
+# Make sure base system dir exists
+mkdir -p "$base_dir"
+
+case "$1" in
+start)
+    system_id=$(uci -q get don.config.system_id)
+    # fallback to ns-plug system ID
+    if [ -z "$system_id" ]; then
+        system_id=$(uci -q get ns-plug.config.system_id)
+    fi
+    if [ -z "$system_id" ]; then
+        log_error "Remote support session failed: system_id not configured"
+        exit 2
+    fi
+
+    cn=$(openssl x509 -noout -subject -in "$ca" | cut -d= -f 2- | sed 's/ = /=/g')
+    if [ -z "$cn" ]; then
+        log_error "Remote support session failed: invalid CA certificate"
+        exit 3
+    fi
+
+    cat << EOF > $vpn_conf
+daemon donvpn
+writepid $vpn_pid
+client
+server-poll-timeout 5
+nobind
+float
+dev tunDON
+persist-tun
+<connection>
+explicit-exit-notify 1
+remote $server 1194 udp
+</connection>
+<connection>
+remote $server 443 tcp
+</connection>
+tls-client
+auth-nocache
+ca $ca
+verify-x509-name "$cn"
+auth-user-pass $credentials
+auth-nocache
+verb 3
+persist-key
+compress lz4
+management $socket unix
+connect-timeout 10
+inactive 604800
+script-security 2
+down "/usr/sbin/don stop"
+EOF
+
+    # Generate VPN credentials
+    password=$(/usr/bin/uuidgen)
+    echo "$system_id" > $credentials
+    echo "$password" >> $credentials
+
+    # Start the VPN
+    /usr/sbin/openvpn --cd $base_dir --config $vpn_conf
+    while [ ! -S $socket ]
+    do
+        sleep 1
+        guard=$((guard+1))
+        if [ $guard -gt $timeout ]; then
+            echo "[ERROR] don-openvpn connection failed: no socket found ($socket)"
+	    cleanup
+            exit 7
+        fi
+    done
+
+    # Wait for VPN
+    ipaddr=$(echo "state" | socat - UNIX-CONNECT:$socket | grep CONNECTED | cut -d',' -f4)
+    until [ "$ipaddr" != "" ]
+    do
+        sleep 1
+        guard=$((guard+1))
+        if [ $guard -gt $timeout ]; then
+            echo "[ERROR] don-openvpn connection failed: can't connect to remote server"
+	    cleanup
+            exit 8
+        fi
+        ipaddr=$(echo "state" | socat - UNIX-CONNECT:$socket | grep CONNECTED | cut -d',' -f4)
+    done
+
+    # Start SSH daemon and bind it to the VPN
+    dropbearconvert dropbear openssh /etc/dropbear/dropbear_rsa_host_key $rsa_key 2>/dev/null
+    dropbearconvert dropbear openssh /etc/dropbear/dropbear_ed25519_host_key $ecdsa_key 2>/dev/null
+    cat << EOF > $sshd_conf
+ListenAddress $ipaddr:981
+HostKey $rsa_key
+HostKey $ecdsa_key
+LoginGraceTime 2m
+ChallengeResponseAuthentication no
+AllowUsers root
+MaxAuthTries 2
+MaxStartups 10:30:60
+PasswordAuthentication no
+PermitRootLogin yes
+AllowAgentForwarding no
+X11Forwarding no
+ClientAliveInterval 60
+ClientAliveCountMax 3
+PidFile $sshd_pid
+AuthorizedKeysFile $auth_keys
+StrictModes no
+EOF
+
+    mkdir -p /var/empty
+    chmod 700 /var/empty
+    /usr/sbin/sshd -f "$sshd_conf"
+    cat "$(uci -q get don.config.ssh_key)" > "$auth_keys"
+
+    # Enable UI access
+    uci set rpcd.ns_don=login
+    uci set rpcd.ns_don.username=$user
+    uci set rpcd.ns_don.password="$(echo "$password" | mkpasswd)"
+    uci add_list rpcd.ns_don.read='*'
+    uci add_list rpcd.ns_don.write='*'
+    # commit rpcd changes
+    uci commit rpcd
+
+    # Save session expiry time (absolute UTC timestamp: now + 24 hours)
+    echo "$(($(date +%s) + 86400))" > "$session_expiry"
+    # Remove one-time extension flag
+    rm -f "$session_extended_flag"
+
+    # Add expiration cron job
+    add_cron_expiration
+
+    log_message "Remote support session started"
+
+    get_session_info
+;;
+stop)
+    cleanup
+;;
+status)
+    if [ -f "$credentials" ]; then
+        get_session_info
+        exit $?
+    else
+        if [ "$json_output" == 1 ]; then
+            echo null
+        else
+            echo "don is not running"
+        fi
+        exit 1
+    fi
+;;
+expire)
+    # Check if session has expired - silently clean up if expired
+    if [ ! -f "$session_expiry" ] || [ ! -f "$credentials" ]; then
+        # No session running, nothing to do
+        exit 0
+    fi
+
+    expiry_time=$(cat "$session_expiry")
+    current_time=$(date +%s)
+    time_remaining=$((expiry_time - current_time))
+
+    if [ $time_remaining -le 0 ]; then
+        # Session has expired - silently stop it (replicates don stop)
+        log_error "Remote support session expired - auto-disabling"
+        cleanup
+    fi
+;;
+extend)
+    # Extend session by 7 days (one-time only)
+    if [ ! -f "$session_expiry" ] || [ ! -f "$credentials" ]; then
+        if [ "$json_output" == 1 ]; then
+            echo "{\"status\": \"no_session\"}"
+        else
+            echo "No session running"
+        fi
+        exit 0
+    fi
+
+    # Only extend once: if already extended, do nothing
+    if [ -f "$session_extended_flag" ]; then
+        if [ "$json_output" != 1 ]; then
+            echo "Session already extended"
+            echo ""
+        fi
+        get_session_info "already_extended"
+        exit $?
+    fi
+
+    # Extend: read current expiry and add 7 days
+    current_expiry=$(cat "$session_expiry")
+    new_expiry=$((current_expiry + 604800))
+    echo "$new_expiry" > "$session_expiry"
+    # Mark as extended (one-time guard)
+    touch "$session_extended_flag"
+
+    # Log the extension
+    log_message "Remote support session extended by 7 days"
+
+    if [ "$json_output" != 1 ]; then
+        echo "Session extended by 7 days"
+        echo ""
+    fi
+
+    # Show updated session info
+    get_session_info
+;;
+*)
+    echo "Usage: $0 {start|stop|status|expire|extend} [-j]"
+    exit 2
+esac

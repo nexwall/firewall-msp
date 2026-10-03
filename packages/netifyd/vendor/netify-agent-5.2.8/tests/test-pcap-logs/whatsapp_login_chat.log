@@ -1,0 +1,53 @@
+offline0: i4pc------------ UDP [L] 192.168.2.1:57621 --> [OL] 192.168.2.255:57621
+    : Spotify.netify.spotify
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.2.1:53 <-- [OL] 192.168.2.4:61697
+    : DNS.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : H: e12.whatsapp.net
+    : DP: 2
+
+offline0: i4pc----------F- TCP [OR] 158.85.58.15:5222 <-- [L] 192.168.2.4:49206
+    : WhatsApp.netify.whatsapp
+    : CT ID: 0: MARK: 0
+    : D: e12.whatsapp.net
+    : DP: 5
+
+offline0: i4pc------------ TCP [OR] 17.173.66.102:443 <-- [L] 192.168.2.4:49205
+    : HTTP/S.netify.apple
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc------------ UDP [L] 192.168.2.1:17500 --> [OL] 192.168.2.255:17500
+    : Dropbox
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 0.0.0.0:68 --> [OB] 255.255.255.255:67
+    : DHCP
+    : CT ID: 0: MARK: 0
+    : H: lucas-imac
+    : DHCP/FP: 1,3,6,15,119,95,252,44,46
+    : DP: 1
+
+offline0: i4pc-------rs-F- TCP [OR] 17.110.229.14:5223 <-- [L] 192.168.2.4:49193
+    : Apple/Push.netify.apple-push
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 6
+
+offline0: i6pc--x--------- UDP [L] fe80::189c:c31b:1298:224:5353 --> [OM] ff02::fb:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _raop._tcp.local
+    : DP: 1
+
+offline0: i4pc--x--------- UDP [L] 192.168.2.4:5353 --> [OM] 224.0.0.251:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _raop._tcp.local
+    : DP: 1
+

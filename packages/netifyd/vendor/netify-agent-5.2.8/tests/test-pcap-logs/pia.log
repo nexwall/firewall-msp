@@ -1,0 +1,12 @@
+offline0: i4pcu------r---- TCP [OR] 143.244.45.60:443 <-- [L] 192.168.88.3:56854
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : V: 0x0303 CS: 0xc030
+    : TLS/CN: newjersey402
+    : TLS/IDN: C=US, ST=CA, L=LosAngeles, O=Private Internet Access, OU=Private Internet Access, CN=Private Internet Access TLS/SDN: C=US, ST=CA, L=LosAngeles, O=Private Internet Access, OU=Private Internet Access, CN=newjersey402, C=US, ST=CA, L=LosAngeles, O=Private Internet Access, OU=Private Internet Access, CN=Private Internet Access
+    : JA4: t13d571000_131602cb7446_24695f2957a7
+    : RID 30: TLS Certificate Expired
+    : RID 35: TLS SNI Extension Not Found
+    : RID 47: TLS ALPN Not Found
+    : DP: 7
+

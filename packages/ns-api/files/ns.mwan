@@ -1,0 +1,173 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import json
+import sys
+
+from euci import EUci
+from nethsec import mwan, utils, objects
+
+def __filter_objects(e_uci: EUci, obj):
+    family = objects.get_info(e_uci, obj['id']).get('family', None)
+    if family and family == 'ipv6':
+        return False
+    if obj['type'] == 'host_set':
+        return objects.is_singleton_host_set(e_uci, obj['id'], allow_cidr=True)
+    return True
+
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        'index_policies': {},
+        'store_policy': {
+            'name': 'String',
+            'interfaces': 'String'
+        },
+        'delete_policy': {
+            'name': 'String'
+        },
+        'edit_policy': {
+            'name': 'String',
+            'interfaces': 'String'
+        },
+        'index_rules': {},
+        'store_rule': {
+            'name': 'String',
+            'policy': 'String',
+            'protocol': 'String',
+            'source_address': 'String',
+            'source_port': 'String',
+            'destination_address': 'String',
+            'destination_port': 'String',
+            'sticky': 'Boolean',
+            'ns_src': 'String',
+            'ns_dst': 'String',
+        },
+        'order_rules': {
+            'rules': 'String'
+        },
+        'delete_rule': {
+            'name': 'String'
+        },
+        'edit_rule': {
+            'name': 'String',
+            'policy': 'String',
+            'label': 'String',
+            'protocol': 'String',
+            'source_address': 'String',
+            'source_port': 'String',
+            'destination_address': 'String',
+            'destination_port': 'String',
+            'sticky': 'Boolean',
+            'ns_src': 'String',
+            'ns_dst': 'String',
+        },
+        'clear_config': {},
+        'set_default_config': {
+            'track_ip': 'String',
+            'ping_timeout': 'String',
+            'ping_interval': 'String',
+            'ping_failure_interval': 'String',
+            'interface_down_threshold': 'String',
+            'interface_up_threshold': 'String',
+        },
+        'get_default_config': {},
+        'list_object_suggestions': {}
+    }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    e_uci = EUci()
+    try:
+        if action == 'index_policies':
+            print(json.dumps({'values': mwan.index_policies(e_uci)}))
+        elif action == 'store_policy':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            mwan.store_policy(e_uci, data['name'], data['interfaces'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'delete_policy':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            mwan.delete_policy(e_uci, data['name'])
+            print({'message': 'success'})
+        elif action == 'edit_policy':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            mwan.edit_policy(e_uci, data['name'], data['label'], data['interfaces'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'index_rules':
+            print(json.dumps({'values': mwan.index_rules(e_uci)}))
+        elif action == 'store_rule':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            mwan.store_rule(
+                e_uci,
+                data['name'],
+                data['policy'],
+                data['protocol'],
+                data.get('source_address'),
+                data['source_port'],
+                data.get('destination_address'),
+                data['destination_port'],
+                data['sticky'],
+                data.get('ns_src'),
+                data.get('ns_dst'),
+            )
+            print(json.dumps({'message': 'success'}))
+        elif action == 'order_rules':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            mwan.order_rules(e_uci, data['rules'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'delete_rule':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            mwan.delete_rule(e_uci, data['name'])
+            print(json.dumps({'message': 'success'}))
+        elif action == 'edit_rule':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            mwan.edit_rule(
+                e_uci,
+                data['name'],
+                data['policy'],
+                data['label'],
+                data['protocol'],
+                data.get('source_address'),
+                data['source_port'],
+                data.get('destination_address'),
+                data['destination_port'],
+                data['sticky'],
+                data.get('ns_src'),
+                data.get('ns_dst'),
+            )
+            print(json.dumps({'message': 'success'}))
+        elif action == 'clear_config':
+            mwan.clear_config(e_uci)
+            print(json.dumps({'message': 'success'}))
+        elif action == 'set_default_config':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            mwan.set_default_config(
+                e_uci,
+                data['track_ip'],
+                data['ping_timeout'],
+                data['ping_interval'],
+                data['ping_failure_interval'],
+                data['interface_down_threshold'],
+                data['interface_up_threshold'],
+            )
+            print(json.dumps({'message': 'success'}))
+        elif action == 'get_default_config':
+            print(json.dumps({'values': mwan.get_default_config(e_uci)}))
+        elif action == "list_object_suggestions":
+            ns_src = list(filter(lambda x: __filter_objects(e_uci, x), objects.list_objects(e_uci, include_domain_sets=False)))
+            ns_dst = list(filter(lambda x: __filter_objects(e_uci, x), objects.list_objects(e_uci, include_domain_sets=False)))
+            print(json.dumps({"objects": {'ns_src': ns_src, 'ns_dst': ns_dst}}))
+
+    except KeyError as e:
+        print(json.dumps(utils.validation_error(e.args[0], 'required')))
+    except json.JSONDecodeError:
+        print(json.dumps(utils.generic_error("json given is invalid")))
+    except utils.ValidationError as e:
+        print(json.dumps(utils.validation_error(e.parameter, e.message, e.value)))
+    except ValueError as e:
+        print(json.dumps(utils.generic_error(e)))

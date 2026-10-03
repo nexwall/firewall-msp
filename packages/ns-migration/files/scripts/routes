@@ -1,0 +1,45 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2022 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+import nsmigration
+from nethsec import firewall, utils
+
+(u, data, nmap) = nsmigration.init("routes.json")
+
+counter = len(data['routes'])
+
+for route in data['routes']:
+    rname = utils.get_id(f'route{counter}')
+    itype = route.pop("type")
+    if itype == "ethernet":
+        route['interface'] = utils.get_interface_from_mac(u, nsmigration.remap(route.pop("hwaddr"), nmap))
+    elif itype == "vlan":
+        device = utils.get_device_name(nsmigration.remap(route.pop("hwaddr"), nmap))
+        route['interface'] = utils.get_interface_from_device(u, f'{device}.{route.pop("vid")}')
+    else:
+        route['interface'] = utils.get_interface_from_device(u, route.pop("device"))
+
+    # Routes created from Server Manager could have no device,
+    # map them to a routes that matches all interfaces
+    if not route['interface']:
+        del route['interface']
+
+    nsmigration.vprint(f'Creating route {rname}')
+    u.set("network", rname, "route")
+    for option in route:
+        u.set("network", rname, option, route[option])
+
+    # Set default options
+    u.set("network", rname, "mtu", "1500")
+    u.set("network", rname, "type", "unicast")
+    u.set("network", rname, "disabled", "0")
+    u.set("network", rname, "onlink", "0")
+
+    counter = counter - 1
+
+# Save configuration
+u.commit("network")

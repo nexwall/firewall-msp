@@ -1,0 +1,11 @@
+offline0: i4pcu------r--F- TCP [OR] 104.111.215.93:443 <-- [L] 192.168.2.126:60174
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : H: www.repubblica.it
+    : V: 0x0303 CS: 0xc030
+    : TLS/SNI: www.repubblica.it TLS/CN: www.repstatic.it
+    : TLS/IDN: C=US, O=DigiCert Inc, OU=www.digicert.com, CN=GeoTrust RSA CA 2018 TLS/SDN: C=IT, ST=Roma, L=Roma, O=GEDI Digital S.r.l., CN=www.repstatic.it
+    : JA4: t13d1615h2_46e7e9700bed_45f260be83e2
+    : RID 30: TLS Certificate Expired
+    : DP: 9
+

@@ -1,0 +1,367 @@
+#!/usr/bin/python3
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Keeps the application catalog of the DPI engine in line with the license.
+#
+#   licensed (subscription or trial)  the catalog published on the Nexwall license server is installed and kept
+#                                     up to date (verified with the signature key the unit already trusts)
+#   not licensed                      the small open list built into the firmware is used again
+#
+# Usage:
+#   nexwall-dpi-catalog sync            cron (every 10 minutes): does only what is due (license change, update interval)
+#   nexwall-dpi-catalog update          fetch and install now (the "Update now" button), ignores the interval
+#   nexwall-dpi-catalog revert          go back to the open list
+#   nexwall-dpi-catalog status [--json]
+#
+# Settings (/etc/config/dpi, section "catalog"):
+#   option auto_update '1'      '0' = never update by itself, only with "update"
+#   option interval    '24'     hours between checks (1 to 168)
+import argparse
+import base64
+import fcntl
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+import requests
+from Crypto.Hash import SHA256
+from Crypto.PublicKey import RSA
+from Crypto.Signature import pkcs1_15
+
+STATE_DIR = '/etc/netifyd/catalog'
+STATE_FILE = STATE_DIR + '/state.json'
+LOCK_FILE = '/var/run/nexwall-dpi-catalog.lock'
+LIVE = {'netify-apps.conf': '/etc/netifyd/netify-apps.conf', 'netify-categories.json': '/etc/netifyd/netify-categories.json'}
+OPEN = {'netify-apps.conf': '/usr/share/netifyd/netify-apps.conf', 'netify-categories.json': '/usr/share/netifyd/netify-categories.json'}
+LICENSE_DIR = '/etc/nexwall-license'
+DEFAULT_SERVER = 'https://license.nexwall.com.br'
+RULE_TYPES = {'app', 'dom', 'net', 'nsd', 'ver', 'aio', 'xfm'}
+MAX_BYTES = 40 * 1024 * 1024
+RETRY_AFTER_ERROR = 15 * 60
+
+
+def log(msg, level='info'):
+    print(msg)
+    subprocess.run(['logger', '-t', 'nexwall-dpi-catalog', '-p', 'daemon.' + level, msg], check=False)
+
+
+def uci(key, default=''):
+    r = subprocess.run(['uci', '-q', 'get', key], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else default
+
+
+def settings():
+    try:
+        interval = int(uci('dpi.catalog.interval', '24'))
+    except ValueError:
+        interval = 24
+    return {'auto_update': uci('dpi.catalog.auto_update', '1') != '0', 'interval': min(max(interval, 1), 168)}
+
+
+def load_state():
+    try:
+        with open(STATE_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = STATE_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(state, f, indent=1, sort_keys=True)
+    os.replace(tmp, STATE_FILE)
+
+
+def license_state():
+    try:
+        from nethsec import license as nx_license
+        return nx_license.state()
+    except Exception:
+        return 'not_registered'
+
+
+def read(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ''
+
+
+def reload_engine():
+    subprocess.run(['/etc/init.d/netifyd', 'reload'], check=False, capture_output=True, timeout=60)
+    time.sleep(4)
+    return subprocess.run(['pidof', 'netifyd'], capture_output=True).returncode == 0
+
+
+def count_rules(path):
+    c = {'applications': 0, 'domains': 0, 'networks': 0}
+    try:
+        with open(path, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if line.startswith('app:'):
+                    c['applications'] += 1
+                elif line.startswith('dom:'):
+                    c['domains'] += 1
+                elif line.startswith('net:'):
+                    c['networks'] += 1
+    except OSError:
+        pass
+    return c
+
+
+def validate_apps(data):
+    """the rule file must look like one; a bad file is never installed"""
+    apps = 0
+    for n, raw in enumerate(data.decode('utf-8', errors='replace').splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        t = line.split(':', 1)[0]
+        if t not in RULE_TYPES:
+            raise ValueError('netify-apps.conf line %d: unknown rule type' % n)
+        apps += t == 'app'
+    if apps < 100:
+        raise ValueError('netify-apps.conf has only %d applications' % apps)
+
+
+def validate_categories(data):
+    d = json.loads(data)
+    for k in ('application_index', 'application_tag_index', 'protocol_index', 'protocol_tag_index'):
+        if k not in d:
+            raise ValueError('netify-categories.json lacks %s' % k)
+
+
+def install(files):
+    """files: name -> bytes. Atomic per file, previous files kept as .prev, engine reloaded, rolled back if it dies."""
+    os.makedirs(STATE_DIR, exist_ok=True)
+    prev = {}
+    for name, dst in LIVE.items():
+        try:
+            with open(dst, 'rb') as f:
+                prev[name] = f.read()
+        except OSError:
+            prev[name] = None
+    try:
+        for name, data in files.items():
+            dst = LIVE[name]
+            tmp = dst + '.new'
+            with open(tmp, 'wb') as f:
+                f.write(data)
+            os.replace(tmp, dst)
+        if not reload_engine():
+            raise RuntimeError('the DPI engine is not running after the reload')
+    except Exception:
+        for name, data in prev.items():
+            if data is not None:
+                with open(LIVE[name], 'wb') as f:
+                    f.write(data)
+        reload_engine()
+        raise
+    for name, data in prev.items():
+        if data is not None:
+            with open(os.path.join(STATE_DIR, name + '.prev'), 'wb') as f:
+                f.write(data)
+
+
+def do_revert(state, reason):
+    files = {}
+    for name, src in OPEN.items():
+        with open(src, 'rb') as f:
+            files[name] = f.read()
+    install(files)
+    state.update({'installed_version': None, 'source': 'open', 'installed_at': int(time.time()), 'apps_sha256': None,
+                  'counts': count_rules(LIVE['netify-apps.conf']), 'last_result': 'reverted: ' + reason})
+    log('using the open application list (%s)' % reason)
+
+
+def verify_manifest(resp):
+    pubkey = RSA.import_key(read(LICENSE_DIR + '/pubkey.pem'))
+    payload = base64.b64decode(resp['payload'])
+    pkcs1_15.new(pubkey).verify(SHA256.new(payload), base64.b64decode(resp['signature']))
+    m = json.loads(payload)
+    if m.get('kind') != 'dpi-catalog':
+        raise ValueError('not a catalog manifest')
+    return m
+
+
+CORE_CTL = '/usr/sbin/licensectl'
+
+
+class CoreResponse:
+    def __init__(self, status_code, content):
+        self.status_code, self.content = status_code, content
+
+    def json(self):
+        return json.loads(self.content)
+
+
+def fetch(server, headers, path):
+    if os.path.exists(CORE_CTL):
+        # the compiled license core talks to the server: pinned TLS, device token and device signature
+        p = subprocess.run([CORE_CTL, 'get', path], capture_output=True, timeout=180)
+        if p.returncode == 0:
+            return CoreResponse(200, p.stdout)
+        msg = p.stderr.decode(errors='replace')
+        m = re.search(r'\((\d{3})\)', msg) or re.search(r'HTTP (\d{3})', msg)
+        return CoreResponse(int(m.group(1)) if m else 599, b'')
+    r = requests.get(server + path, headers=headers, timeout=(10, 120))
+    return r
+
+
+def do_update(state, force):
+    st = license_state()
+    state['license_state'] = st
+    if st not in ('subscribed', 'trial'):
+        if state.get('source') == 'nexwall':
+            do_revert(state, 'license %s' % st)
+        else:
+            state['last_result'] = 'not licensed: using the open list'
+        return
+    hwid, token = read(LICENSE_DIR + '/hwid'), read(LICENSE_DIR + '/device_token')
+    if not hwid or not token:
+        state['last_result'] = 'waiting for registration'
+        return
+    server = (uci('nexwall-license.main.server', DEFAULT_SERVER)).rstrip('/')
+    headers = {'X-Nexwall-HWID': hwid, 'X-Nexwall-Token': token}
+    r = fetch(server, headers, '/api/v1/dpi/manifest')
+    if r.status_code != 200:
+        raise RuntimeError('manifest request failed: HTTP %d' % r.status_code)
+    j = r.json()
+    if not j.get('entitled'):
+        if state.get('source') == 'nexwall':
+            do_revert(state, 'the server says the unit is %s' % j.get('license_state'))
+        else:
+            state['last_result'] = 'server: not entitled (%s)' % j.get('license_state')
+        return
+    if not j.get('payload'):
+        state['last_result'] = 'no catalog published yet'
+        return
+    m = verify_manifest(j)
+    version = m['version']
+    if version == state.get('installed_version') and live_matches(state) and not force:
+        state['last_result'] = 'up to date (%s)' % version
+        return
+    files = {}
+    for name, want in m['files'].items():
+        if name not in LIVE:
+            continue
+        if want['size'] > MAX_BYTES:
+            raise ValueError('%s is too large' % name)
+        fr = fetch(server, headers, '/api/v1/dpi/file/%s/%s' % (version, name))
+        if fr.status_code != 200:
+            raise RuntimeError('%s: HTTP %d' % (name, fr.status_code))
+        if hashlib.sha256(fr.content).hexdigest() != want['sha256']:
+            raise ValueError('%s does not match the signed manifest' % name)
+        files[name] = fr.content
+    if set(files) != set(LIVE):
+        raise ValueError('the manifest lacks a required file')
+    validate_apps(files['netify-apps.conf'])
+    validate_categories(files['netify-categories.json'])
+    install(files)
+    state.update({'installed_version': version, 'source': 'nexwall', 'installed_at': int(time.time()),
+                  'apps_sha256': hashlib.sha256(files['netify-apps.conf']).hexdigest(),
+                  'counts': m.get('counts') or count_rules(LIVE['netify-apps.conf']),
+                  'last_result': 'installed %s' % version})
+    log('installed application catalog %s (%s applications)' % (version, (m.get('counts') or {}).get('applications', '?')))
+
+
+def live_matches(state):
+    """False when the catalog in use is no longer the one installed (e.g. the firmware upgrade restored the open list)"""
+    want = state.get('apps_sha256')
+    if not want:
+        return True
+    try:
+        with open(LIVE['netify-apps.conf'], 'rb') as f:
+            return hashlib.sha256(f.read()).hexdigest() == want
+    except OSError:
+        return False
+
+
+def run(mode):
+    os.makedirs(os.path.dirname(LOCK_FILE), exist_ok=True)
+    lock = open(LOCK_FILE, 'w')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print('another run is in progress')
+        return 0
+    state = load_state()
+    cfg = settings()
+    now = int(time.time())
+    try:
+        if mode == 'revert':
+            do_revert(state, 'requested')
+        elif mode == 'update':
+            state['last_check'] = now
+            do_update(state, force=False)
+        else:  # sync
+            st = license_state()
+            due = now - state.get('last_check', 0) >= cfg['interval'] * 3600
+            retry = state.get('last_error') and now - state.get('last_check', 0) >= RETRY_AFTER_ERROR
+            lapsed = st not in ('subscribed', 'trial') and state.get('source') == 'nexwall'
+            entitled = st in ('subscribed', 'trial')
+            first = entitled and not state.get('installed_version')
+            drift = entitled and bool(state.get('installed_version')) and not live_matches(state)
+            if lapsed or (cfg['auto_update'] and (due or retry or first or drift)):
+                state['last_check'] = now
+                do_update(state, force=False)
+            else:
+                return 0
+        state['last_error'] = None
+    except Exception as e:
+        state['last_error'] = str(e)[:300]
+        state['last_result'] = 'failed'
+        log('catalog update failed: %s' % e, 'err')
+    save_state(state)
+    return 0 if not state.get('last_error') else 1
+
+
+def status(as_json):
+    state = load_state()
+    cfg = settings()
+    st = license_state()
+    installed = state.get('installed_version')
+    counts = state.get('counts') or count_rules(LIVE['netify-apps.conf'])
+    out = {
+        'license_state': st,
+        'entitled': st in ('subscribed', 'trial'),
+        'source': state.get('source', 'open'),
+        'installed_version': installed,
+        'installed_at': state.get('installed_at'),
+        'counts': counts,
+        'auto_update': cfg['auto_update'],
+        'interval': cfg['interval'],
+        'last_check': state.get('last_check'),
+        'next_check': (state.get('last_check', 0) + cfg['interval'] * 3600) if cfg['auto_update'] else None,
+        'last_result': state.get('last_result'),
+        'last_error': state.get('last_error'),
+    }
+    if as_json:
+        print(json.dumps(out))
+    else:
+        for k, v in out.items():
+            print('%-18s %s' % (k, v))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('command', nargs='?', default='sync', choices=['sync', 'update', 'revert', 'status'])
+    ap.add_argument('--json', action='store_true')
+    a = ap.parse_args()
+    if a.command == 'status':
+        status(a.json)
+        return 0
+    return run(a.command)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

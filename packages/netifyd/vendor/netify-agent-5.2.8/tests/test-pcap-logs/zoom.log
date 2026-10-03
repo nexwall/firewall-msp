@@ -1,0 +1,258 @@
+offline0: i4pcu------r---- TCP [OR] 167.99.215.164:4434 <-- [L] 192.168.1.117:54863
+    : TLS
+    : CT ID: 0: MARK: 0
+    : H: dati.ntop.org
+    : V: 0x0303 CS: 0xc030
+    : TLS/SNI: dati.ntop.org
+    : JA4: t12d800700_64d9932cae36_4446390ac224
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+
+offline0: i4pc------------ UDP [L] 192.168.1.117:57025 --> [OM] 239.255.255.250:1900
+    : SSDP
+    : CT ID: 0: MARK: 0
+    : H: 239.255.255.250
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.117:137 --> [OB] 192.168.1.255:137
+    : NETBIOS
+    : CT ID: 0: MARK: 0
+    : H: workgroup
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.117:64352
+    : DNS.netify.zoom
+    : CT ID: 0: MARK: 0
+    : H: log.zoom.us
+    : DP: 2
+
+offline0: i4pc-------r---- UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.117:65394
+    : DNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: local
+    : RID  8: Error Code
+    : DP: 2
+
+offline0: i4pc-------r---- ICMP [L] 192.168.1.1:0 <-- [OL] 192.168.1.117:0
+    : ICMP
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 162.255.37.14:3478 <-- [L] 192.168.1.117:23903
+    : ZOOM.netify.zoom
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pcu------r---- TCP [OR] 52.202.62.238:443 <-- [L] 192.168.1.117:54864
+    : HTTP/S.netify.zoom
+    : CT ID: 0: MARK: 0
+    : D: log.zoom.us
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: log.zoom.us TLS/CN: zoom.us
+    : TLS/IDN: C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2 TLS/SDN: OU=Domain Control Validated, CN=*.zoom.us
+    : JA4: t12d8008ht_9cedc1f1428b_046e095b7c4a
+    : RID 30: TLS Certificate Expired
+    : DP: 10
+
+offline0: i4pc-------r---- UDP [OR] 162.255.38.14:3478 <-- [L] 192.168.1.117:23903
+    : ZOOM.netify.zoom
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 162.255.38.14:3479 <-- [L] 192.168.1.117:23903
+    : ZOOM.netify.zoom
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ TCP [OR] 35.186.224.53:443 <-- [L] 192.168.1.117:53872
+    : HTTP/S.netify.google
+    : CT ID: 0: MARK: 0
+    : DP: 5
+
+offline0: i4pc-------r---- ICMP [OR] 162.255.38.14:0 <-- [L] 192.168.1.117:0
+    : ICMP.netify.zoom
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.0.1:68 --> [OB] 255.255.255.255:67
+    : DHCP
+    : CT ID: 0: MARK: 0
+    : H: tl-sg116e
+    : DHCP/FP: 1,3 DHCP/CI: TL-SG116E
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.117:62988
+    : DNS.netify.zoom
+    : CT ID: 0: MARK: 0
+    : H: www3.zoom.us
+    : DP: 2
+
+offline0: i4pcu------r---- TCP [OR] 52.202.62.196:443 <-- [L] 192.168.1.117:54865
+    : HTTP/S.netify.zoom
+    : CT ID: 0: MARK: 0
+    : H: zoom.us
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: zoom.us TLS/CN: zoom.us
+    : TLS/IDN: C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2 TLS/SDN: OU=Domain Control Validated, CN=*.zoom.us
+    : JA4: t12d8008ht_9cedc1f1428b_046e095b7c4a
+    : RID 30: TLS Certificate Expired
+    : DP: 10
+
+offline0: i4pcu------r---- TCP [OR] 52.202.62.236:443 <-- [L] 192.168.1.117:54866
+    : HTTP/S.netify.zoom
+    : CT ID: 0: MARK: 0
+    : D: www3.zoom.us
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: www3.zoom.us TLS/CN: zoom.us
+    : TLS/IDN: C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2 TLS/SDN: OU=Domain Control Validated, CN=*.zoom.us
+    : JA4: t12d8008ht_9cedc1f1428b_046e095b7c4a
+    : RID 30: TLS Certificate Expired
+    : DP: 10
+
+offline0: i4pc------------ UDP [L] 192.168.1.117:57621 --> [OB] 192.168.1.255:57621
+    : Spotify.netify.spotify
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.117:62563
+    : DNS.netify.zoom
+    : CT ID: 0: MARK: 0
+    : H: zoomfr85zc.zoom.us
+    : DP: 2
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.117:58063
+    : DNS.netify.zoom
+    : CT ID: 0: MARK: 0
+    : H: zoomfr84zc.zoom.us
+    : DP: 2
+
+offline0: i4pcu------r--F- TCP [L] 192.168.1.117:54867 --> [OR] 213.19.144.105:443
+    : HTTP/S.netify.zoom
+    : CT ID: 0: MARK: 0
+    : H: zoomam105zc.zoom.us
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: zoomam105zc.zoom.us TLS/CN: zoom.us
+    : TLS/IDN: C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2 TLS/SDN: OU=Domain Control Validated, CN=*.zoom.us
+    : JA4: t12d930700_72a4e8475a2e_4446390ac224
+    : RID 30: TLS Certificate Expired
+    : RID 47: TLS ALPN Not Found
+    : DP: 11
+
+offline0: i4pcu------r--F- TCP [L] 192.168.1.117:54869 --> [OR] 213.244.140.85:443
+    : HTTP/S.netify.zoom
+    : CT ID: 0: MARK: 0
+    : D: zoomfr85zc.zoom.us
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: zoomfr85zc.zoom.us TLS/CN: zoom.us
+    : TLS/IDN: C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2 TLS/SDN: OU=Domain Control Validated, CN=*.zoom.us
+    : JA4: t12d930700_72a4e8475a2e_4446390ac224
+    : RID 30: TLS Certificate Expired
+    : RID 47: TLS ALPN Not Found
+    : DP: 11
+
+offline0: i4pcu------r--F- TCP [L] 192.168.1.117:54868 --> [OR] 213.19.144.104:443
+    : HTTP/S.netify.zoom
+    : CT ID: 0: MARK: 0
+    : H: zoomam104zc.zoom.us
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: zoomam104zc.zoom.us TLS/CN: zoom.us
+    : TLS/IDN: C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2 TLS/SDN: OU=Domain Control Validated, CN=*.zoom.us
+    : JA4: t12d930700_72a4e8475a2e_4446390ac224
+    : RID 30: TLS Certificate Expired
+    : RID 47: TLS ALPN Not Found
+    : DP: 11
+
+offline0: i4pcu------r--F- TCP [L] 192.168.1.117:54870 --> [OR] 213.244.140.84:443
+    : HTTP/S.netify.zoom
+    : CT ID: 0: MARK: 0
+    : D: zoomfr84zc.zoom.us
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: zoomfr84zc.zoom.us TLS/CN: zoom.us
+    : TLS/IDN: C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2 TLS/SDN: OU=Domain Control Validated, CN=*.zoom.us
+    : JA4: t12d930700_72a4e8475a2e_4446390ac224
+    : RID 30: TLS Certificate Expired
+    : RID 47: TLS ALPN Not Found
+    : DP: 11
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:53 <-- [OL] 192.168.1.117:51185
+    : DNS.netify.zoom
+    : CT ID: 0: MARK: 0
+    : H: zoomfrn99mmr.zoom.us
+    : DP: 2
+
+offline0: i4pcu------r---- TCP [OR] 109.94.160.99:443 <-- [L] 192.168.1.117:54871
+    : HTTP/S.netify.zoom
+    : CT ID: 0: MARK: 0
+    : D: zoomfrn99mmr.zoom.us
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: zoomfrn99mmr.zoom.us TLS/CN: zoom.us
+    : TLS/IDN: C=US, ST=Arizona, L=Scottsdale, O=GoDaddy.com, Inc., OU=http://certs.godaddy.com/repository/, CN=Go Daddy Secure Certificate Authority - G2 TLS/SDN: OU=Domain Control Validated, CN=*.zoom.us
+    : JA4: t12d930700_72a4e8475a2e_4446390ac224
+    : RID 30: TLS Certificate Expired
+    : RID 47: TLS ALPN Not Found
+    : DP: 11
+
+offline0: i4pc------------ UDP [OR] 109.94.160.99:8801 <-- [L] 192.168.1.117:58327
+    : ZOOM.netify.zoom
+    : CT ID: 0: MARK: 0
+    : D: zoomfrn99mmr.zoom.us
+    : DP: 5
+
+offline0: i4pc------------ UDP [OR] 109.94.160.99:8801 <-- [L] 192.168.1.117:60620
+    : ZOOM.netify.zoom
+    : CT ID: 0: MARK: 0
+    : D: zoomfrn99mmr.zoom.us
+    : DP: 5
+
+offline0: i4pc------------ UDP [OR] 109.94.160.99:8801 <-- [L] 192.168.1.117:61731
+    : ZOOM.netify.zoom
+    : CT ID: 0: MARK: 0
+    : D: zoomfrn99mmr.zoom.us
+    : DP: 5
+
+offline0: i4pc------------ UDP [L] 10.140.117.35:45634 --> [OR] 193.122.35.237:8801
+    : ZOOM.netify.zoom
+    : CT ID: 0: MARK: 0
+    : VLAN: 113
+    : DP: 8
+
+offline0: i4pc--x--------- TCP [OR] 62.149.152.153:993 <-- [L] 192.168.1.117:54341
+    : IMAP/S
+    : CT ID: 0: MARK: 0
+    : DP: 2
+
+offline0: i4pc-gx----r---- TCP [OR] 13.225.84.182:443 <-- [L] 192.168.1.117:54798
+    : HTTP/S
+    : CT ID: 0: MARK: 0
+    : RID 51: TCP Connection Issues
+    : RID 56: Probing Attempt
+    : DP: 2
+
+offline0: i4pc--x--------- UDP [L] 192.168.1.117:5353 --> [OM] 224.0.0.251:5353
+    : MDNS.netify.internal-network
+    : CT ID: 0: MARK: 0
+    : H: _spotify-connect._tcp.local
+    : DP: 1
+
+offline0: i4pc--x----r---- TCP [OR] 172.217.21.72:443 <-- [L] 192.168.1.117:54854
+    : HTTP/S.netify.analytics
+    : CT ID: 0: MARK: 0
+    : H: www.googletagmanager.com
+    : V: 0x0301
+    : TLS/SNI: www.googletagmanager.com
+    : JA4: t10d0909h2_61c4dbd01224_cc731f12afbb
+    : RID 36: Obsolete TLS (v1.1 or older)
+    : DP: 4
+
+offline0: i4pc-gx--------- TCP [OR] 104.199.65.42:80 <-- [L] 192.168.1.117:53867
+    : HTTP.netify.google
+    : CT ID: 0: MARK: 0
+    : DP: 6
+

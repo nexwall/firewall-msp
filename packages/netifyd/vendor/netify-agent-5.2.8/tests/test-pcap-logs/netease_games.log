@@ -1,0 +1,34 @@
+offline0: i4pc------------ UDP [L] 172.17.8.75:53 <-- [OR] 192.168.88.231:49377
+    : DNS.netify.netease-games
+    : CT ID: 0: MARK: 0
+    : H: data-detect.nie.easebar.com
+    : DP: 3
+
+offline0: i4pc-------r---- UDP [OR] 35.246.207.19:4513 <-- [L] 192.168.88.231:56588
+    : NetEaseGames
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 35.228.32.209:4170 <-- [L] 192.168.88.231:41040
+    : NetEaseGames
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 34.141.75.90:28203 <-- [L] 192.168.88.231:58951
+    : NetEaseGames
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pcu-x----r---- TCP [OR] 35.73.71.94:443 <-- [L] 192.168.88.231:50402
+    : HTTP/S.netify.netease-games
+    : CT ID: 0: MARK: 0
+    : D: a88d4e959885f11ebae61065d532a826-4fdea18b1eb69036.elb.ap-northeast-1.amazonaws.com H: data-detect.nie.easebar.com
+    : V: 0x0303 CS: 0xc02f
+    : TLS/SNI: data-detect.nie.easebar.com
+    : JA4: t12d600600_a54dbbc9e493_8587f467d9ea
+    : RID 47: TLS ALPN Not Found
+    : DP: 6
+

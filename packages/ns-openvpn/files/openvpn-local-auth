@@ -1,0 +1,49 @@
+#!/usr/bin/python
+
+#
+# Copyright (C) 2023 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Used env variables:
+# - username
+# - password
+# - config
+
+import os
+import re
+import sys
+from euci import EUci
+from nethsec import users
+
+username = os.environ.get("username")
+password = os.environ.get("password")
+config_path = os.environ.get("config")
+
+instance = re.sub(r'^openvpn-|\.conf$', '', config_path)
+
+uci = EUci()
+try:
+    db = uci.get("openvpn", instance, "ns_user_db")
+except:
+    # user db not set
+    sys.exit(5)
+
+user = users.get_user_by_name(uci, username, db)
+if user is None:
+    # user not found
+    sys.exit(4)
+
+if not "openvpn_enabled" in user or user["openvpn_enabled"] != "1":
+    # user not enabled
+    sys.exit(3)
+
+if "password" not in user:
+    # password not set
+    sys.exit(2)
+
+if users.check_password(password, user["password"]):
+    sys.exit(0)
+else:
+    # password do not match
+    sys.exit(1)

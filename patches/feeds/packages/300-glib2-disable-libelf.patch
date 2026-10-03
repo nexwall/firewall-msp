@@ -1,0 +1,14 @@
+diff --git a/libs/glib2/Makefile b/libs/glib2/Makefile
+--- a/libs/glib2/Makefile
++++ b/libs/glib2/Makefile
+@@ -65,6 +65,10 @@
+ # default feature=auto see meson_options.txt
+ COMP_ARGS+=-Dintrospection=disabled
+ 
++# libelf is auto-detected but not declared in DEPENDS; when elfutils is built in
++# parallel the link fails (libelf.so missing). Only gresource-on-ELF needs it.
++COMP_ARGS+=-Dlibelf=disabled
++
+ # set runtime dir to /var/run
+ COMP_ARGS+=-Druntime_dir=/var/run
+ 

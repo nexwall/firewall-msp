@@ -1,0 +1,18 @@
+offline0: i6pc-------r---- UDP [OR] 2001:b07:a3d:c112:91b7:b97e:6e2:fad8:37542 --> [L] 2606:4700:7::a29f:9804:443
+    : QUIC
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 5
+
+offline0: i6pc-------r---- UDP [OR] 2001:b07:a3d:c112:91b7:b97e:6e2:fad8:33144 --> [L] 2a00:1450:4002:411::200e:443
+    : QUIC.netify.google
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : DP: 6
+
+offline0: i4pc-------r---- UDP [OR] 13.226.175.53:443 <-- [L] 192.168.1.245:40408
+    : QUIC
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 3
+

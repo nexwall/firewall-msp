@@ -1,0 +1,31 @@
+# Victoria Metrics Alert Rules for the DPI / IPS packet queue watchdog
+#
+# nexwall-nfq-watchdog (nexwall-scripts) writes the nexwall_nfq_watchdog metric every minute:
+#   last_event   time of the last stall (0 = never), restarts_1h, limited (1 = restart limit reached)
+
+groups:
+  - name: "dpi"
+    interval: "1m"
+    rules:
+      - alert: DpiEngineStalled
+        expr: 'nexwall_nfq_watchdog_last_event > 0 and time() - nexwall_nfq_watchdog_last_event < 3600'
+        for: "0m"
+        labels:
+          severity: "warning"
+          alertgroup: "dpi"
+        annotations:
+          summary_en: "The traffic inspection engine stopped responding and was recovered"
+          summary_es: "El motor de inspección de tráfico dejó de responder y fue recuperado"
+          description_en: "A packet queue of the application inspection (DPI) or intrusion prevention engine stopped being served. The watchdog saved a diagnostic report in /root/nfq-stall and restarted the engine. Traffic kept flowing but new connections may have been delayed for a few minutes. Contact support if it repeats."
+          description_es: "Una cola de paquetes del motor de inspección de aplicaciones (DPI) o de prevención de intrusiones dejó de ser atendida. El watchdog guardó un informe de diagnóstico en /root/nfq-stall y reinició el motor. El tráfico siguió fluyendo, pero las conexiones nuevas pueden haberse retrasado unos minutos. Contacte a soporte si se repite."
+      - alert: DpiEngineRestartLimit
+        expr: 'nexwall_nfq_watchdog_limited == 1'
+        for: "0m"
+        labels:
+          severity: "critical"
+          alertgroup: "dpi"
+        annotations:
+          summary_en: "The traffic inspection engine keeps stalling and is no longer restarted automatically"
+          summary_es: "El motor de inspección de tráfico se sigue bloqueando y ya no se reinicia automáticamente"
+          description_en: "The watchdog reached its limit of restarts per hour. Collect the reports in /root/nfq-stall and contact support."
+          description_es: "El watchdog alcanzó su límite de reinicios por hora. Recopile los informes de /root/nfq-stall y contacte a soporte."

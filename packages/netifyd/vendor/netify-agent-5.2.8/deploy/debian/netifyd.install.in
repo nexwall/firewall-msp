@@ -1,0 +1,9 @@
+@libdir@/*/libnetifyd.so*
+@mandir@/man5/*
+@mandir@/man7/*
+@mandir@/man8/*
+@sbindir@/netifyd
+@sharedatadir@/*
+@sysconfdir@/*
+@systemdsystemunitdir@/netifyd.service
+@tmpfilesdir@/netifyd.conf

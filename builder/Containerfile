@@ -1,0 +1,87 @@
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+FROM debian:13.4 AS base
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends --no-install-suggests \
+        # openwrt build dependencies https://openwrt.org/docs/guide-developer/toolchain/install-buildsystem#debianubuntumint
+        bison \
+        build-essential \
+        clang \
+        file \
+        flex \
+        g++ \
+        g++-multilib \
+        gawk \
+        gcc-multilib \
+        gettext \
+        git \
+        libncurses5-dev \
+        libssl-dev \
+        python3-setuptools \
+        rsync \
+        swig \
+        unzip \
+        wget \
+        zlib1g-dev \
+        # other dependencies
+        ca-certificates \
+        cmake \
+        curl \
+        less \
+        quilt \
+        sudo \
+        vim
+
+RUN groupadd -g 1000 'buildbot' \
+    && useradd -m -s '/bin/bash' -u 1000 -g 1000 'buildbot' \
+    && echo 'buildbot ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/buildbot \
+    && printf '%s\n' \
+        'QUILT_DIFF_ARGS="--no-timestamps --no-index -p ab --color=auto"' \
+        'QUILT_REFRESH_ARGS="--no-timestamps --no-index -p ab"' \
+        'QUILT_SERIES_ARGS="--color=auto"' \
+        'QUILT_PATCH_OPTS="--unified"' \
+        'QUILT_DIFF_OPTS="-p"' \
+        'EDITOR="vim"' \
+        > /home/buildbot/.quiltrc
+USER buildbot
+WORKDIR /home/buildbot
+# OpenWRT repo
+ARG OWRT_VERSION
+RUN git clone --branch "${OWRT_VERSION}" https://github.com/openwrt/openwrt.git
+WORKDIR /home/buildbot/openwrt
+RUN sed -i '/routing/d' feeds.conf.default \
+    && sed -i '/video/d' feeds.conf.default
+RUN ./scripts/feeds update -a
+COPY --chmod=777 builder/apply-patches.sh /usr/local/bin/apply-patches
+COPY --chown=buildbot:buildbot patches patches
+RUN /usr/local/bin/apply-patches
+RUN sed -i '1isrc-link nethsecurity /home/buildbot/openwrt/nspackages' feeds.conf.default
+COPY --chown=buildbot:buildbot packages nspackages
+RUN ./scripts/feeds update nethsecurity
+RUN ./scripts/feeds install -a
+COPY --chown=buildbot:buildbot files files
+COPY --chown=buildbot:buildbot config config
+
+# Build utils and volumes setup
+ARG REPO_CHANNEL
+ARG TARGET
+ARG NETHSECURITY_VERSION
+ARG BUILD_SEMVER_SUFFIX
+COPY --chmod=777 builder/configure-build.sh /usr/local/bin/configure-build
+RUN /usr/local/bin/configure-build
+COPY --chmod=777 builder/entrypoint.sh /usr/local/bin/entrypoint.sh
+ENTRYPOINT [ "/usr/local/bin/entrypoint.sh" ]
+RUN mkdir -p \
+        .ccache \
+        build_dir \
+        dl \
+        download \
+        staging_dir
+VOLUME "/home/buildbot/openwrt/.ccache" \
+        "/home/buildbot/openwrt/build_dir" \
+        "/home/buildbot/openwrt/dl" \
+        "/home/buildbot/openwrt/download" \
+        "/home/buildbot/openwrt/staging_dir"

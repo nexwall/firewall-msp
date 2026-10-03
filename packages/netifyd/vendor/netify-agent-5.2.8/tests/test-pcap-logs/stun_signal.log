@@ -1,0 +1,174 @@
+offline0: i4pc-------r---- ICMP [OR] 35.158.183.167:0 --> [L] 192.168.12.169:0
+    : ICMP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pc-------r---- UDP [OR] 35.158.183.167:443 <-- [L] 192.168.12.169:47204
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 35.158.183.167:443 <-- [L] 192.168.12.169:39518
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+
+offline0: i4pcu-------s--- UDP [OR] 35.158.183.167:3478 <-- [L] 192.168.12.169:39518
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.47.225.19:11888
+    : STUN/RELAYED: 35.158.183.167:62696
+    : STUN/RESPONSE: 35.158.183.167:3478
+    : STUN/OTHER: 35.158.183.167:80
+    : DP: 7
+
+offline0: i4pcu-------s--- UDP [OR] 35.158.183.167:3478 <-- [L] 192.168.12.169:47204
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.47.225.19:11889
+    : STUN/RELAYED: 35.158.183.167:54498
+    : STUN/RESPONSE: 35.158.183.167:3478
+    : STUN/OTHER: 35.158.183.167:80
+    : DP: 7
+
+offline0: i4pcu-------s--- UDP [OR] 35.158.183.167:3478 <-- [L] 192.168.12.169:39950
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.47.225.19:11911
+    : STUN/PEER: 18.195.131.143:61156
+    : STUN/RELAYED: 35.158.183.167:52495
+    : STUN/RESPONSE: 35.158.183.167:3478
+    : STUN/OTHER: 35.158.183.167:80
+    : DP: 7
+
+offline0: i4pcu-------s--- UDP [OR] 35.158.183.167:3478 <-- [L] 192.168.12.169:43068
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.47.225.19:11910
+    : STUN/PEER: 18.195.131.143:61156
+    : STUN/RELAYED: 35.158.183.167:64458
+    : STUN/RESPONSE: 35.158.183.167:3478
+    : STUN/OTHER: 35.158.183.167:80
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 18.195.131.143:61156 --> [L] 192.168.12.169:43068
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 35.158.183.167:443 <-- [L] 192.168.12.169:43068
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 35.158.183.167:443 <-- [L] 192.168.12.169:39950
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+
+offline0: i4pc-------rs--- UDP [OR] 172.253.121.127:19302 <-- [L] 192.168.12.169:43068
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------rs--- UDP [OR] 172.253.121.127:19302 <-- [L] 192.168.12.169:39950
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------r---- ICMP [OR] 35.158.122.211:0 --> [L] 192.168.12.169:0
+    : ICMP
+    : CT ID: 0: MARK: 0
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
+offline0: i4pcu-------s--- UDP [OR] 35.158.122.211:3478 <-- [L] 192.168.12.169:37970
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.47.225.19:11929
+    : STUN/PEER: 18.195.131.143:54054
+    : STUN/RELAYED: 35.158.122.211:51073
+    : STUN/RESPONSE: 35.158.122.211:3478
+    : STUN/OTHER: 35.158.122.211:80
+    : DP: 7
+
+offline0: i4pcu-------s--- UDP [OR] 35.158.122.211:3478 <-- [L] 192.168.12.169:47767
+    : SignalCall.netify.signal
+    : CT ID: 0: MARK: 0
+    : H: signal.org
+    : STUN/MAPPED: 93.47.225.19:11928
+    : STUN/PEER: 18.195.131.143:54054
+    : STUN/RELAYED: 35.158.122.211:51358
+    : STUN/RESPONSE: 35.158.122.211:3478
+    : STUN/OTHER: 35.158.122.211:80
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 18.195.131.143:61498 --> [L] 192.168.12.169:47767
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 35.158.122.211:443 <-- [L] 192.168.12.169:47767
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+
+offline0: i4pc-------r---- UDP [OR] 35.158.122.211:443 <-- [L] 192.168.12.169:37970
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : RID 46: Unidirectional Traffic
+    : DP: 7
+
+offline0: i4pc-------rs--- UDP [OR] 172.253.121.127:19302 <-- [L] 192.168.12.169:37970
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc-------rs--- UDP [OR] 172.253.121.127:19302 <-- [L] 192.168.12.169:47767
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 7
+
+offline0: i4pc--x----r---- UDP [OR] 18.195.131.143:54054 --> [L] 192.168.12.169:47767
+    : STUN
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 6
+
+offline0: i4pc--x----rs--- UDP [OR] 172.253.121.127:19302 <-- [L] 192.168.12.169:47204
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 4
+
+offline0: i4pc--x----rs--- UDP [OR] 172.253.121.127:19302 <-- [L] 192.168.12.169:39518
+    : Google/Call.netify.google-hangouts
+    : CT ID: 0: MARK: 0
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 4
+

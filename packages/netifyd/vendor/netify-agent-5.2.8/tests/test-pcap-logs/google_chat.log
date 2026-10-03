@@ -1,0 +1,10 @@
+offline0: i4pcu----------- TCP [OR] 142.251.1.100:443 <-- [L] 192.168.88.231:46172
+    : HTTP/S.netify.google-chat
+    : CT ID: 0: MARK: 0
+    : H: chat.google.com
+    : V: 0x0303 CS: 0x1301
+    : TLS/SNI: chat.google.com
+    : TLS/ECH: 0xfe0d
+    : JA4: t13d1715h2_5b57614c22b0_5c2c66f702b0
+    : DP: 6
+

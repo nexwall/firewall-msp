@@ -1,0 +1,8 @@
+offline0: i4pc-------r---- ICMP [L] 192.168.154.131:0 --> [OL] 192.168.154.132:0
+    : ICMP
+    : CT ID: 0: MARK: 0
+    : RID 17: Malformed Packet
+    : RID 28: Suspicious Entropy
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+

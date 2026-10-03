@@ -1,0 +1,10 @@
+offline0: i4pc----------F- TCP [L] 127.0.0.1:37904 <-- [OL] 127.0.0.1:1080
+    : SOCKS
+    : CT ID: 0: MARK: 0
+    : DP: 6
+
+offline0: i4pc-gx-------F- TCP [L] 127.0.0.1:8388 <-- [OL] 127.0.0.1:44276
+    : Unknown
+    : CT ID: 0: MARK: 0
+    : DP: 15
+

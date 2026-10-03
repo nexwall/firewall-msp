@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# shellcheck source=/dev/null
+. /lib/functions/keepalived/hotplug.sh
+
+set_service_name nginx
+
+set_restart_if_master
+
+keepalived_hotplug

@@ -1,0 +1,9 @@
+#!/bin/sh
+
+if [ "$ACTION" == "NOTIFY_MASTER" ]; then
+    /usr/libexec/ns-ha-enable
+elif [ "$ACTION" == "NOTIFY_SYNC" ]; then
+    /usr/libexec/ns-ha-import
+elif [ "$ACTION" == "NOTIFY_BACKUP" ]; then
+    /usr/libexec/ns-ha-disable
+fi

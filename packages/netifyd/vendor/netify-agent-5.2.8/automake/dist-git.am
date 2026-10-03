@@ -1,0 +1,4 @@
+# Nexwall stub: the vendor's automake/dist-git.am (from a private, auth-gated
+# repo) derives PACKAGE_VERSION extras from "git describe" for their own
+# release tooling. We pin PKG_VERSION explicitly in the OpenWrt Makefile
+# instead, so nothing here needs to do anything.

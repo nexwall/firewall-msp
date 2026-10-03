@@ -1,0 +1,10 @@
+offline0: i4pc-------r---- UDP [L] 192.168.2.134:53 <-- [OL] 192.168.2.225:45290
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: 4sicn03_2qaa3rlc3qudhh0aavjycxwakjehelu5klueow0zjxulgage-.4s2fgaaaa__-.test.txt
+    : RID  7: Suspicious DNS Traffic
+    : RID 15: Text With Non-Printable Characters
+    : RID 28: Suspicious Entropy
+    : RID 50: Minor Issues
+    : DP: 2
+

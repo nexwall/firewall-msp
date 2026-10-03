@@ -1,0 +1,55 @@
+offline0: i4pc------------ UDP [L] 192.168.1.138:60790 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc-------r--F- TCP [L] 192.168.1.138:35726 --> [OL] 192.168.1.204:8080
+    : HTTP
+    : CT ID: 0: MARK: 0
+    : H: 192.168.1.204
+    : HTTP/UA: AirControl Agent v1.0
+    : URL: 192.168.1.204:8080/inform
+    : RID 10: Numeric IP Address
+    : RID 16: Known Protocol on Non-standard Port
+    : DP: 5
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:34085 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:44641 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:55321 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:47871 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:59772 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:52220 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:47746 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+
+offline0: i4pc------------ UDP [L] 192.168.1.1:42838 --> [OB] 255.255.255.255:10001
+    : UBNTAC2.netify.ubiquiti
+    : CT ID: 0: MARK: 0
+    : DP: 1
+

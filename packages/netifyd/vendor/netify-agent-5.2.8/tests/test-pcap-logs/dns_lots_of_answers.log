@@ -1,0 +1,14 @@
+offline0: i4pc-------r--F- TCP [L] 192.168.12.1:53 <-- [OL] 192.168.12.169:4026
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: bstream.hzmklvdieo.com
+    : RID 23: Risky Domain Name
+    : RID 27: Suspicious DGA Domain name
+    : DP: 9
+
+offline0: i4pc------------ UDP [L] 192.168.12.1:53 <-- [OL] 192.168.12.156:54660
+    : DNS.netify.alibaba-cloud
+    : CT ID: 0: MARK: 0
+    : H: dinamicx.alibabausercontent.com
+    : DP: 2
+

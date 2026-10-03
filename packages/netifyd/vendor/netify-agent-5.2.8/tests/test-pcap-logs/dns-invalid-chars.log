@@ -1,0 +1,7 @@
+offline0: i4pcu------r---- UDP [L] 127.0.0.1:53 <-- [OL] 127.0.0.1:35980
+    : DNS
+    : CT ID: 0: MARK: 0
+    : H: www.allyourbasesare___ongto.cn
+    : RID 15: Text With Non-Printable Characters
+    : DP: 2
+

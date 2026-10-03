@@ -1,0 +1,11 @@
+offline0: i4pc------------ TCP [L] 127.0.1.1:56899 <-- [OL] 127.0.1.1:42717
+    : Corba
+    : CT ID: 0: MARK: 0
+    : DP: 4
+
+offline0: i4pc-------r---- UDP [L] 10.95.28.46:15984 <-- [OL] 10.95.28.46:34477
+    : Corba
+    : CT ID: 0: MARK: 0
+    : RID 46: Unidirectional Traffic
+    : DP: 1
+
