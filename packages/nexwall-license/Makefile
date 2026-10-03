@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-license
 PKG_VERSION:=1.1.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -19,8 +19,8 @@ PKG_LICENSE:=GPL-2.0-only
 # reproducible and a changed file on the feed is refused. Without it (option off, other architecture, feed not
 # reachable by the builder) the image is a community build: no licensing logic is shipped and the unit runs with
 # the limited feature set. See nexwall-internal/msp/LICENSE_PROTECTION_ARCHITECTURE.md.
-VENDOR_CORE_VERSION:=1.5.2
-VENDOR_CORE_SHA256:=0c940e72d3879bd16389aee795a4de2b686d5e402aef30b746aca989cdf49010
+VENDOR_CORE_VERSION:=1.6.0
+VENDOR_CORE_SHA256:=647c3e79ed9433132783103ff5dcb3233e41f80a734768f9cadef8bbf1f74cd6
 VENDOR_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 ifeq ($(CONFIG_NEXWALL_LICENSE_VENDOR_CORE),y)
