@@ -9,9 +9,106 @@
 
 import sys
 import json
+import os
 import socket
+import time
+import ipaddress
 
 from nethsec import dpi
+
+
+CT_FILE = '/proc/net/nf_conntrack'
+CT_STATE = '/tmp/ns.talkers-conntrack.json'
+CT_MAX_AGE = 180   # a snapshot older than this is not used as the start of a measurement
+
+
+def _is_local(ip):
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return a.is_private and not (a.is_loopback or a.is_multicast or a.is_link_local or a.is_unspecified)
+
+
+def read_conntrack(path=CT_FILE):
+    """Every connection of the connection tracker with its byte counters, whatever the DPI engine saw of it (the engine only
+    inspects the first packets of a long transfer): {flow: [local_ip, bytes_sent_by_local, bytes_received_by_local, packets]}."""
+    flows = {}
+    try:
+        f = open(path)
+    except OSError:
+        return flows
+    with f:
+        for line in f:
+            parts = line.split()
+            if len(parts) < 8 or parts[2] not in ('tcp', 'udp', 'icmp', 'udplite', 'sctp', 'gre'):
+                continue
+            fields = {}
+            nums = []
+            for tok in parts:
+                k, _, v = tok.partition('=')
+                if not v:
+                    continue
+                if k in ('src', 'dst', 'sport', 'dport', 'id') and k not in fields:
+                    fields[k] = v
+                elif k == 'bytes' or k == 'packets':
+                    nums.append((k, int(v)))
+            try:
+                orig_bytes = [v for k, v in nums if k == 'bytes'][0]
+                reply_bytes = [v for k, v in nums if k == 'bytes'][1]
+                pkts = sum(v for k, v in nums if k == 'packets')
+            except IndexError:
+                continue
+            src, dst = fields.get('src'), fields.get('dst')
+            if not src or not dst:
+                continue
+            # the local host is the private side: a client going out, or a server that is reached from outside
+            if _is_local(src):
+                local, sent, recv = src, orig_bytes, reply_bytes
+            elif _is_local(dst):
+                local, sent, recv = dst, reply_bytes, orig_bytes
+            else:
+                continue
+            key = '%s|%s|%s|%s|%s|%s' % (parts[2], src, dst, fields.get('sport', fields.get('id', '')), fields.get('dport', ''), local)
+            flows[key] = [local, sent, recv, pkts]
+    return flows
+
+
+def conntrack_hosts(path=CT_FILE, state_path=CT_STATE, now=None):
+    """Bytes moved by every local host since the previous call, from the connection tracker counters.
+    Returns (hosts, seconds) or None when there is no usable earlier snapshot yet (the first call, or a long pause)."""
+    now = time.time() if now is None else now
+    cur = read_conntrack(path)
+    prev = None
+    try:
+        with open(state_path) as fp:
+            prev = json.load(fp)
+    except (OSError, ValueError):
+        pass
+    try:
+        tmp = state_path + '.tmp'
+        with open(tmp, 'w') as fp:
+            json.dump({'time': now, 'flows': cur}, fp)
+        os.replace(tmp, state_path)
+    except OSError:
+        pass
+    if not prev or not 1 <= now - prev.get('time', 0) <= CT_MAX_AGE:
+        return None
+    seconds = now - prev['time']
+    before = prev.get('flows', {})
+    hosts = {}
+    for key, (local, sent, recv, pkts) in cur.items():
+        old = before.get(key)
+        d_sent = sent - old[1] if old else sent
+        d_recv = recv - old[2] if old else recv
+        d_pkts = pkts - old[3] if old else pkts
+        if d_sent < 0 or d_recv < 0:       # the counters of the entry restarted
+            d_sent, d_recv, d_pkts = sent, recv, pkts
+        h = hosts.setdefault(local, {'upload': 0, 'download': 0, 'packets': 0})
+        h['upload'] += d_sent
+        h['download'] += d_recv
+        h['packets'] += max(d_pkts, 0)
+    return hosts, seconds
 
 
 def list_talkers(limit = 20, stat_file="/var/run/netifyd/aggregator-stats.json"):
@@ -58,11 +155,27 @@ def list_talkers(limit = 20, stat_file="/var/run/netifyd/aggregator-stats.json")
 
                         protocols[proto] += data['stats'][mac][ip][app][proto]['download'] + data['stats'][mac][ip][app][proto]['upload']
 
-            # name resolution can highly slow down the API
-            stats[ip]['host'] = socket.getnameinfo((ip, 0), 0)[0]
             stats[ip]['totals']['bandwidth'] = stats[ip]['totals']['bandwidth'] / time_diff
 
     ordered = sorted(stats.values(), key=lambda x: x['totals']['bandwidth'], reverse=True)
+    # hosts: what the connection tracker counted (all the traffic, also the part the DPI engine does not inspect); the DPI
+    # numbers are only used until a first measurement exists
+    measured = conntrack_hosts()
+    if measured:
+        hosts, seconds = measured
+        macs = {ip: mac for mac in data['stats'] for ip in data['stats'][mac]}
+        ordered = [{'ip': ip, 'host': ip, 'mac': macs.get(ip, ''),
+                    'totals': {'download': h['download'], 'upload': h['upload'], 'packets': h['packets'],
+                               'bandwidth': (h['download'] + h['upload']) / seconds},
+                    'apps': stats[ip]['apps'] if ip in stats else {}}
+                   for ip, h in hosts.items() if h['download'] or h['upload']]
+        ordered.sort(key=lambda x: x['totals']['bandwidth'], reverse=True)
+    for entry in ordered[:limit]:
+        # name resolution can highly slow down the API: only for the hosts that are shown
+        try:
+            entry['host'] = socket.getnameinfo((entry['ip'], 0), 0)[0]
+        except OSError:
+            pass
     applications = [{"name": k, "value": v / time_diff} for k, v in sorted(applications.items(), key=lambda x: x[1], reverse=True)]
     protocols_naming = dpi.load_protocols()
     protocols = {protocols_naming.get(int(k), k): v for k, v in protocols.items()}
