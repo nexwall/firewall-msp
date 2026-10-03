@@ -1,0 +1,16 @@
+#!/bin/sh
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+
+# The data and license downloads of the previous catalog service (services host, /api/netifyd/...) do not exist anymore:
+# the application catalog comes from the Nexwall license server (nexwall-dpi-catalog). Their daily jobs only filled the log
+# with 404 errors, so they are switched off.
+for s in dpi-update dpi-data-update dpi-license-update; do
+	[ -x /etc/init.d/$s ] && { /etc/init.d/$s stop; /etc/init.d/$s disable; } >/dev/null 2>&1
+done
+if [ -f /etc/crontabs/root ]; then
+	grep -v -e '/etc/init.d/dpi-data-update' -e '/etc/init.d/dpi-license-update' -e '/usr/sbin/dpi-update' /etc/crontabs/root > /tmp/cron.nexwall.new
+	cat /tmp/cron.nexwall.new > /etc/crontabs/root
+	rm -f /tmp/cron.nexwall.new
+fi
+exit 0

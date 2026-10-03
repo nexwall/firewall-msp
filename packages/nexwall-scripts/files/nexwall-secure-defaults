@@ -1,0 +1,143 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+"""
+Secure by default: a new firewall protects the network before anyone logs in or runs the setup wizard.
+
+Runs once at the first start of a unit nobody has configured yet (the setup wizard is not complete), through the same
+ns.* APIs the web interface uses, so every license check and every commit hook behaves as if an administrator did it:
+
+  - Network Protection (IPS) on, policy Security, detected threats blocked;
+  - Application Control with the Standard profile (what does not belong in a school or a workplace is blocked; social
+    networks and the normal use of a home stay allowed), and new connections blocked when the inspection engine cannot
+    keep up;
+  - DNS Filtering and IP & Geo Blocking on (the lists switch on by themselves when the first download arrives, see
+    nexwall-threat-feeds).
+
+A unit that was configured (wizard complete) is never touched. The setup wizard can change every choice afterwards.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import syslog
+import time
+
+DONE = '/etc/nexwall/secure-defaults.done'
+TRIES = '/etc/nexwall/secure-defaults.tries'
+MAX_TRIES = 5
+PRIVATE_NETWORKS = ['192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8']
+
+
+def log(msg):
+    syslog.openlog('nexwall-secure-defaults')
+    syslog.syslog(msg)
+
+
+def ubus(obj, method, payload=None):
+    proc = subprocess.run(['ubus', 'call', obj, method, json.dumps(payload or {})], capture_output=True, text=True, timeout=180)
+    if proc.returncode != 0:
+        raise RuntimeError('%s %s: %s' % (obj, method, (proc.stderr or 'failed').strip()))
+    data = json.loads(proc.stdout or '{}')
+    if isinstance(data, dict) and 'validation' in data:
+        errors = data['validation'].get('errors') or [{}]
+        raise RuntimeError('%s %s: %s' % (obj, method, errors[0].get('message', 'validation error')))
+    return data
+
+
+def uci_get(key):
+    proc = subprocess.run(['uci', '-q', 'get', key], capture_output=True, text=True)
+    return proc.stdout.strip()
+
+
+def mark_done():
+    os.makedirs(os.path.dirname(DONE), exist_ok=True)
+    open(DONE, 'w').write(time.strftime('%Y-%m-%dT%H:%M:%S%z') + '\n')
+
+
+def wait_for_api(objects, seconds=300):
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        listed = subprocess.run(['ubus', 'list'], capture_output=True, text=True).stdout.split()
+        if all(o in listed for o in objects):
+            return True
+        time.sleep(3)
+    return False
+
+
+def step_ips():
+    s = ubus('ns.snort', 'settings')
+    ubus('ns.snort', 'save-settings', {
+        'enabled': True, 'ns_policy': 'security', 'home_net': s.get('home_net') or PRIVATE_NETWORKS,
+        'max_inspect_bytes': s.get('max_inspect_bytes', 1048576), 'mode': 'block', 'log_alerts': bool(s.get('log_alerts'))})
+
+
+def step_dns():
+    ubus('ns.threatshield', 'dns-edit-settings', {'enabled': True, 'zones': ['lan'], 'ports': ['53', '853']})
+
+
+def step_ip():
+    cur = ubus('ns.threatshield', 'list-settings').get('data', {})
+    payload = {'enabled': True}
+    for key in ('ban_logprerouting', 'ban_loginbound', 'ban_logoutbound', 'ban_loglimit', 'ban_logcount', 'ban_logterm',
+                'ban_icmplimit', 'ban_synlimit', 'ban_udplimit', 'ban_nftexpiry'):
+        if key in cur:
+            payload[key] = cur[key]
+    if 'ban_logcount' in payload:
+        try:
+            payload['ban_logcount'] = int(payload['ban_logcount'])
+        except (TypeError, ValueError):
+            payload['ban_logcount'] = 3
+    ubus('ns.threatshield', 'edit-settings', payload)
+
+
+def step_dpi():
+    ubus('ns.dpi', 'apply-profile', {'profile': 'standard'})
+
+
+def main():
+    if os.path.exists(DONE):
+        return 0
+    if uci_get('ns-wizard.config.complete') == '1':
+        mark_done()                     # somebody configured this unit: leave it alone
+        return 0
+    tries = int(open(TRIES).read() or 0) if os.path.exists(TRIES) else 0
+    if tries >= MAX_TRIES:
+        return 1
+    os.makedirs(os.path.dirname(TRIES), exist_ok=True)
+    open(TRIES, 'w').write(str(tries + 1))
+
+    if not wait_for_api(['ns.snort', 'ns.threatshield', 'ns.dpi', 'ns.commit']):
+        log('the API did not come up: will try again at the next start')
+        return 1
+    failed = []
+    for name, step in (('Network Protection', step_ips), ('DNS Filtering', step_dns), ('IP & Geo Blocking', step_ip),
+                       ('Application Control', step_dpi)):
+        try:
+            step()
+            log('%s: switched on' % name)
+        except Exception as e:  # noqa: BLE001 - every step on its own, the log says why
+            failed.append(name)
+            log('%s: %s' % (name, e))
+    try:
+        changes = ubus('uci', 'changes').get('changes') or {}
+        if changes:
+            ubus('ns.commit', 'commit', {'changes': changes})
+    except Exception as e:  # noqa: BLE001
+        failed.append('commit')
+        log('commit: %s' % e)
+    if failed:
+        log('not everything could be switched on (%s): will try again at the next start' % ', '.join(failed))
+        return 1
+    mark_done()
+    log('secure defaults applied')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

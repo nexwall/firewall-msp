@@ -36,7 +36,7 @@ def apply_ips(enabled):
         return err
     settings = {
         "enabled": enabled,
-        "ns_policy": data.get("ns_policy") if data.get("ns_policy") in ("connectivity", "balanced", "security") and data.get("enabled") else "balanced",
+        "ns_policy": "security",
         "home_net": data.get("home_net") or ["192.168.0.0/16", "172.16.0.0/12", "10.0.0.0/8"],
         "max_inspect_bytes": data.get("max_inspect_bytes", 1048576),
         "mode": "block",

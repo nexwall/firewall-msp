@@ -271,7 +271,39 @@ def apply_defaults(manifest):
     if changed:
         subprocess.run(['uci', 'commit', 'adblock'], check=False)
         subprocess.run(['uci', 'commit', 'banip'], check=False)
+        enable_services()
     return changed
+
+
+def enable_services():
+    """The lists were just switched on for the first time: DNS Filtering and the IP lists must be running too, the same
+    way the web interface starts them (a unit configured by hand keeps its choice: this is only reached on the first
+    download)."""
+    try:
+        ubus_call('ns.threatshield', 'dns-edit-settings', {'enabled': True, 'zones': ['lan'], 'ports': ['53', '853']})
+        cur = json.loads(ubus_call('ns.threatshield', 'list-settings')).get('data', {})
+        payload = {'enabled': True}
+        for key in ('ban_logprerouting', 'ban_loginbound', 'ban_logoutbound', 'ban_loglimit', 'ban_logcount', 'ban_logterm',
+                    'ban_icmplimit', 'ban_synlimit', 'ban_udplimit', 'ban_nftexpiry'):
+            if key in cur:
+                payload[key] = cur[key]
+        try:
+            payload['ban_logcount'] = int(payload.get('ban_logcount', 3))
+        except (TypeError, ValueError):
+            payload['ban_logcount'] = 3
+        ubus_call('ns.threatshield', 'edit-settings', payload)
+        changes = json.loads(ubus_call('uci', 'changes')).get('changes') or {}
+        if changes:
+            ubus_call('ns.commit', 'commit', {'changes': changes})
+    except Exception as e:  # noqa: BLE001 - the lists stay; the page shows the services as off
+        log('could not switch the services on: %s' % e)
+
+
+def ubus_call(obj, method, payload=None):
+    proc = subprocess.run(['ubus', 'call', obj, method, json.dumps(payload or {})], capture_output=True, text=True, timeout=120)
+    if proc.returncode != 0:
+        raise RuntimeError('%s %s: %s' % (obj, method, proc.stderr.strip()))
+    return proc.stdout or '{}'
 
 
 def cmd_update(force=False):

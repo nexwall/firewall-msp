@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+
+START=99
+
+# Secure by default, once: see /usr/sbin/nexwall-secure-defaults. Runs in the background (it waits for the API).
+start() {
+	[ -f /etc/nexwall/secure-defaults.done ] && return 0
+	( /usr/sbin/nexwall-secure-defaults >/dev/null 2>&1 & )
+}
+
+boot() {
+	start
+}

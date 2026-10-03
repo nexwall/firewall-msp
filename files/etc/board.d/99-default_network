@@ -1,0 +1,26 @@
+#
+# Copyright (C) 2013-2015 OpenWrt.org
+# Copyright (C) 2026 Nexwall
+#
+# Default network of a board that has no script of its own (virtual machines, generic x86 boxes): the first
+# network card is the LAN and the second one is the WAN, asking for an address by DHCP. A board script that defined
+# a LAN but left the WAN out gets the same WAN, so a firewall plugged into a modem works at once and the setup
+# wizard finds the internet connection already there.
+
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+
+if json_is_a network object; then
+	json_select network
+	json_get_type _has_wan wan
+	json_select ..
+	[ -z "$_has_wan" ] && [ -d /sys/class/net/eth1 ] && ucidef_set_interface_wan 'eth1' 'dhcp'
+else
+	ucidef_set_interface_lan 'eth0'
+	[ -d /sys/class/net/eth1 ] && ucidef_set_interface_wan 'eth1' 'dhcp'
+fi
+
+board_config_flush
+
+exit 0

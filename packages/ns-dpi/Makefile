@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ns-dpi
 PKG_VERSION:=0.3.4
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/ns-dpi-$(PKG_VERSION)
 
@@ -81,13 +81,13 @@ define Package/ns-dpi/install
 	$(INSTALL_BIN) ./files/dpi-nft $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/dpi-config $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/dpi-license-update.py $(1)/usr/sbin/dpi-license-update
+	$(INSTALL_BIN) ./files/nexwall-dpi-profile $(1)/usr/sbin/nexwall-dpi-profile
 	$(INSTALL_BIN) ./files/nexwall-dpi-catalog $(1)/usr/sbin/nexwall-dpi-catalog
 	$(INSTALL_BIN) ./files/99-dpi-catalog-cron.uci-defaults $(1)/etc/uci-defaults/99-dpi-catalog-cron
 	$(INSTALL_BIN) ./files/dpi-data-update.py $(1)/usr/sbin/dpi-data-update
 	$(INSTALL_BIN) ./files/dpi-update.py $(1)/usr/sbin/dpi-update
 	$(INSTALL_CONF) ./files/20_dpi $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/99-dpi-license-update-cron.uci-defaults $(1)/etc/uci-defaults/99-dpi-license-update-cron
-	$(INSTALL_BIN) ./files/99-dpi-data-update-cron.uci-defaults $(1)/etc/uci-defaults/99-dpi-data-update-cron
+	$(INSTALL_BIN) ./files/99-dpi-obsolete-updaters.uci-defaults $(1)/etc/uci-defaults/99-dpi-obsolete-updaters
 	$(INSTALL_DIR) $(1)/usr/share/ns-plug/hooks/register
 	$(INSTALL_BIN) ./files/70dpi $(1)/usr/share/ns-plug/hooks/unregister/
 	# the proc-flow-actions plugin and its config (/etc/netifyd/plugins.d/10-dpi-actions.conf) come from the

@@ -10,6 +10,7 @@ import sys
 
 from euci import EUci
 from nethsec import dpi, utils, performance, engine_metrics
+from nethsec.dpi import profiles
 from nethsec import license as nx_license
 from nethsec.license import enforcement
 
@@ -64,6 +65,11 @@ if cmd == 'list':
             'enabled': False
         },
         'list-exemptions': {},
+        'list-profiles': {},
+        'get-profile': {},
+        'apply-profile': {
+            'profile': 'standard'
+        },
         'get-catalog-status': {},
         'get-catalog-settings': {},
         'set-catalog-settings': {
@@ -172,6 +178,15 @@ elif cmd == 'call':
             print(json.dumps({'message': 'success'}))
         elif action == 'list-exemptions':
             print(json.dumps({'values': dpi.list_exemptions(e_uci)}))
+        elif action == 'list-profiles':
+            print(json.dumps({'values': profiles.list_profiles(), 'active': profiles.active_profile(e_uci)}))
+        elif action == 'get-profile':
+            print(json.dumps({'active': profiles.active_profile(e_uci)}))
+        elif action == 'apply-profile':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            nx_license.require('security_services')
+            result = profiles.apply_profile(e_uci, data['profile'])
+            print(json.dumps(dict(result, message='success')))
         elif action == 'get-catalog-status':
             print(json.dumps(dpi.get_catalog_status()))
         elif action == 'get-catalog-settings':

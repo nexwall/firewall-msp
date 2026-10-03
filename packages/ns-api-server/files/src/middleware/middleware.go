@@ -140,9 +140,9 @@ func InitJWT() *jwt.GinJWTMiddleware {
 			reqURI := c.Request.RequestURI
 
 			// check if token exists
-			if !methods.CheckTokenValidation(claims["id"].(string), token.Raw) {
+			if !methods.CheckTokenValidation(claimID(claims), token.Raw) {
 				// write logs
-				logs.Logs.Println("[INFO][AUTH] authorization failed for user " + utils.SanitizeForLog(claims["id"].(string)) + ". " + reqMethod + " " + reqURI)
+				logs.Logs.Println("[INFO][AUTH] authorization failed for user " + utils.SanitizeForLog(claimID(claims)) + ". " + reqMethod + " " + reqURI)
 
 				// not authorized
 				return false
@@ -182,7 +182,7 @@ func InitJWT() *jwt.GinJWTMiddleware {
 				reqBody = jsonB
 			}
 
-			logs.Logs.Println("[INFO][AUTH] authorization success for user " + utils.SanitizeForLog(claims["id"].(string)) + ". " + reqMethod + " " + reqURI + " " + utils.SanitizeForLog(reqBody))
+			logs.Logs.Println("[INFO][AUTH] authorization success for user " + utils.SanitizeForLog(claimID(claims)) + ". " + reqMethod + " " + reqURI + " " + utils.SanitizeForLog(reqBody))
 
 			// authorized
 			return true
@@ -194,11 +194,11 @@ func InitJWT() *jwt.GinJWTMiddleware {
 
 			// set token to valid, if not 2FA
 			if !claims["2fa"].(bool) {
-				methods.SetTokenValidation(claims["id"].(string), token)
+				methods.SetTokenValidation(claimID(claims), token)
 			}
 
 			// write logs
-			logs.Logs.Println("[INFO][AUTH] login response success for user " + utils.SanitizeForLog(claims["id"].(string)))
+			logs.Logs.Println("[INFO][AUTH] login response success for user " + utils.SanitizeForLog(claimID(claims)))
 
 			// return 200 OK
 			c.JSON(200, gin.H{"code": 200, "expire": t, "token": token})
@@ -209,10 +209,10 @@ func InitJWT() *jwt.GinJWTMiddleware {
 			claims := jwt.ExtractClaimsFromToken(tokenObj)
 
 			// set token to valid
-			methods.SetTokenValidation(claims["id"].(string), token)
+			methods.SetTokenValidation(claimID(claims), token)
 
 			// write logs
-			logs.Logs.Println("[INFO][AUTH] refresh response success for user " + utils.SanitizeForLog(claims["id"].(string)))
+			logs.Logs.Println("[INFO][AUTH] refresh response success for user " + utils.SanitizeForLog(claimID(claims)))
 
 			// return 200 OK
 			c.JSON(200, gin.H{"code": 200, "expire": t, "token": token})
@@ -223,10 +223,10 @@ func InitJWT() *jwt.GinJWTMiddleware {
 			claims := jwt.ExtractClaimsFromToken(tokenObj)
 
 			// set token to invalid
-			methods.DelTokenValidation(claims["id"].(string), tokenObj.Raw)
+			methods.DelTokenValidation(claimID(claims), tokenObj.Raw)
 
 			// write logs
-			logs.Logs.Println("[INFO][AUTH] logout response success for user " + utils.SanitizeForLog(claims["id"].(string)))
+			logs.Logs.Println("[INFO][AUTH] logout response success for user " + utils.SanitizeForLog(claimID(claims)))
 
 			// reutrn 200 OK
 			c.JSON(200, gin.H{"code": 200})
@@ -263,4 +263,11 @@ func InitJWT() *jwt.GinJWTMiddleware {
 
 	// return object
 	return authMiddleware
+}
+
+// claimID reads the user of a token. A token that carries no user (one from another installation of the same address,
+// still kept by a browser) must end in a plain "not authorized", never in a panic of the request handler.
+func claimID(claims map[string]interface{}) string {
+	id, _ := claims["id"].(string)
+	return id
 }

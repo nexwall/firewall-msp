@@ -312,7 +312,17 @@ def cmd_status(as_json):
     return 0
 
 
+def lock():
+    """Serialize the updaters (cron, the first-enable download, the web interface): returns the open lock file."""
+    import fcntl
+    os.makedirs(os.path.dirname(state_path()), exist_ok=True)
+    f = open(state_path() + '.lock', 'w')
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
+
+
 def main():
+    _lock = lock()   # held until the process ends
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest='cmd', required=True)
     u = sub.add_parser('update')

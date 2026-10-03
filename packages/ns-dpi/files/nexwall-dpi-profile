@@ -1,0 +1,51 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+"""
+Application Control profiles from the command line.
+
+    nexwall-dpi-profile list           the profiles and what each one blocks
+    nexwall-dpi-profile status         the profile in use
+    nexwall-dpi-profile apply <name>   standard, school or restricted: replaces the rules of the previous profile
+
+The rules of the administrator are never touched. The same thing is done by the web interface (Application Control, the
+setup wizard) through the ns.dpi API.
+"""
+
+import json
+import subprocess
+import sys
+
+from euci import EUci
+from nethsec.dpi import profiles
+from nethsec.utils import ValidationError
+
+
+def main():
+    cmd = sys.argv[1] if len(sys.argv) > 1 else 'status'
+    e_uci = EUci()
+    if cmd == 'list':
+        print(json.dumps(profiles.list_profiles(), indent=2))
+    elif cmd == 'status':
+        print(profiles.active_profile(e_uci) or 'none')
+    elif cmd == 'apply' and len(sys.argv) > 2:
+        try:
+            res = profiles.apply_profile(e_uci, sys.argv[2])
+        except ValidationError:
+            print('unknown profile: %s (standard, school, restricted)' % sys.argv[2], file=sys.stderr)
+            return 1
+        subprocess.run(['uci', 'commit', 'dpi'], check=True)
+        subprocess.run(['/sbin/reload_config'], check=False)
+        print('profile %s applied: %d rule(s) on %s' % (res['profile'], res['rules'], ', '.join(res['devices']) or 'no device'))
+    else:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

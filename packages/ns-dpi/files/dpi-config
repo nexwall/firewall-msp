@@ -126,6 +126,11 @@ for section in u.get_all('dpi'):
             applications.append(f"proto == '{proto.lower()}'")
         for cat in rule.get('category', []):
             applications.append(f"category == '{cat.lower()}'")
+        # whole categories of the catalog (profiles use them): new applications of a category are covered automatically
+        for cat in rule.get('app_category', []):
+            applications.append(f"app_category == '{cat.lower()}'")
+        for cat in rule.get('proto_category', []):
+            applications.append(f"proto_category == '{cat.lower()}'")
 
         criteria = dpi.build_criteria(device, sources, applications, vlan_id if base_if is not None else None)
         if criteria is None:

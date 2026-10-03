@@ -41,6 +41,8 @@ DNS_TEMPLATE = """# DNS Query input plugin - monitors DNS resolution
 [[inputs.dns_query]]
   domains = [{{ dns_domains|map('tojson')|join(', ') }}]
   servers = ["127.0.0.1"]
+  # an address query: the local resolver refuses NS queries, which only filled the log with errors
+  record_type = "A"
 
   [inputs.dns_query.tags]
     influxdb_db = "ping-metrics"

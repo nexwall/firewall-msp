@@ -750,6 +750,48 @@ def dns_list_blocklist(e_uci):
                      'memory_mib': round((info.get('count') or 0) * BYTES_PER_DOMAIN / 1048576)})
     return { "data": ret, "memory": memory_summary(ret, total_memory_mib()) }
 
+def run_json(cmd, timeout=40):
+    import subprocess
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+        return json.loads(out)
+    except Exception:  # noqa: BLE001 - the card shows "no information"
+        return {}
+
+
+def feed_updating():
+    import subprocess
+    return subprocess.run(['pgrep', '-f', 'nexwall-threat-feeds (update|sync)'], capture_output=True).returncode == 0
+
+
+def get_feed_status():
+    """What the Nexwall threat lists on this firewall are: bundle, last check, sizes, and whether an update is running."""
+    st = run_json(['/usr/sbin/nexwall-threat-feeds', 'status', '--json'])
+    cats = st.get('categories', [])
+
+    def total(kind):
+        return sum(c.get('count') or 0 for c in cats if c.get('kind') == kind)
+
+    return {
+        'license_state': st.get('license_state'), 'version': st.get('version'), 'last_check': st.get('last_check'),
+        'last_result': st.get('last_result'), 'last_error': st.get('last_error'),
+        'domains': total('dns'), 'addresses': total('ip'), 'country_blocks': total('geo'),
+        'categories': len([c for c in cats if c.get('kind') in ('dns', 'ip')]),
+        'enabled': len([c for c in cats if c.get('enabled') and c.get('kind') in ('dns', 'ip')]),
+        'updating': feed_updating(),
+    }
+
+
+def start_feed_update():
+    """Check for a new bundle now (in the background: it can take minutes with large lists)."""
+    import subprocess
+    if feed_updating():
+        return {'message': 'running'}
+    subprocess.Popen(['/usr/sbin/nexwall-threat-feeds', 'update', '--force'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    return {'message': 'started'}
+
+
 def dns_edit_all_blocklists(e_uci, payload):
     """Switch every Nexwall DNS category on or off at once."""
     if not isinstance(payload.get('enabled'), bool):
@@ -1168,6 +1210,8 @@ if cmd == 'list':
         'is-ip-blocked': {'ip': ''},
         'dns-list-blocklist': {},
         'dns-edit-blocklist': { "blocklist": "blocklist_name", "enabled": True },
+        'get-feed-status': {},
+        'update-feeds': {},
         'dns-edit-all-blocklists': { "enabled": True },
         'edit-all-blocklists': { "enabled": True },
         'dns-list-settings': {},
@@ -1235,6 +1279,10 @@ elif cmd == 'call':
         elif action == 'dns-edit-blocklist':
             payload = json.loads(sys.stdin.read())
             ret = dns_edit_blocklist(e_uci, payload)
+        elif action == 'get-feed-status':
+            ret = get_feed_status()
+        elif action == 'update-feeds':
+            ret = start_feed_update()
         elif action == 'dns-edit-all-blocklists':
             payload = json.loads(sys.stdin.read())
             ret = dns_edit_all_blocklists(e_uci, payload)

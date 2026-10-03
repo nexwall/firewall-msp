@@ -358,6 +358,16 @@ def list_rules(e_uci: EUci) -> list[dict[str]]:
                 if len(found_protocol) > 0:
                     data_rule['criteria'].append(found_protocol[0])
 
+            # whole categories (rules made by a profile): shown as one entry per category
+            for cat in rule.get('app_category', []):
+                data_rule['criteria'].append({'id': -1, 'name': 'Category: %s' % cat, 'type': 'application',
+                                              'category': {'name': cat}, 'is_category': True})
+            for cat in rule.get('proto_category', []):
+                data_rule['criteria'].append({'id': -1, 'name': 'Category: %s' % cat, 'type': 'protocol',
+                                              'category': {'name': cat}, 'is_category': True})
+            # the profile that made the rule, empty for the administrator's own rules
+            data_rule['profile'] = rule.get('ns_profile', '')
+
             # append rule
             rules.append(data_rule)
 

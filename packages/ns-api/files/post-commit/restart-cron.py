@@ -13,10 +13,10 @@ force_restart = False
 
 # snort: added or removed cron job for rules download
 if 'snort' in changes:
-    for change in changes['firewall']:
+    for change in changes['snort']:
         if 'enabled' in change:
             force_restart = True
             break
 
 if force_restart:
-    subprocess.run(["/etc/init.d", "cron", "restart"])
+    subprocess.run(["/etc/init.d/cron", "restart"])

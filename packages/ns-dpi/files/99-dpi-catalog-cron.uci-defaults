@@ -19,10 +19,10 @@ if ! uci -q get dpi.catalog > /dev/null; then
   uci -q commit dpi
 fi
 
-# Inspection engine overload: traffic passes uninspected when the engine cannot keep up (default)
+# Inspection engine overload: new connections are blocked when the engine cannot keep up (strict by default)
 if ! uci -q get dpi.engine > /dev/null; then
   uci -q set dpi.engine=engine
-  uci -q set dpi.engine.overload_action='allow'
+  uci -q set dpi.engine.overload_action='block'
   uci -q set dpi.engine.queue_limit='256'
   uci -q commit dpi
 fi

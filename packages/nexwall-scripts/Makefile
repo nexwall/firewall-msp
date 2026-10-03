@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-scripts
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -48,11 +48,14 @@ define Package/nexwall-scripts/install
 	$(INSTALL_BIN) ./files/nfq-watchdog $(1)/usr/sbin/nexwall-nfq-watchdog
 	$(INSTALL_BIN) ./files/dpidbg $(1)/usr/sbin/dpidbg
 	$(INSTALL_BIN) ./files/nexwall-fastpath $(1)/usr/sbin/nexwall-fastpath
+	$(INSTALL_BIN) ./files/nexwall-secure-defaults $(1)/usr/sbin/nexwall-secure-defaults
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/nexwall-fastpath.init $(1)/etc/init.d/nexwall-fastpath
+	$(INSTALL_BIN) ./files/nexwall-secure-defaults.init $(1)/etc/init.d/nexwall-secure-defaults
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-nfq-watchdog $(1)/etc/uci-defaults/99-nexwall-nfq-watchdog
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-perf $(1)/etc/uci-defaults/99-nexwall-perf
+	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-secure-defaults $(1)/etc/uci-defaults/99-nexwall-secure-defaults
 	$(INSTALL_DIR) $(1)/usr/lib/nexwall-scripts
 	$(INSTALL_DATA) ./files/lib/trace.awk $(1)/usr/lib/nexwall-scripts/trace.awk
 	$(INSTALL_DATA) ./files/lib/common.sh $(1)/usr/lib/nexwall-scripts/common.sh

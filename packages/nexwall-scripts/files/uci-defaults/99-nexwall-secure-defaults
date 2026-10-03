@@ -1,0 +1,7 @@
+#!/bin/sh
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+
+# secure by default: the service runs once at the first start of a unit nobody configured (nexwall-secure-defaults)
+/etc/init.d/nexwall-secure-defaults enable
+exit 0
