@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-scripts
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -19,7 +19,7 @@ define Package/nexwall-scripts
 	SECTION:=base
 	CATEGORY:=Nexwall
 	TITLE:=Nexwall operator/support diagnostic tools
-	DEPENDS:=+nftables +conntrack-tools +gawk +socat +curl +ethtool +python3-light
+	DEPENDS:=+nftables +conntrack +gawk +socat +curl +ethtool +python3-light
 	PKGARCH:=all
 endef
 
