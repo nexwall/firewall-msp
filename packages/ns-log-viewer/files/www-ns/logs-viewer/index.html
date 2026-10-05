@@ -213,6 +213,7 @@ en: {
  'trace.none':'Waiting for traffic that matches the filter… Generate some (open the site, ping, …).',
  'trace.desc_fw':'Follows routed and NAT traffic in real time and shows, for each flow, the decision, the exact rule that made it and why (firewall rule, zone policy, DPI, IP & Geo Blocking). It only observes; nothing is changed.',
  'trace.desc_dr':'Like Live rule trace, plus traffic to the firewall itself, and it lists every rule the packet crossed. It only observes; nothing is changed.',
+ 'trace.desc_dp':'Follows packets in real time and lists only the ones the firewall drops or rejects, with the rule that stopped each one and every rule it crossed. Includes traffic to the firewall itself. It only observes; nothing is changed.',
  'trace.path':'rule path','col.decision':'Decision'
 },
 es: {
@@ -256,6 +257,7 @@ es: {
  'trace.none':'Esperando tráfico que coincida con el filtro… Genere tráfico (abra el sitio, ping, …).',
  'trace.desc_fw':'Sigue en tiempo real el tráfico enrutado y con NAT y muestra, por flujo, la decisión, la regla exacta que la tomó y por qué (regla de firewall, política de zona, DPI, bloqueo de IP y geografía). Solo observa; no cambia nada.',
  'trace.desc_dr':'Como la traza de reglas en vivo, más el tráfico hacia el propio firewall, y lista todas las reglas que cruzó el paquete. Solo observa; no cambia nada.',
+ 'trace.desc_dp':'Sigue los paquetes en tiempo real y lista solo los que el firewall descarta o rechaza, con la regla que detuvo cada uno y todas las reglas que cruzó. Incluye el tráfico hacia el propio firewall. Solo observa; no cambia nada.',
  'trace.path':'ruta de reglas','col.decision':'Decisión'
 },
 'pt-BR': {
@@ -299,6 +301,7 @@ es: {
  'trace.none':'Aguardando tráfego que corresponda ao filtro… Gere tráfego (abra o site, ping, …).',
  'trace.desc_fw':'Acompanha em tempo real o tráfego roteado e com NAT e mostra, por fluxo, a decisão, a regra exata que a tomou e o motivo (regra de firewall, política da zona, DPI, bloqueio de IP e geografia). Apenas observa; nada é alterado.',
  'trace.desc_dr':'Como o rastreio de regras ao vivo, mais o tráfego para o próprio firewall, e lista todas as regras que o pacote atravessou. Apenas observa; nada é alterado.',
+ 'trace.desc_dp':'Acompanha os pacotes em tempo real e lista apenas os que o firewall descarta ou rejeita, com a regra que parou cada um e todas as regras que ele atravessou. Inclui o tráfego para o próprio firewall. Apenas observa; nada é alterado.',
  'trace.path':'caminho das regras','col.decision':'Decisão'
 }
 };
@@ -375,8 +378,8 @@ const TABS = [
   {id:'sys',    kind:'simple', base:''},
   {id:'fwtrace',kind:'trace', tool:'fwtrace', sep:true},
   {id:'drppkt', kind:'trace', tool:'drppkt'},
-  // every packet the firewall dropped or rejected, whatever the reason (zone policy, rule, DPI, IP & Geo Blocking)
-  {id:'dropped',kind:'netfilter', extra:'nf_action:~"(?i)reject|drop|banip|dpi|block|deny"', blockOnly:true, sep:true},
+  // the same live trace as Packet path (drppkt), showing only the packets the firewall dropped or rejected
+  {id:'dropped',kind:'trace', tool:'drppkt', dropsOnly:true, desc:'trace.desc_dp'},
 ];
 let activeTab = TABS[0];
 function tabLabel(tab){ return t('tab.' + tab.id); }
@@ -771,7 +774,7 @@ async function tracePoll(){
   d.lines.forEach(l => { try { trace.rows.push(JSON.parse(l)); } catch(e){} });
   trace.next = d.next;
   renderTraceRows();
-  document.getElementById('tStatus').textContent = d.running ? t('trace.running', {n:trace.rows.length}) : (t('trace.finished', {n:trace.rows.length}) + (d.error ? ' · ' + d.error.trim() : ''));
+  document.getElementById('tStatus').textContent = d.running ? t('trace.running', {n:traceShown().length}) : (t('trace.finished', {n:traceShown().length}) + (d.error ? ' · ' + d.error.trim() : ''));
   if(!d.running){ clearInterval(trace.timer); trace.timer = null; traceSetRunning(false); }
 }
 function traceStop(silent){
@@ -782,9 +785,13 @@ function traceStop(silent){
   }
   traceSetRunning(false);
 }
+function traceShown(){
+  // Dropped Packets: only what was dropped or rejected (every decision that is not accept or queue)
+  return activeTab.dropsOnly ? trace.rows.filter(r => r.decision !== 'ACCEPT' && r.decision !== 'QUEUE') : trace.rows;
+}
 function renderTraceRows(){
-  if(!trace.rows.length){ setBody(`<tr><td colspan="7" class="empty">${esc(t('trace.none'))}</td></tr>`); return; }
-  const rows = trace.rows.slice().reverse();
+  if(!traceShown().length){ setBody(`<tr><td colspan="7" class="empty">${esc(t('trace.none'))}</td></tr>`); return; }
+  const rows = traceShown().slice().reverse();
   setBody(rows.map((r,i) => {
     const cls = r.decision === 'ACCEPT' ? 'allow' : (r.decision === 'QUEUE' ? 'other' : 'block');
     const src = r.src + (r.sport && r.sport !== '-' ? ':' + r.sport : '');
@@ -844,7 +851,7 @@ function selectTab(){
   document.getElementById('chips').style.display = isTrace ? 'none' : '';
   document.getElementById('tracePanel').style.display = isTrace ? '' : 'none';
   if(isTrace){
-    document.getElementById('traceDesc').textContent = t(activeTab.tool === 'fwtrace' ? 'trace.desc_fw' : 'trace.desc_dr');
+    document.getElementById('traceDesc').textContent = t(activeTab.desc || (activeTab.tool === 'fwtrace' ? 'trace.desc_fw' : 'trace.desc_dr'));
     traceHead(); renderTraceRows();
     document.getElementById('tStatus').textContent = '';
   } else {

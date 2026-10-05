@@ -3,7 +3,7 @@
 if ! uci -q get dpi.config > /dev/null; then
   uci -q import dpi << EOI
 config main 'config'
-  option log_blocked '0'
+  option log_blocked '1'
   option enabled '0'
   option firewall_exemption '0'
   list popular_filters 'netify.facebook'

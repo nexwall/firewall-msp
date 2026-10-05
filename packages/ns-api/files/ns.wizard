@@ -93,6 +93,7 @@ if cmd == "list":
             "password": "str",
             "password_confirm": "str",
         },
+        "skip-unauth": {},
         "apply-security": {"ips": True, "dns": True, "ip": True},
     }, sys.stdout)
 elif cmd == "call":
@@ -128,6 +129,18 @@ elif cmd == "call":
                 err = func(bool(data[name]))
                 results[name] = {"ok": err is None, "error": err}
         json.dump({"results": results}, sys.stdout)
+    elif action == "skip-unauth":
+        # "Skip wizard" on a unit nobody has logged in to yet: the administrator keeps the default password and logs in
+        # with it. Like set-password-unauth this is only possible while the wizard is not complete (an unconfigured unit
+        # lets anyone on the LAN set its password anyway, so skipping gives nobody more than that), and it is committed
+        # at once: there is no session that could commit it later.
+        if e_uci.get("ns-wizard", "config", "complete", dtype=bool, default=False):
+            json.dump(utils.validation_error("complete", "wizard_already_complete"), sys.stdout)
+        else:
+            e_uci.set("ns-wizard", "config", "complete", True)
+            e_uci.save("ns-wizard")
+            e_uci.commit("ns-wizard")
+            json.dump({"message": "successful"}, sys.stdout)
     elif action == "set-password-unauth":
         # Reachable without a session, deliberately - see nexwall-ui's StandaloneApp.vue and
         # ns-api-server's UnauthWizardSetPassword. The ONLY thing that makes this safe is the

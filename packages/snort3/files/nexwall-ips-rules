@@ -313,16 +313,22 @@ def cmd_status(as_json):
 
 
 def lock():
-    """Serialize the updaters (cron, the first-enable download, the web interface): returns the open lock file."""
+    """Serialize the updaters (cron, the first-enable download, the web interface): returns the open lock file.
+    The lock is taken once by the outermost command; a command it starts (sync runs apply) inherits it through the
+    environment instead of waiting for it, which would never end."""
+    if os.environ.get('NEXWALL_IPS_LOCK_HELD'):
+        return None
     import fcntl
     os.makedirs(os.path.dirname(state_path()), exist_ok=True)
     f = open(state_path() + '.lock', 'w')
     fcntl.flock(f, fcntl.LOCK_EX)
+    os.environ['NEXWALL_IPS_LOCK_HELD'] = '1'
     return f
 
 
 def main():
-    _lock = lock()   # held until the process ends
+    # only the commands that write need the lock; status must always answer at once
+    _lock = lock() if len(sys.argv) > 1 and sys.argv[1] in ('update', 'apply', 'sync') else None   # held until the process ends
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest='cmd', required=True)
     u = sub.add_parser('update')

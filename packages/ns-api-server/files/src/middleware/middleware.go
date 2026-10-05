@@ -223,7 +223,10 @@ func InitJWT() *jwt.GinJWTMiddleware {
 			claims := jwt.ExtractClaimsFromToken(tokenObj)
 
 			// set token to invalid
-			methods.DelTokenValidation(claimID(claims), tokenObj.Raw)
+			// a token that cannot be read (expired, from another installation) has nothing to invalidate
+			if tokenObj != nil {
+				methods.DelTokenValidation(claimID(claims), tokenObj.Raw)
+			}
 
 			// write logs
 			logs.Logs.Println("[INFO][AUTH] logout response success for user " + utils.SanitizeForLog(claimID(claims)))

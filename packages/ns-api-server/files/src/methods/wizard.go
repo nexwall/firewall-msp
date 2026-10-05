@@ -64,6 +64,32 @@ func WizardStatus(c *gin.Context) {
 	c.JSON(status, parsed.Data())
 }
 
+// POST /api/wizard/skip - "Skip wizard" before any login. ns.wizard refuses once the wizard is complete (checked fresh on
+// every call) and commits the flag itself, there is no session that could do it later.
+func WizardSkip(c *gin.Context) {
+	parsed, _, err := callNsWizard("skip-unauth", []byte("{}"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, structs.Map(response.StatusBadRequest{
+			Code:    500,
+			Message: "wizard call failed",
+			Data:    err.Error(),
+		}))
+		return
+	}
+	if parsed.Exists("validation") || parsed.Exists("error") {
+		c.JSON(http.StatusBadRequest, structs.Map(response.StatusBadRequest{
+			Code:    400,
+			Message: "wizard_skip_failed",
+			Data:    parsed,
+		}))
+		return
+	}
+	c.JSON(http.StatusOK, structs.Map(response.StatusOK{
+		Code:    200,
+		Message: "wizard skipped",
+	}))
+}
+
 type wizardSetPasswordRequest struct {
 	Password        string `json:"password" binding:"required"`
 	PasswordConfirm string `json:"password_confirm" binding:"required"`

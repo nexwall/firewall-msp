@@ -103,6 +103,7 @@ func main() {
 	// same global per-IP rate limiter as every other route, including /login above.
 	api.GET("/wizard/status", methods.WizardStatus)
 	api.POST("/wizard/set-password", middleware.BodyLimit(4<<10), methods.WizardSetPassword)
+	api.POST("/wizard/skip", middleware.BodyLimit(1<<10), methods.WizardSkip)
 
 	// define JWT middleware
 	authGroup := api.Group("/", middleware.InstanceJWT().MiddlewareFunc())

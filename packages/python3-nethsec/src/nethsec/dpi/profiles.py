@@ -103,6 +103,8 @@ def apply_profile(e_uci, profile: str) -> dict:
             created += 1
     e_uci.set('dpi', 'config', 'profile', profile)
     e_uci.set('dpi', 'config', 'enabled', '1' if created else '0')
+    # blocked flows are logged (rate limited): the Log Viewer shows what Application Control blocked
+    e_uci.set('dpi', 'config', 'log_blocked', '1')
     if not e_uci.get('dpi', 'engine', default=''):
         e_uci.set('dpi', 'engine', 'engine')
     e_uci.set('dpi', 'engine', 'overload_action', 'block')
