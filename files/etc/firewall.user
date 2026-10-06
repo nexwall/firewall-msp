@@ -1,0 +1,2 @@
+# This file is included at the end of the firewall configuration. Put your own nftables rules here (firewall4 include,
+# fw4 compatible). It is empty by default: the firewall rules of the web interface do not need it.

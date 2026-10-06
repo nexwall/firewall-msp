@@ -67,9 +67,8 @@ config rule 'ns_lan_to_wan'
 	option ns_service '*'
 	option proto 'all'
 	option enabled '1'
-	# logged (rate limited) so the Log Viewer shows the traffic the firewall lets through
-	option log '1'
-	option log_limit '10/s'
+	# not logged: the traffic that is allowed is seen in Flows, Top talkers and Traffic analytics; a log line per allowed
+	# connection would flood the log and the console of a busy firewall. Switch it on per rule (Firewall rules, Logging).
 
 config rule 'ns_default_drop'
 	option name 'DROP DEFAULT'

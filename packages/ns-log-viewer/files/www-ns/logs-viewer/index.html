@@ -207,6 +207,7 @@ en: {
  'empty.auth':'No login events in this period.',
  'empty.admin':'No configuration changes in this period.',
  'empty.generic':'No logs found for this category in the selected period.',
+ 'empty.fw':'No logged traffic in this period. Blocked traffic and the traffic of rules that have logging switched on appear here. Allowed traffic is not logged by default (a line for every connection would flood a busy firewall): see Flows, Top talkers and Traffic analytics, or switch logging on in a firewall rule.',
  'trace.host':'To host','trace.src_host':'From host','trace.net':'To network','trace.src_net':'From network','trace.port':'To port','trace.src_port':'From port','trace.proto':'Protocol',
  'trace.duration':'Duration','trace.both':'Both directions','trace.start':'Start trace','trace.stop':'Stop','trace.running':'Tracing… {n} flow(s)','trace.finished':'Finished · {n} flow(s)',
  'trace.need_filter':'Give at least one of: host, network, port or protocol.','trace.busy':'Another trace is already running on this firewall.','trace.err':'Could not start the trace',
@@ -251,6 +252,7 @@ es: {
  'empty.auth':'Sin eventos de inicio de sesión en este período.',
  'empty.admin':'Sin cambios de configuración en este período.',
  'empty.generic':'No hay registros de esta categoría en el período seleccionado.',
+ 'empty.fw':'No hay tráfico registrado en este período. Aquí aparece el tráfico bloqueado y el de las reglas con el registro activado. El tráfico permitido no se registra de forma predeterminada (una línea por conexión inundaría un firewall ocupado): vea Flujos, Principales consumidores y Análisis de tráfico, o active el registro en una regla del firewall.',
  'trace.host':'Al host','trace.src_host':'Desde el host','trace.net':'A la red','trace.src_net':'Desde la red','trace.port':'Al puerto','trace.src_port':'Desde el puerto','trace.proto':'Protocolo',
  'trace.duration':'Duración','trace.both':'Ambos sentidos','trace.start':'Iniciar traza','trace.stop':'Detener','trace.running':'Trazando… {n} flujo(s)','trace.finished':'Terminado · {n} flujo(s)',
  'trace.need_filter':'Indique al menos uno: host, red, puerto o protocolo.','trace.busy':'Ya hay otra traza en curso en este firewall.','trace.err':'No se pudo iniciar la traza',
@@ -295,6 +297,7 @@ es: {
  'empty.auth':'Nenhum evento de login no período.',
  'empty.admin':'Nenhuma alteração de configuração no período.',
  'empty.generic':'Nenhum log encontrado para esta categoria no período selecionado.',
+ 'empty.fw':'Nenhum tráfego registrado neste período. Aqui aparecem o tráfego bloqueado e o das regras com registro ligado. O tráfego permitido não é registrado por padrão (uma linha por conexão inundaria um firewall movimentado): veja Fluxos, Maiores consumidores e Análise de tráfego, ou ligue o registro em uma regra do firewall.',
  'trace.host':'Para o host','trace.src_host':'Do host','trace.net':'Para a rede','trace.src_net':'Da rede','trace.port':'Para a porta','trace.src_port':'Da porta','trace.proto':'Protocolo',
  'trace.duration':'Duração','trace.both':'Ambos os sentidos','trace.start':'Iniciar rastreio','trace.stop':'Parar','trace.running':'Rastreando… {n} fluxo(s)','trace.finished':'Concluído · {n} fluxo(s)',
  'trace.need_filter':'Informe ao menos um: host, rede, porta ou protocolo.','trace.busy':'Já há outro rastreio em andamento neste firewall.','trace.err':'Não foi possível iniciar o rastreio',
@@ -539,7 +542,7 @@ async function runNetfilterTab(){
   await withStats(() => vlQuery(qy, 300), renderNetfilterRows, `${core} | stats count() as total`, `${core} | filter (${BLK}) | stats count() as total`);
 }
 function renderNetfilterRows(rows){
-  if(!rows.length){ emptyRow(8, t('ui.none')); return; }
+  if(!rows.length){ emptyRow(8, t('empty.' + activeTab.id) !== 'empty.' + activeTab.id ? t('empty.' + activeTab.id) : t('ui.none')); return; }
   setBody(rows.map((r,i) => {
     const act = cleanAction(r.nf_action);
     const cls = classify(act);

@@ -156,6 +156,12 @@ elif cmd == 'call':
             print(json.dumps(utils.validation_error('passphrase', 'required')))
 
     elif action == 'registered-list-backups':
+        # the remote (cloud) backup needs the credentials of the cloud service (ns-plug system id and secret): a firewall
+        # that has none has no remote backups, which is not an error (the dashboard asked every few seconds and logged one)
+        plug = lambda option: subprocess.run(['uci', '-q', 'get', 'ns-plug.config.' + option], capture_output=True, text=True).stdout.strip()
+        if not (plug('system_id') and plug('secret') and plug('backup_url')):
+            print(json.dumps({'values': {'backups': []}, 'available': False}))
+            sys.exit(0)
         try:
             # list remote backups, the return is a string, so it gets decoded and encoded to generate a formatted json
             completed_process = subprocess.run(['/usr/sbin/remote-backup', 'list'], check=True, capture_output=True,

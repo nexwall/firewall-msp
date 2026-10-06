@@ -1,0 +1,13 @@
+#!/bin/sh
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Firmware 26.0.0-rc2 and rc3 logged the traffic of the default rule "LAN -> WAN" (10 lines a second): a busy firewall floods the
+# system log and the console with it. The rule keeps its logging only if the administrator changed the limit.
+if [ "$(uci -q get firewall.ns_lan_to_wan.log)" = "1" ] && [ "$(uci -q get firewall.ns_lan_to_wan.log_limit)" = "10/s" ]; then
+	uci set firewall.ns_lan_to_wan.log='0'
+	uci -q delete firewall.ns_lan_to_wan.log_limit
+	uci commit firewall
+fi
+sysctl -q -w kernel.printk="3 4 1 3" >/dev/null 2>&1
+exit 0

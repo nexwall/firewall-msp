@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-scripts
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=7
+PKG_RELEASE:=9
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -61,6 +61,9 @@ define Package/nexwall-scripts/install
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-webui-cert $(1)/etc/uci-defaults/99-nexwall-webui-cert
 	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-webui-redirect $(1)/etc/uci-defaults/99-nexwall-webui-redirect
 	$(INSTALL_DIR) $(1)/usr/share/nexwall/redirect
+	$(INSTALL_DIR) $(1)/etc/sysctl.d
+	$(INSTALL_DATA) ./files/sysctl.d/99-nexwall-console.conf $(1)/etc/sysctl.d/99-nexwall-console.conf
+	$(INSTALL_BIN) ./files/uci-defaults/99-nexwall-log-quiet $(1)/etc/uci-defaults/99-nexwall-log-quiet
 	$(INSTALL_DATA) ./files/redirect/index.html $(1)/usr/share/nexwall/redirect/index.html
 	$(INSTALL_DIR) $(1)/usr/lib/nexwall-scripts
 	$(INSTALL_DATA) ./files/lib/trace.awk $(1)/usr/lib/nexwall-scripts/trace.awk
