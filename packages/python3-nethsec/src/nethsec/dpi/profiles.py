@@ -17,6 +17,9 @@ which is how they are told apart from the administrator's own rules (those are n
     school      standard, plus social networks, video and streaming, games and entertainment.
     restricted  school, plus online shopping, recreation and sports, remote-desktop tools, cloud file sharing and
                 advertising: a strict profile for companies.
+
+With Web Protection installed (``nethsec.webprotection.profiles``) choosing a profile also creates one website rule with the
+categories of that profile, so applications and websites follow the same choice.
 """
 
 from nethsec import dpi, utils
@@ -53,10 +56,29 @@ PROFILES = {
 DEFAULT_PROFILE = 'standard'
 
 
+def _web_profiles():
+    """The Web Protection side of the profiles (package nexwall-webprotection, proprietary, from the vendor feed), None without it."""
+    try:
+        from nethsec.webprotection import profiles as web_profiles
+        return web_profiles
+    except ImportError:
+        return None
+
+
 def list_profiles() -> list:
-    """The profiles and what they block, for the web interface."""
-    return [{'id': pid, 'title': p['title'],
-             'blocks': [{'id': g, 'title': GROUPS[g]['title']} for g in p['groups']]} for pid, p in PROFILES.items()]
+    """The profiles and what they block, for the web interface. With Web Protection installed each profile also lists the website
+    categories it blocks (``web_blocks``)."""
+    web = _web_profiles()
+    out = []
+    for pid, p in PROFILES.items():
+        item = {'id': pid, 'title': p['title'], 'blocks': [{'id': g, 'title': GROUPS[g]['title']} for g in p['groups']]}
+        if web:
+            try:
+                item['web_blocks'] = web.list_categories(pid)
+            except Exception:
+                pass
+        out.append(item)
+    return out
 
 
 def active_profile(e_uci) -> str:
@@ -88,6 +110,13 @@ def apply_profile(e_uci, profile: str) -> dict:
     if profile not in PROFILES:
         raise utils.ValidationError('profile', 'invalid', str(profile))
     remove_profile_rules(e_uci)
+    web = _web_profiles()
+    web_result = None
+    if web:
+        try:
+            web_result = web.apply(e_uci, profile)       # one rule with the website categories of the profile
+        except Exception:                                # never let the website part break Application Control
+            web_result = None
     devices = _lan_devices(e_uci)
     created = 0
     for group_id in PROFILES[profile]['groups']:
@@ -109,4 +138,7 @@ def apply_profile(e_uci, profile: str) -> dict:
         e_uci.set('dpi', 'engine', 'engine')
     e_uci.set('dpi', 'engine', 'overload_action', 'block')
     e_uci.save('dpi')
-    return {'profile': profile, 'rules': created, 'devices': devices}
+    result = {'profile': profile, 'rules': created, 'devices': devices}
+    if web_result is not None:
+        result['web'] = web_result
+    return result

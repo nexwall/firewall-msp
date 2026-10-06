@@ -39,8 +39,12 @@ def main():
             print('unknown profile: %s (standard, school, restricted)' % sys.argv[2], file=sys.stderr)
             return 1
         subprocess.run(['uci', 'commit', 'dpi'], check=True)
+        if res.get('web') is not None:
+            subprocess.run(['uci', 'commit', 'web_protection'], check=False)
         subprocess.run(['/sbin/reload_config'], check=False)
         print('profile %s applied: %d rule(s) on %s' % (res['profile'], res['rules'], ', '.join(res['devices']) or 'no device'))
+        if res.get('web'):
+            print('website rule: %d (%d categories), Web Protection %s' % (res['web'].get('rules', 0), res['web'].get('categories', 0), 'on' if res['web'].get('enabled') else 'off'))
     else:
         print(__doc__.strip(), file=sys.stderr)
         return 2
