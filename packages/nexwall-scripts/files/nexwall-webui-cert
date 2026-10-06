@@ -8,9 +8,18 @@
 """
 nexwall-webui-cert - a certificate the browser trusts for the web interface of this firewall.
 
-The administrator opens https://firewall.nexwall.com.br. This firewall answers that name itself (a static DNS entry
-pointing to its own LAN address, kept current by this tool) and presents a Let's Encrypt certificate for it, which it
-downloads from the Nexwall license server:
+The administrator opens https://firewall.lan.nexwall.com.br (or https://<serial>.lan.nexwall.com.br). This firewall answers
+those names itself (static DNS entries pointing to its own LAN address, kept current by this tool) and presents a Let's Encrypt
+certificate that belongs to this unit alone: the unit makes its own private key (it never leaves the unit), asks the Nexwall
+license server for a certificate for its two names, and installs what comes back:
+
+  - the answer is signed by the license server; the certificate must carry the unit's names and belong to the unit's own key;
+  - Let's Encrypt validates through DNS, so the unit has to be online only for the request (a minute); renewal starts 28 days
+    before the certificate ends;
+  - a unit whose server cannot issue yet (older server, no answer) falls back to the shared certificate of
+    firewall.nexwall.com.br that older firmware used, and tries the own certificate again at the next run.
+
+Everything below about the shared certificate describes that fallback:
 
   - the answer is signed by the license server and is only accepted when it is for firewall.nexwall.com.br, the certificate
     is valid for that name, is not about to expire and belongs to the private key that came with it;
@@ -37,7 +46,13 @@ import sys
 import tempfile
 import time
 
-HOSTNAME = 'firewall.nexwall.com.br'
+HOSTNAME = 'firewall.nexwall.com.br'          # the shared certificate of earlier firmware (fallback)
+ZONE = 'lan.nexwall.com.br'
+GENERIC = 'firewall.' + ZONE                  # the same short name on every label
+ACCEPTED = (GENERIC, HOSTNAME)                # a certificate must carry one of these
+SERIAL_FILE = '/etc/nexwall-license/serial'
+UNIT_KEY = '/etc/nexwall/webui-cert/unit.key'
+RENEW_DAYS = 28
 DIR = '/etc/nexwall/webui-cert'
 CHAIN = os.path.join(DIR, 'fullchain.pem')
 KEY = os.path.join(DIR, 'privkey.pem')
@@ -74,20 +89,33 @@ def lan_address():
     return value.split('/')[0].strip("'") if value else ''
 
 
+def unit_name():
+    """<serial>.lan.nexwall.com.br of this unit, '' when the serial is not known."""
+    try:
+        serial = open(SERIAL_FILE).read().strip().upper()
+    except OSError:
+        return ''
+    return serial.lower() + '.' + ZONE if re.match(r'^NXW-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$', serial) else ''
+
+
 def ensure_dns():
-    """firewall.nexwall.com.br -> the LAN address of this unit, in the DNS server of the firewall. True when it changed."""
+    """The names of the web interface -> the LAN address of this unit, in the DNS server of the firewall. True when changed."""
     ip = lan_address()
     if not ip:
         return False
-    if uci('dhcp.nexwall_webui.name') == HOSTNAME and uci('dhcp.nexwall_webui.ip') == ip:
-        return False
-    run(['uci', 'set', 'dhcp.nexwall_webui=domain'])
-    run(['uci', 'set', 'dhcp.nexwall_webui.name=%s' % HOSTNAME])
-    run(['uci', 'set', 'dhcp.nexwall_webui.ip=%s' % ip])
-    run(['uci', 'commit', 'dhcp'])
-    run(['/etc/init.d/dnsmasq', 'reload'])
-    log('%s now points to %s' % (HOSTNAME, ip))
-    return True
+    changed = False
+    for section, name in (('nexwall_webui', HOSTNAME), ('nexwall_webui_lan', GENERIC), ('nexwall_webui_unit', unit_name())):
+        if not name or (uci('dhcp.%s.name' % section) == name and uci('dhcp.%s.ip' % section) == ip):
+            continue
+        run(['uci', 'set', 'dhcp.%s=domain' % section])
+        run(['uci', 'set', 'dhcp.%s.name=%s' % (section, name)])
+        run(['uci', 'set', 'dhcp.%s.ip=%s' % (section, ip)])
+        log('%s now points to %s' % (name, ip))
+        changed = True
+    if changed:
+        run(['uci', 'commit', 'dhcp'])
+        run(['/etc/init.d/dnsmasq', 'reload'])
+    return changed
 
 
 # ---------------------------------------------------------------- certificate checks
@@ -117,8 +145,8 @@ def key_pubkey(path):
 def check_pair(chain_path, key_path):
     """The certificate is for our name, is not about to expire, and its private key is the one given. Returns the info."""
     info = cert_info(chain_path)
-    if HOSTNAME not in info['names']:
-        raise ValueError('the certificate is not for %s' % HOSTNAME)
+    if not any(n in info['names'] for n in ACCEPTED):
+        raise ValueError('the certificate is not for %s' % GENERIC)
     if time.time() > NOW_FLOOR and info['not_after'] < time.time() + MIN_DAYS_LEFT * 86400:
         raise ValueError('the certificate is expired or about to expire')
     if key_pubkey(key_path) != info['pubkey']:
@@ -126,7 +154,7 @@ def check_pair(chain_path, key_path):
     return info
 
 
-def verify_signature(resp):
+def verify_signature(resp, kind='webui-certificate'):
     from Crypto.Hash import SHA256
     from Crypto.PublicKey import RSA
     from Crypto.Signature import pkcs1_15
@@ -135,8 +163,8 @@ def verify_signature(resp):
     payload = base64.b64decode(resp['payload'])
     pkcs1_15.new(key).verify(SHA256.new(payload), base64.b64decode(resp['signature']))
     data = json.loads(payload)
-    if data.get('kind') != 'webui-certificate' or data.get('hostname') != HOSTNAME:
-        raise ValueError('not the web interface certificate of %s' % HOSTNAME)
+    if data.get('kind') != kind or (kind == 'webui-certificate' and data.get('hostname') != HOSTNAME):
+        raise ValueError('not a web interface certificate answer')
     return data
 
 
@@ -213,17 +241,18 @@ def install(fullchain, privkey):
         revert()
         raise RuntimeError('the new certificate could not be used')
     info = cert_info(CHAIN)
-    log('certificate installed for %s, valid until %s' % (HOSTNAME, datetime.datetime.fromtimestamp(info['not_after'], datetime.timezone.utc).date()))
+    log('certificate installed for %s, valid until %s' % (', '.join(n for n in info['names'] if n in ACCEPTED or n == unit_name()), datetime.datetime.fromtimestamp(info['not_after'], datetime.timezone.utc).date()))
     return 'installed'
 
 
 def installed_status():
-    out = {'hostname': HOSTNAME, 'lan_address': lan_address(), 'dns_entry': uci('dhcp.nexwall_webui.ip'),
-           'using': 'nexwall' if nginx_uses() == CHAIN else 'self-signed', 'valid': False}
+    out = {'hostname': GENERIC, 'unit_name': unit_name(), 'lan_address': lan_address(), 'dns_entry': uci('dhcp.nexwall_webui_lan.ip'),
+           'using': 'nexwall' if nginx_uses() == CHAIN else 'self-signed', 'valid': False, 'mode': 'none'}
     if os.path.exists(CHAIN) and os.path.exists(KEY):
         try:
             info = check_pair(CHAIN, KEY)
-            out.update({'valid': True, 'not_after': info['not_after']})
+            out.update({'valid': True, 'not_after': info['not_after'], 'names': info['names'],
+                        'mode': 'unit' if GENERIC in info['names'] else 'shared'})
         except (ValueError, OSError) as e:
             out['error'] = str(e)
     return out
@@ -243,11 +272,84 @@ def recently_checked():
         return False
 
 
+def ensure_unit_key():
+    """The private key of this unit (EC P-256), made once, mode 0600; it never leaves the unit."""
+    if not os.path.exists(UNIT_KEY):
+        os.makedirs(DIR, mode=0o700, exist_ok=True)
+        tmp = UNIT_KEY + '.new'
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.close(fd)
+        p = run(['openssl', 'ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', tmp])
+        if p.returncode != 0:
+            raise RuntimeError('cannot make the private key: %s' % p.stderr.strip())
+        os.replace(tmp, UNIT_KEY)
+    os.chmod(UNIT_KEY, 0o600)
+
+
+def make_csr():
+    """The certificate request for both names, DER, base64url (it travels in the address of a GET request)."""
+    own = unit_name()
+    if not own:
+        raise RuntimeError('the serial number of this unit is not known yet')
+    p = subprocess.run(['openssl', 'req', '-new', '-key', UNIT_KEY, '-subj', '/CN=%s' % GENERIC, '-addext',
+                        'subjectAltName=DNS:%s,DNS:%s' % (GENERIC, own), '-outform', 'DER'], capture_output=True, timeout=30)
+    if p.returncode != 0:
+        raise RuntimeError('cannot make the certificate request: %s' % p.stderr.decode(errors='replace').strip())
+    return base64.urlsafe_b64encode(p.stdout).decode().rstrip('=')
+
+
+def days_left():
+    try:
+        return (check_pair(CHAIN, KEY)['not_after'] - time.time()) / 86400
+    except (ValueError, OSError):
+        return -1
+
+
+def unit_cert_current():
+    """True when the installed certificate is this unit's own, valid and not due for renewal."""
+    st = installed_status()
+    return st['valid'] and st['using'] == 'nexwall' and st['mode'] == 'unit' and \
+        open(KEY).read() == open(UNIT_KEY).read() and days_left() > RENEW_DAYS
+
+
+def sync_unit():
+    """Ask the license server for this unit's own certificate and install it. Returns 'installed', 'unchanged' or raises."""
+    ensure_unit_key()
+    csr = make_csr()
+    deadline = time.time() + 150
+    while True:
+        p = subprocess.run([CORE_CTL, 'get', '/api/v1/webui-cert/issue?csr=' + csr], capture_output=True, timeout=120)
+        if p.returncode != 0:
+            raise RuntimeError(p.stderr.decode(errors='replace').strip() or 'request failed')
+        answer = json.loads(p.stdout)
+        if answer.get('status') == 'ready':
+            data = verify_signature(answer, 'webui-certificate-issued')
+            if unit_name() not in data['names'] or GENERIC not in data['names']:
+                raise ValueError('the certificate is not for the names of this unit')
+            return install(data['fullchain'], open(UNIT_KEY).read())
+        if answer.get('status') == 'error':
+            raise RuntimeError('the server could not issue the certificate: %s %s' % (answer.get('code'), answer.get('detail', '')))
+        if time.time() > deadline:
+            raise RuntimeError('the certificate is still being issued, the next run asks again')
+        time.sleep(10)
+
+
 def cmd_sync(args):
     ensure_dns()
-    # the schedule runs every half hour so that a new unit gets its certificate soon after its license registration;
-    # a unit that has a valid certificate asks the server only every few hours
-    if not getattr(args, 'force', False) and recently_checked():
+    # the schedule runs every half hour so that a new unit gets its certificate soon after its license registration
+    force = getattr(args, 'force', False)
+    if not force and unit_cert_current():
+        return 0
+    try:
+        result = sync_unit()
+        print(result)
+        return 0
+    except Exception as e:  # noqa: BLE001 - the shared certificate or the self-signed one keep the web interface working
+        log('could not get the own certificate: %s' % e)
+    # fallback: a unit that has no valid certificate takes the shared one of earlier firmware, until the own one is ready
+    if not force and installed_status()['valid'] and installed_status()['using'] == 'nexwall':
+        return 1
+    if not force and recently_checked():
         return 0
     try:
         p = subprocess.run([CORE_CTL, 'get', '/api/v1/webui-cert'], capture_output=True, timeout=120)
