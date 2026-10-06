@@ -11,11 +11,11 @@ PKG_NAME:=nexwall-webprotection
 # vendor feed. This recipe downloads one pinned build and checks its SHA-256, so the public tree does not carry that code.
 # To ship a new version: release it (scripts/release-feed.sh in the private repository), then bump WP_FEED_VERSION and
 # WP_FEED_SHA256 here and PKG_RELEASE.
-PKG_VERSION:=0.4.1
+PKG_VERSION:=0.5.0
 PKG_RELEASE:=1
 
-WP_FEED_VERSION:=0.4.1
-WP_FEED_SHA256:=e5e4150b370b761d4c7b70e538234a4033eb304c638295a985d059347e9ee9e8
+WP_FEED_VERSION:=0.5.0
+WP_FEED_SHA256:=3c40c99ba827f069ad594d475cb4f02fc78ea35e0c61bf951acd546885cd7a1e
 WP_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 PKG_SOURCE:=nexwall-webprotection_$(WP_FEED_VERSION)_all.tar.gz

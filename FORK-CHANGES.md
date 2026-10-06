@@ -55,3 +55,13 @@ Record of modifications to files inherited from NethSecurity (upstream commit `9
 
 Internal names (`ns-*` packages, the `nethsec` Python module, UCI option names, the build feed name) are deliberately
 unchanged to keep future merges from upstream small. Original copyright headers are preserved everywhere.
+
+## 2026-10-06 (26.1.0)
+
+- **Application Control profiles** (`packages/python3-nethsec/src/nethsec/dpi/profiles.py`): when Web Protection is installed, choosing a profile also creates its website rules (optional hook); the profile list carries what the web side does. `packages/ns-dpi/files/nexwall-dpi-profile` commits that configuration too.
+- **Storage** (`packages/ns-storage`): slot-B gap before the data partition, swap service `ns-swap` (zram and swap file), `remove-storage` detaches without deleting unless `--erase`, `ns.storage` lists what uses the storage (`packages/ns-api/files/ns.storage`).
+- **Image layout** (`config/partsize.conf`): root partition 1024 MiB (was 300), boot partition 64 MiB (was 16).
+- **Log Viewer** (`packages/ns-log-viewer`, `packages/ns-api/files/ns.log-viewer`): traffic and applications tab, collector `ns-flowlog`; the DPI tab extraction fix.
+- **Traffic reports** (`packages/ns-monitoring`): the hourly reports are kept on the data partition for 35 days (`ns-stats` init and cleanup).
+- **License module list** (`packages/python3-nethsec/src/nethsec/license/__init__.py`): web, av, atp and ztna.
+- **New packages**: `packages/nexwall-webprotection` and `packages/nexwall-webd` (recipes only; the content is proprietary and comes from the vendor feed).

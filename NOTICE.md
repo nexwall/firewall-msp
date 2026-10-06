@@ -12,6 +12,18 @@ Nexwall Firewall is a derivative work of free software projects. This file recor
 
 Components fetched from other repositories at build time are listed in `THIRD_PARTY_LICENSES.md`.
 
+## Web Protection (26.1.0): software and data delivered with it
+
+| What | Source | License | How it reaches the firewall |
+|---|---|---|---|
+| Squid 7.1 (SSL-Bump proxy) | squid-cache.org, OpenWrt packages feed | GPL-2.0-or-later | package `squid` in the image |
+| ClamAV 1.4.x (antivirus engine) | Cisco Talos / ClamAV, OpenWrt packages feed | GPL-2.0-only | packages `clamav`, `freshclam` in the image; virus signatures are downloaded by `freshclam` from the ClamAV mirrors (their own terms) |
+| YARA 4.5 | VirusTotal / YARA project, OpenWrt packages feed | BSD-3-Clause | package `yara` in the image |
+| Website categories | UT1 blacklists, Universite Toulouse Capitole, https://dsi.ut-capitole.fr/blacklists/ | CC BY-SA 4.0 (attribution and share-alike: the category lists Nexwall publishes are derived from it and are offered under the same license) | downloaded from the Nexwall license server |
+| YARA rules | ReversingLabs (github.com/reversinglabs/reversinglabs-yara-rules, MIT, copyright ReversingLabs) and the Yara-Rules project (github.com/Yara-Rules/rules, GPL-2.0, copyright the contributors); Nexwall own rules | MIT, GPL-2.0, Nexwall | downloaded from the Nexwall license server; the published rule file and its `NOTICE.txt` name the sources and licenses |
+| SafeSearch and YouTube restriction names | the search engines' published enforcement names (forcesafesearch.google.com, strict.bing.com, safe.duckduckgo.com, restrict.youtube.com) and Google's list of country domains | public service information of the providers | `google_domains.txt` in `nexwall-webprotection` |
+| `nexwall-webprotection`, `nexwall-webd` | Nexwall | proprietary, delivered through the Nexwall vendor feed (not part of the GPL tree) | vendor feed, pinned by version and SHA-256 in `packages/nexwall-webprotection` and `packages/nexwall-webd` |
+
 ## Rules followed
 
 1. Original copyright and license headers are never removed, even in files we modify.
