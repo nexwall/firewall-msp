@@ -392,7 +392,7 @@ function esc(s){ return (s===undefined||s===null) ? '' : String(s).replace(/[&<>
 function q(s){ return String(s).replace(/"/g,''); }   // safe inside a LogsQL "..." literal
 
 function fwRegex(){
-  return '(?P<nf_action>[^:]+): IN=(?P<in_if>[^ ]*) OUT=(?P<out_if>[^ ]*).*?SRC=(?P<src_ip>[^ ]+) DST=(?P<dst_ip>[^ ]+).*?PROTO=(?P<proto>[^ ]+)(?: SPT=(?P<spt>[0-9]+) DPT=(?P<dpt>[0-9]+))?';
+  return '\\s*(?:\\[[^\\]]*\\]\\s*)?(?P<nf_action>[^:\\s][^:]*): IN=(?P<in_if>[^ ]*) OUT=(?P<out_if>[^ ]*).*?SRC=(?P<src_ip>[^ ]+) DST=(?P<dst_ip>[^ ]+).*?PROTO=(?P<proto>[^ ]+)(?: SPT=(?P<spt>[0-9]+) DPT=(?P<dpt>[0-9]+))?';
 }
 function cleanAction(a){ return String(a||'').replace(/^\s*\[[^\]]*\]\s*/, '').trim(); }   // some kernels prefix "[12345.678]"
 
