@@ -35,6 +35,10 @@ MODULES = (
     ('dns', 'DNS Filtering', 'base'),
     ('geo', 'IP & Geo Blocking', 'base'),
     ('vpn_ext', 'VPN Extended', 'base'),
+    ('web', 'Web Protection', 'base'),
+    ('av', 'Antivirus / Sandbox', 'base'),
+    ('atp', 'Advanced Threat Protection', 'base'),
+    ('ztna', 'Workspace Protection (ZTNA)', 'addon'),
     ('waf', 'Web Server Protection (WAF)', 'addon'),
     ('mta', 'Email Protection (MTA)', 'addon'),
 )
