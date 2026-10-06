@@ -17,6 +17,21 @@ start_service() {
 	config_get export_path daemon export_path "/var/run/dpireport/"
 	config_get log_level daemon log_level "info"
 
+	# The hourly traffic reports (per client, application, protocol and host) are kept on the data partition when there is one,
+	# so they survive a reboot and the retention is days, not whatever fits in RAM. The working database stays in RAM.
+	# /var/run/dpireport stays valid for every reader (ns.dpireport, ns.controller): it becomes a link to the persistent folder.
+	local keep=/mnt/data/dpireport
+	if grep -q ' /mnt/data ' /proc/mounts && mkdir -p "$keep" 2>/dev/null; then
+		if [ -d /var/run/dpireport ] && [ ! -L /var/run/dpireport ]; then
+			cp -a /var/run/dpireport/. "$keep"/ 2>/dev/null
+			rm -f "$keep"/stats.db "$keep"/stats.db-shm "$keep"/stats.db-wal
+			rm -rf /var/run/dpireport
+		fi
+		[ -L /var/run/dpireport ] || ln -s "$keep" /var/run/dpireport
+		case "$db_path" in /var/run/dpireport/*) db_path=/var/run/ns-stats/stats.db ;; esac
+		case "$export_path" in /var/run/dpireport*) export_path="$keep/" ;; esac
+	fi
+
 	mkdir -p "$(dirname "$db_path")"
 	mkdir -p "$export_path"
 

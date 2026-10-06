@@ -25,6 +25,13 @@ def run(cmd):
     subprocess.run(cmd, check=True, capture_output=True)
 
 
+def flowlog(*actions):
+    """The traffic and application collector (package ns-log-viewer) follows the viewer; absent in builds without it."""
+    if os.path.exists("/etc/init.d/ns-flowlog"):
+        for action in actions:
+            subprocess.run(["/etc/init.d/ns-flowlog", action], capture_output=True)
+
+
 def is_running():
     r = subprocess.run(["/etc/init.d/victoria-logs", "running"], capture_output=True)
     return r.returncode == 0
@@ -63,6 +70,7 @@ def enable():
         run(["/etc/init.d/victoria-logs", "enable"])
         run(["/etc/init.d/victoria-logs", "start"])
         run(["/etc/init.d/rsyslog", "restart"])
+        flowlog("enable", "start")
         # regenerates ns-ui.conf from its template, which includes logs-viewer.inc if present
         regenerate_web_config()
     except subprocess.CalledProcessError as e:
@@ -76,6 +84,7 @@ def disable():
             if os.path.islink(link) or os.path.exists(link):
                 os.remove(link)
 
+        flowlog("stop", "disable")
         run(["/etc/init.d/victoria-logs", "stop"])
         run(["/etc/init.d/victoria-logs", "disable"])
         run(["/etc/init.d/rsyslog", "restart"])

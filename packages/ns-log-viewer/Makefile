@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ns-log-viewer
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only
@@ -19,7 +19,7 @@ define Package/ns-log-viewer
 	SECTION:=base
 	CATEGORY:=Nexwall
 	TITLE:=Nexwall Log Viewer
-	DEPENDS:=+victoria-logs +rsyslog
+	DEPENDS:=+victoria-logs +rsyslog +python3
 	PKGARCH:=all
 endef
 
@@ -37,6 +37,10 @@ define Package/ns-log-viewer/install
 	$(INSTALL_DIR) $(1)/usr/share/ns-log-viewer
 	$(INSTALL_DATA) ./files/nginx/logs-viewer.inc $(1)/usr/share/ns-log-viewer/logs-viewer.inc
 	$(INSTALL_DATA) ./files/rsyslog/nexwall-extra.conf $(1)/usr/share/ns-log-viewer/nexwall-extra.conf
+
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/usr/sbin/ns-flowlog $(1)/usr/sbin/ns-flowlog
+	$(INSTALL_BIN) ./files/etc/init.d/ns-flowlog $(1)/etc/init.d/ns-flowlog
 
 	$(INSTALL_DIR) $(1)/www-ns/logs-viewer
 	$(INSTALL_DATA) ./files/www-ns/logs-viewer/index.html $(1)/www-ns/logs-viewer/index.html

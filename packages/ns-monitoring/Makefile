@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=ns-monitoring
 # Nexwall fork of nethserver/nethsecurity-monitoring (code identical to upstream v1.2.1), pinned to a commit.
 PKG_VERSION:=1.2.1
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/nexwall/nexwall-monitoring.git
