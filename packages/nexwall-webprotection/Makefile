@@ -11,11 +11,11 @@ PKG_NAME:=nexwall-webprotection
 # vendor feed. This recipe downloads one pinned build and checks its SHA-256, so the public tree does not carry that code.
 # To ship a new version: release it (scripts/release-feed.sh in the private repository), then bump WP_FEED_VERSION and
 # WP_FEED_SHA256 here and PKG_RELEASE.
-PKG_VERSION:=0.2.0
+PKG_VERSION:=0.3.0
 PKG_RELEASE:=1
 
-WP_FEED_VERSION:=0.2.0
-WP_FEED_SHA256:=f142f0bc64dfe3fd27a89df0accd5f004ac20e16e8a37f45d42584dbb82a87b2
+WP_FEED_VERSION:=0.3.0
+WP_FEED_SHA256:=a32524bd73153598a2be690b54574f40300b2e407390ef05d4f9eeaefaaf1b18
 WP_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 PKG_SOURCE:=nexwall-webprotection_$(WP_FEED_VERSION)_all.tar.gz
@@ -40,7 +40,10 @@ define Package/nexwall-webprotection
 		+python3-cryptodome \
 		+squid \
 		+openssl-util \
-		+ca-bundle
+		+ca-bundle \
+		+clamav \
+		+freshclam \
+		+yara
 	PKGARCH:=all
 endef
 
