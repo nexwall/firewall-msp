@@ -1,0 +1,5 @@
+#!/bin/sh
+# swap on first boot (and after an update that brings it): compressed RAM swap, and a swap file when the data partition is large
+/etc/init.d/ns-swap enable
+/etc/init.d/ns-swap start >/dev/null 2>&1 &
+exit 0

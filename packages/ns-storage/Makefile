@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
  
 PKG_NAME:=ns-storage
 PKG_VERSION:=1.0.4
-PKG_RELEASE:=1
+PKG_RELEASE:=2
  
 PKG_BUILD_DIR:=$(BUILD_DIR)/ns-storage-$(PKG_VERSION)
 
@@ -21,7 +21,7 @@ define Package/ns-storage
 	CATEGORY:=Nexwall
 	TITLE:=Nexwall Firewall storage manager
 	URL:=https://github.com/NethServer/nethsecurity/
-	DEPENDS:=+parted +block-mount +logrotate +rsync +tune2fs +blockd
+	DEPENDS:=+parted +block-mount +logrotate +rsync +tune2fs +blockd +kmod-zram
 	PKGARCH:=all
 endef
  
@@ -72,6 +72,10 @@ define Package/ns-storage/install
 	$(INSTALL_CONF) ./files/data.conf $(1)/etc/logrotate.d
 	$(INSTALL_BIN) ./files/storage-status $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/ns-storage-check.init $(1)/etc/init.d/ns-storage-check
+	$(INSTALL_BIN) ./files/ns-swap.init $(1)/etc/init.d/ns-swap
+	$(INSTALL_BIN) ./files/33-ns-swap.uci-default $(1)/etc/uci-defaults/33-ns-swap
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/ns-swap.config $(1)/etc/config/ns-swap
 endef
  
 $(eval $(call BuildPackage,ns-storage))
