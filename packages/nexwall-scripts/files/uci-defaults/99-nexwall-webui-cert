@@ -7,6 +7,6 @@
 # up and then checked every few hours; the web interface keeps its own certificate until a valid one is installed.
 /usr/sbin/nexwall-webui-cert dns >/dev/null 2>&1
 grep -q nexwall-webui-cert /etc/crontabs/root 2>/dev/null || \
-	echo '17 */4 * * * sleep $(( RANDOM % 900 )); /usr/sbin/nexwall-webui-cert sync >/dev/null 2>&1' >> /etc/crontabs/root
+	echo '*/30 * * * * sleep $(( RANDOM % 300 )); /usr/sbin/nexwall-webui-cert sync >/dev/null 2>&1' >> /etc/crontabs/root
 ( sleep 150; /usr/sbin/nexwall-webui-cert sync >/dev/null 2>&1 ) &
 exit 0

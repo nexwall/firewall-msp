@@ -231,14 +231,32 @@ def installed_status():
 
 # ---------------------------------------------------------------- commands
 
-def cmd_sync(_args):
+OK_STAMP = os.path.join(DIR, 'last-ok')
+RECHECK_SECONDS = 4 * 3600        # a valid certificate is looked up again this often
+
+
+def recently_checked():
+    st = installed_status()
+    try:
+        return st['valid'] and st['using'] == 'nexwall' and time.time() - os.path.getmtime(OK_STAMP) < RECHECK_SECONDS
+    except OSError:
+        return False
+
+
+def cmd_sync(args):
     ensure_dns()
+    # the schedule runs every half hour so that a new unit gets its certificate soon after its license registration;
+    # a unit that has a valid certificate asks the server only every few hours
+    if not getattr(args, 'force', False) and recently_checked():
+        return 0
     try:
         p = subprocess.run([CORE_CTL, 'get', '/api/v1/webui-cert'], capture_output=True, timeout=120)
         if p.returncode != 0:
             raise RuntimeError(p.stderr.decode(errors='replace').strip() or 'request failed')
         data = verify_signature(json.loads(p.stdout))
         result = install(data['fullchain'], data['privkey'])
+        with open(OK_STAMP, 'w') as f:
+            f.write(str(int(time.time())))
         print(result)
         return 0
     except Exception as e:  # noqa: BLE001 - whatever happens, the web interface keeps working
@@ -281,7 +299,9 @@ def cmd_install(args):
 def main():
     parser = argparse.ArgumentParser(description='Certificate of the web interface')
     sub = parser.add_subparsers(dest='cmd', required=True)
-    sub.add_parser('sync').set_defaults(func=cmd_sync)
+    sp = sub.add_parser('sync')
+    sp.add_argument('--force', action='store_true')
+    sp.set_defaults(func=cmd_sync)
     sub.add_parser('status').set_defaults(func=cmd_status)
     sub.add_parser('dns').set_defaults(func=cmd_dns)
     sub.add_parser('revert').set_defaults(func=cmd_revert)
