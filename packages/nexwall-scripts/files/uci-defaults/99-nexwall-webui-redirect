@@ -1,0 +1,18 @@
+#!/bin/sh
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Port 80 of the firewall: http://<LAN address> and http://firewall.lan show a small page that opens the trusted address
+# https://firewall.lan.nexwall.com.br when this computer can reach it and offers the direct link otherwise (a computer that
+# does not use the firewall as DNS server cannot resolve the trusted name). The web interface itself stays on 443 and 9090.
+uci -q get nginx._nexwall_http >/dev/null && exit 0
+uci set nginx._nexwall_http=server
+uci add_list nginx._nexwall_http.listen='80 default_server'
+uci add_list nginx._nexwall_http.listen='[::]:80 default_server'
+uci set nginx._nexwall_http.server_name='_'
+uci set nginx._nexwall_http.root='/usr/share/nexwall/redirect'
+uci set nginx._nexwall_http.index='index.html'
+uci set nginx._nexwall_http.error_page='404 =200 /index.html'
+uci set nginx._nexwall_http.access_log='off'
+uci commit nginx
+exit 0
