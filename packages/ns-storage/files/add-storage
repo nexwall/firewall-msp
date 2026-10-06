@@ -56,3 +56,6 @@ crontab -l | grep -q '/usr/sbin/sync-data' || echo '40 1 * * * /usr/sbin/sync-da
 /etc/init.d/dnsmasq restart
 /etc/init.d/victoria-metrics restart
 /etc/init.d/victoria-logs restart 2>/dev/null || :
+# swap file on the new storage and the traffic reports that move to it
+/etc/init.d/ns-swap restart 2>/dev/null || :
+/etc/init.d/ns-stats restart 2>/dev/null || :

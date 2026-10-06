@@ -15,6 +15,7 @@ def install_fake(monkeypatch, apply_result=None, boom=False):
         return apply_result or {'rules': 1, 'enabled': True, 'categories': 3}
     mod.apply = apply
     mod.list_categories = lambda pid: [{'id': 'adult', 'title': 'Adult content'}]
+    mod.describe = lambda pid: {'blocks': [], 'inspects': [], 'antivirus': True, 'safesearch': True, 'youtube': 'strict'}
     pkg = types.ModuleType('nethsec.webprotection')
     pkg.profiles = mod
     monkeypatch.setitem(sys.modules, 'nethsec.webprotection', pkg)

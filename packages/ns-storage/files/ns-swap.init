@@ -1,0 +1,76 @@
+#!/bin/sh /etc/rc.common
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Swap for the memory-hungry services (antivirus, proxy, IPS, traffic engine):
+#   - compressed RAM swap (zram), first choice, about 2:1 to 3:1 in practice, no disk wear
+#   - a swap file on the data partition, second choice, only when the partition is large (16 GiB or more) and has the room
+# Settings (uci ns-swap.main): enabled (1), zram_percent (50 of RAM, 256 MiB minimum, 2 GiB maximum), file_mb (0 = automatic: half of the RAM,
+# 4 GiB at most), swappiness (20).
+START=16
+STOP=89
+
+SWAPFILE=/mnt/data/swapfile
+
+cfg() { uci -q get "ns-swap.main.$1" || echo "$2"; }
+
+mem_kb() { awk '/^MemTotal:/ {print $2}' /proc/meminfo; }
+
+start_zram() {
+	[ -e /sys/block/zram0 ] || modprobe zram num_devices=1 2>/dev/null || return 0
+	[ -e /sys/block/zram0 ] || return 0
+	grep -q '^/dev/zram0 ' /proc/swaps && return 0
+	local pct kb size
+	pct=$(cfg zram_percent 50)
+	kb=$(( $(mem_kb) * pct / 100 ))
+	[ "$kb" -lt 262144 ] && kb=262144
+	[ "$kb" -gt 2097152 ] && kb=2097152
+	size=$(( kb * 1024 ))
+	echo 1 > /sys/block/zram0/reset 2>/dev/null
+	echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null
+	echo "$size" > /sys/block/zram0/disksize 2>/dev/null || return 0
+	mkswap /dev/zram0 >/dev/null 2>&1 && swapon -p 100 /dev/zram0 2>/dev/null
+}
+
+start_file() {
+	grep -q ' /mnt/data ' /proc/mounts || return 0
+	grep -q "^$SWAPFILE " /proc/swaps && return 0
+	local total_mb avail_mb want
+	total_mb=$(df -m /mnt/data | awk 'NR==2 {print $2}')
+	avail_mb=$(df -m /mnt/data | awk 'NR==2 {print $4}')
+	[ "${total_mb:-0}" -ge 16384 ] || return 0
+	want=$(cfg file_mb 0)
+	if [ "$want" -le 0 ]; then
+		want=$(( $(mem_kb) / 2048 ))
+		[ "$want" -gt 4096 ] && want=4096
+	fi
+	# never more than a tenth of the free space
+	[ "$want" -gt $(( avail_mb / 10 )) ] && want=$(( avail_mb / 10 ))
+	[ "$want" -ge 256 ] || return 0
+	if [ ! -f "$SWAPFILE" ] || [ "$(( $(stat -c %s "$SWAPFILE") / 1048576 ))" -ne "$want" ]; then
+		swapoff "$SWAPFILE" 2>/dev/null
+		rm -f "$SWAPFILE"
+		# a swap file must not have holes
+		dd if=/dev/zero of="$SWAPFILE" bs=1M count="$want" conv=fsync 2>/dev/null || { rm -f "$SWAPFILE"; return 0; }
+		chmod 600 "$SWAPFILE"
+		mkswap "$SWAPFILE" >/dev/null 2>&1 || { rm -f "$SWAPFILE"; return 0; }
+	fi
+	swapon -p 10 "$SWAPFILE" 2>/dev/null
+}
+
+start() {
+	[ "$(cfg enabled 1)" = 1 ] || return 0
+	sysctl -qw vm.swappiness="$(cfg swappiness 20)" 2>/dev/null
+	start_zram
+	# the file is created in the background: writing a few GiB takes a while and must not hold up the boot
+	( start_file ) >/dev/null 2>&1 &
+}
+
+stop() {
+	swapoff -a 2>/dev/null
+	[ -e /sys/block/zram0/reset ] && echo 1 > /sys/block/zram0/reset 2>/dev/null
+	return 0
+}

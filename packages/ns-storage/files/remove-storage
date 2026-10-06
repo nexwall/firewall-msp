@@ -7,6 +7,13 @@
 
 set -e
 
+# remove-storage [--erase]
+# Without --erase the storage is only DETACHED: the partition and everything on it stay as they are (the label is cleared, so
+# it can be attached again later). With --erase the partition on the system disk is deleted and its space returned: logs,
+# metrics, traffic reports, antivirus signatures and the swap file are gone for good.
+erase=0
+[ "$1" = "--erase" ] && erase=1
+
 rom_part=$(lsblk -l --json | jq -r '.blockdevices[] | select(any(.mountpoints[]; . == "/boot")) | .name')
 rom_disk=$(lsblk -lno pkname /dev/$rom_part)
 
@@ -14,6 +21,22 @@ rom_disk=$(lsblk -lno pkname /dev/$rom_part)
 data_part=$(lsblk -l --json | jq -r '.blockdevices[] | select(any(.mountpoints[]; . == "/mnt/data")) | .name')
 data_disk=''
 [ -n "$data_part" ] && data_disk=$(lsblk -lno pkname "/dev/$data_part")
+
+# What lives on the storage must stop first: the swap on it (it would keep the partition busy), the antivirus (its signatures are
+# there) and the traffic reports (a link to the storage). They go back to RAM, the firewall keeps forwarding.
+logger -t remove-storage "detaching /mnt/data (erase=$erase)"
+/etc/init.d/ns-swap stop 2>/dev/null || :
+if uci -q get web_protection.av.enabled >/dev/null 2>&1; then
+    uci -q set web_protection.av.enabled=0
+    uci commit web_protection
+    /etc/init.d/nexwall-web-av stop 2>/dev/null || :
+    logger -t remove-storage "antivirus switched off: its signatures were on the storage"
+fi
+/etc/init.d/ns-stats stop 2>/dev/null || :
+if [ -L /var/run/dpireport ]; then
+    rm -f /var/run/dpireport
+    mkdir -p /var/run/dpireport
+fi
 
 # Removing auto-mount
 uci -q delete fstab.ns_data || :
@@ -32,6 +55,7 @@ uci commit rsyslog
 /etc/init.d/dnsmasq stop
 /etc/init.d/victoria-metrics stop
 /etc/init.d/victoria-logs stop 2>/dev/null || :
+/etc/init.d/ns-flowlog stop 2>/dev/null || :
 # Sync and wait for the disk to be free
 sync && sleep 5
 
@@ -46,9 +70,14 @@ rm -rf /mnt/data
 # /mnt/data alongside this one.
 if [ -z "$data_part" ]; then
     : # no storage was mounted, nothing to release
-elif [ "$rom_disk" == "$data_disk" ]; then
-    # Partition carved out of the OS disk: give the space back
+elif [ "$rom_disk" == "$data_disk" ] && [ "$erase" = 1 ]; then
+    # Partition carved out of the OS disk, erase asked: give the space back
     parted -s "/dev/${data_disk}" rm "$(cat "/sys/class/block/${data_part}/partition")"
+    logger -t remove-storage "partition ${data_part} deleted"
+elif [ "$rom_disk" == "$data_disk" ]; then
+    # Same disk, no erase: the partition and its data stay, only the label is cleared
+    tune2fs -L "" "/dev/${data_part}" >/dev/null
+    logger -t remove-storage "partition ${data_part} kept (detached)"
 else
     # Secondary drive: keep the partition so its logs can still be
     # inspected, just drop the label
@@ -62,3 +91,4 @@ fi
 /etc/init.d/dnsmasq start
 /etc/init.d/victoria-metrics start
 /etc/init.d/victoria-logs start 2>/dev/null || :
+/etc/init.d/ns-stats start 2>/dev/null || :

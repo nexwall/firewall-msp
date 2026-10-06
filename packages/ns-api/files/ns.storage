@@ -9,6 +9,7 @@
 
 import sys
 import json
+import os
 import subprocess
 from subprocess import CalledProcessError
 from nethsec import utils
@@ -66,6 +67,27 @@ def list_devices():
     return {"devices": devices}
 
 
+def used_by():
+    """What would be affected if the storage went away (for the confirmation in the web interface)."""
+    out = []
+    try:
+        if EUci().get('web_protection', 'av', 'enabled', default='0') in ('1', 'true', 'on'):
+            out.append('antivirus')
+    except Exception:
+        pass
+    if subprocess.run(["/etc/init.d/victoria-logs", "running"], capture_output=True).returncode == 0:
+        out.append('log_viewer_data')
+    if os.path.isdir('/mnt/data/dpireport'):
+        out.append('traffic_reports')
+    try:
+        with open('/proc/swaps') as f:
+            if any(line.startswith('/mnt/data/') for line in f):
+                out.append('swap')
+    except OSError:
+        pass
+    return out
+
+
 def get_configuration():
     u = EUci()
     os_device = ''
@@ -75,7 +97,7 @@ def get_configuration():
     except:
         return utils.generic_error("os_device_not_found")
 
-    ret = {"name": None, "size": None, "path": None, "model": None, "vendor": None}
+    ret = {"name": None, "size": None, "path": None, "model": None, "vendor": None, "used_by": used_by()}
     try:
         info = get_storage_info(u)
         p = subprocess.run(["/usr/bin/lsblk", "--json", "-b", "--output-all"], check=True, capture_output=True, text=True)
@@ -152,7 +174,7 @@ if cmd == 'list':
     print(json.dumps({
         "list-devices": {},
         "add-storage": {"device": "/dev/sdb", "type": "disk"},
-        "remove-storage": {},
+        "remove-storage": {"erase": False},
         "get-configuration": {},
         "health-check": {}
     }))
@@ -164,7 +186,9 @@ elif cmd == 'call':
         args = json.loads(sys.stdin.read())
         ret = add_storage(args.get('device'), args.get('type', 'disk'))
     elif action == "remove-storage":
-        ret = run("/usr/sbin/remove-storage")
+        # detach only (the partition and its data stay) unless the administrator asked to erase it
+        args = json.loads(sys.stdin.read() or '{}')
+        ret = run("/usr/sbin/remove-storage" + (" --erase" if args.get('erase') is True else ""))
     elif action == "get-configuration":
         ret = get_configuration()
     elif action == "health-check":

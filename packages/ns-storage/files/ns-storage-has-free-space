@@ -12,7 +12,15 @@ set -e
 
 part=$(lsblk -ln | grep "/rom" | uniq | awk '{print $1}')
 dev="/dev/$(lsblk -lno pkname /dev/$part)"
-preserve=${1:-100}
+# same default as ns-storage-setup-partition: 100 MiB plus the root slot size (slot B) on disks of 16 GiB or more
+root_mib=$(( $(lsblk -bno SIZE "/dev/$part" | head -n 1) / 1048576 ))
+disk_mib=$(( $(lsblk -bdno SIZE "$dev") / 1048576 ))
+if [ "$disk_mib" -ge 16384 ] && [ "$root_mib" -gt 0 ] && [ "$root_mib" -le 4096 ]; then
+    default_preserve=$(( root_mib + 100 ))
+else
+    default_preserve=100
+fi
+preserve=${1:-$default_preserve}
 
 pnum=$(lsblk ${dev} -o TYPE -n | grep part | wc -l)
 if [ "${pnum}" -gt 3 ]; then

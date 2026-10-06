@@ -75,6 +75,7 @@ def list_profiles() -> list:
         if web:
             try:
                 item['web_blocks'] = web.list_categories(pid)
+                item['web'] = web.describe(pid)
             except Exception:
                 pass
         out.append(item)
