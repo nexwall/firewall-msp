@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-webd
-PKG_VERSION:=1.1.0
+PKG_VERSION:=1.1.1
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=Nexwall
@@ -18,8 +18,8 @@ PKG_MAINTAINER:=Nexwall
 # license core hands it a valid short-lived feature token (scopes `av` and `web`, core 1.7.0 or later). Without the
 # package (community build) Squid runs but nothing is redirected to it and nothing is scanned.
 # See nexwall-internal/msp/WEB_PROTECTION.md and the license token notes (DPI_PLUGIN_LICENSE_TOKEN.md).
-WEBD_FEED_VERSION:=1.1.0
-WEBD_FEED_SHA256:=622c577ff0ed19ac2cae733529cdb0835b7fa033c0c2dacf9be6c94e35193d1f
+WEBD_FEED_VERSION:=1.1.1
+WEBD_FEED_SHA256:=66f0f50a61c7922c2bd151e4f74c14c5dbdba45f02bdda46590660b42541641e
 WEBD_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 ifeq ($(CONFIG_NEXWALL_WEBD_VENDOR),y)
