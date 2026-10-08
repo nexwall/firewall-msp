@@ -181,14 +181,12 @@ def metrics_history(args):
         return _single_series(q(expr))
 
     # Peaks: above the sampling interval a point is not the last sample of its step but the highest (or, for free memory, the lowest) of
-    # the step, so a short spike of CPU or memory is still on the chart in a long window
-    def peak(expr, func="max"):
-        if step <= 30:
-            return single(expr)
-        return single(f"{func}_over_time(({expr})[{step}s:15s])")
+    # the samples of the step, so a short spike of CPU or memory is still on the chart in a long window
+    def over(func, metric):
+        return metric if step <= 30 else f"{func}_over_time({metric}[{step}s])"
 
     # Connections (conntrack)
-    s = peak("conntrack_ip_conntrack_count")
+    s = single(over("max", "conntrack_ip_conntrack_count"))
     connections = {
         "labels": s["labels"],
         "datasets": [{"label": "Connections", "data": s["data"]}],
@@ -239,13 +237,13 @@ def metrics_history(args):
         )
 
     # CPU usage (%)
-    s = peak('100 - (avg(cpu_usage_idle{cpu="cpu-total"}))')
+    s = single("100 - avg(" + over("min", 'cpu_usage_idle{cpu="cpu-total"}') + ")")
     cpu = {"labels": s["labels"], "datasets": [{"label": "CPU (%)", "data": s["data"]}]}
 
     # System load (1m / 5m / 15m)
-    s1 = peak("system_load1")
-    s5 = peak("system_load5")
-    s15 = peak("system_load15")
+    s1 = single(over("max", "system_load1"))
+    s5 = single(over("max", "system_load5"))
+    s15 = single(over("max", "system_load15"))
     load = {
         "labels": s1["labels"],
         "datasets": [
@@ -291,8 +289,8 @@ def metrics_history(args):
     }
 
     # RAM usage: Used and Free (MB)
-    s_used = peak("mem_used / 1048576")
-    s_free = peak("mem_free / 1048576", "min")
+    s_used = single(over("max", "mem_used") + " / 1048576")
+    s_free = single(over("min", "mem_free") + " / 1048576")
     memory = {
         "labels": s_used["labels"],
         "datasets": [

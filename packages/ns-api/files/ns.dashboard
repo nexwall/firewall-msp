@@ -356,7 +356,7 @@ def system_info():
     return ret
 
 # The windows of the traffic charts of the WAN uplinks (seconds) and the step of each; same table as the ping charts in ns.report.
-TRAFFIC_WINDOWS = {3600: 20, 21600: 120, 43200: 240, 86400: 480, 604800: 1800}
+TRAFFIC_WINDOWS = {3600: 20, 21600: 120, 43200: 240, 86400: 480, 604800: 1800, 2592000: 3600}
 
 
 def interface_traffic(interface, window=3600):
@@ -382,7 +382,9 @@ def interface_traffic(interface, window=3600):
 
     def kbps(metric):
         rate = f'rate({metric}{{interface="{interface}"}}[20s]) * 8 / 1000'
-        return rate if step <= 20 else f'max_over_time(({rate})[{step}s:20s])'
+        # the highest rate inside each step; the longest windows look at the rate every minute (a peak shorter than that is averaged away)
+        inner = 20 if step <= 480 else 60
+        return rate if step <= 20 else f'max_over_time(({rate})[{step}s:{inner}s])'
 
     try:
         recv = vm_query(kbps('net_bytes_recv'))

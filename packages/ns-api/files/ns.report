@@ -473,10 +473,10 @@ def ovpnrw_bytes_by_hour_and_user(instance, day, user):
     return {"hours": hours_bytes}
 
 
-# Time windows of the WAN uplinks charts (seconds) and the step of each one. The data are kept by VictoriaMetrics (7 days without a data disk,
-# a year with one). For a step above the sampling interval every point is the minimum, maximum or average of the samples it covers (and the
+# Time windows of the WAN uplinks charts (seconds: 1 h, 6 h, 12 h, 24 h, 7 d, 30 d) and the step of each one. The data are kept by VictoriaMetrics
+# (7 days without a data disk, a year with one: on a unit without the disk the 30 days chart shows the last 7). For a step above the sampling interval every point is the minimum, maximum or average of the samples it covers (and the
 # peak for packet loss and the highest latency), so a longer window still shows the peaks.
-PING_WINDOWS = {3600: 20, 21600: 120, 43200: 240, 86400: 480, 604800: 1800}
+PING_WINDOWS = {3600: 20, 21600: 120, 43200: 240, 86400: 480, 604800: 1800, 2592000: 3600}
 DEFAULT_WINDOW = 3600
 
 
