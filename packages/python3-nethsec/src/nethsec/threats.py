@@ -116,10 +116,13 @@ def parse_syslog_line(line, now=None):
     if m:
         return {'ts': ts, 'layer': 'threat_shield', 'action': 'blocked', 'severity': 'high', 'client': '', 'remote': m.group(1),
                 'reason': 'attacker', 'detail': 'address banned after repeated attacks'}
-    m = re.search(r'page-blocked client=(\S+) host=(\S+) category=(\S+) rule=(.*)$', line)
-    if m:  # the category gate of Web Protection showed a block page
+    m = re.search(r'page-blocked client=(\S+) host=(\S+) category=(\S+)(?: ref=(\S+))? rule=(.*)$', line)
+    if m:  # the category gate of Web Protection showed a block page; ref is the code the user read on the page
+        detail = 'rule %s' % m.group(5).strip()
+        if m.group(4):
+            detail += ' ref %s' % m.group(4)
         return {'ts': ts, 'layer': 'web', 'action': 'blocked', 'severity': 'low', 'client': m.group(1), 'remote': m.group(2).lower(),
-                'reason': 'category: %s' % m.group(3), 'detail': 'rule %s' % m.group(4).strip()}
+                'reason': 'category: %s' % m.group(3), 'detail': detail}
     m = re.search(r'dnsmasq.*config (\S+) is NXDOMAIN', line)
     if m:
         domain = m.group(1).lower()
