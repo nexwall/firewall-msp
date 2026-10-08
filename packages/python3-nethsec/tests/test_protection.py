@@ -134,3 +134,15 @@ def test_cache_is_used_for_a_few_seconds(tmp_path, monkeypatch):
     os.utime(p.CACHE_FILE, (NOW - 100, NOW - 100))
     p.overview(lambda: MODULES, now=NOW)
     assert len(calls) == 2
+
+
+def test_sandbox_block_only_while_the_unit_uses_it():
+    off = {'enabled': False, 'entitled': True, 'analysed': 3}
+    outside = {'enabled': True, 'entitled': False, 'analysed': 3}
+    on = {'enabled': True, 'entitled': True, 'analysed': 3, 'queued': 1, 'malicious': 1, 'suspicious': 0, 'advisory': True,
+          'gateway': 'https://secret.example', 'machines': []}
+    assert p.normalize_sandbox(None) is None and p.normalize_sandbox(off) is None and p.normalize_sandbox(outside) is None
+    shown = p.normalize_sandbox(on)
+    assert shown['analysed'] == 3 and shown['advisory'] is True and 'gateway' not in shown
+    assert p.build_overview({'sandbox': on}, {}, now=1)['sandbox']['malicious'] == 1
+    assert p.build_overview({'sandbox': off}, {}, now=1)['sandbox'] is None

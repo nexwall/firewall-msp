@@ -211,6 +211,15 @@ def build_layers(raw, modules):
     return layers
 
 
+def normalize_sandbox(raw):
+    """The sandbox block of the overview: only while the unit uses it (switched on and entitled); never placeholder numbers."""
+    if not isinstance(raw, dict) or not raw.get('enabled') or not raw.get('entitled'):
+        return None
+    keep = ('analysed', 'queued', 'malicious', 'suspicious', 'indicators_applied', 'indicators_known', 'advisory', 'machines',
+            'language', 'last_run', 'last_error')
+    return {k: raw[k] for k in keep if k in raw}
+
+
 def build_overview(raw, modules, now=None):
     now = int(now if now is not None else time.time())
     catalogs = build_catalogs(raw, now)
@@ -224,7 +233,7 @@ def build_overview(raw, modules, now=None):
         'catalogs_current': current, 'catalogs_total': counted,
         'layers': layers,
         'events': build_events(catalogs, raw.get('av') if isinstance(raw.get('av'), dict) else {}, now),
-        'sandbox': raw.get('sandbox') if isinstance(raw.get('sandbox'), dict) else None,
+        'sandbox': normalize_sandbox(raw.get('sandbox')),
         'errors': raw.get('errors', []),
     }
 
@@ -266,6 +275,7 @@ def gather(modules_fn):
         'threat_feeds': lambda: _client('/usr/sbin/nexwall-threat-feeds', 'status', '--json'),
         'web': lambda: _ubus('ns.webprotection', 'get-catalog-status'),
         'av': lambda: _ubus('ns.webprotection', 'get-av-status'),
+        'sandbox': lambda: _ubus('ns.webprotection', 'get-sandbox-status'),
         'web_rules': lambda: _ubus('ns.webprotection', 'list-rules'),
         'web_settings': lambda: _ubus('ns.webprotection', 'get-settings'),
         'web_inspection': lambda: _ubus('ns.webprotection', 'get-inspection-status'),
