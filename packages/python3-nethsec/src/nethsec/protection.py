@@ -250,26 +250,8 @@ def _client(path, *args):
 
 
 def gather(modules_fn):
-    errors = []
-    raw = {}
-
-    def part(name, fn):
-        try:
-            raw[name] = fn()
-        except Exception:
-            raw[name] = None
-            errors.append(name)
-
-    part('dpi', lambda: _client('/usr/sbin/nexwall-dpi-catalog', 'status', '--json'))
-    part('ips', lambda: _client('/usr/sbin/nexwall-ips-rules', 'status', '--json'))
-    part('threat_feeds', lambda: _client('/usr/sbin/nexwall-threat-feeds', 'status', '--json'))
-    part('web', lambda: _ubus('ns.webprotection', 'get-catalog-status'))
-    part('av', lambda: _ubus('ns.webprotection', 'get-av-status'))
-    part('web_rules', lambda: _ubus('ns.webprotection', 'list-rules'))
-    part('web_settings', lambda: _ubus('ns.webprotection', 'get-settings'))
-    part('web_inspection', lambda: _ubus('ns.webprotection', 'get-inspection-status'))
-    part('snort', lambda: _ubus('ns.snort', 'status'))
-    part('dpi_rules', lambda: _ubus('ns.dpi', 'list-rules'))
+    """Runs every status command at the same time (each one is a process or a ubus call): the page waits for the slowest, not the sum."""
+    from concurrent.futures import ThreadPoolExecutor
 
     def threat_shield():
         def svc(name):
@@ -278,7 +260,28 @@ def gather(modules_fn):
         blocked = (_ubus('ns.dashboard', 'counter', {'service': 'threat_shield_ip'}) or {}).get('result', {}).get('count')
         return {'ip_status': svc('threat_shield_ip'), 'dns_status': svc('threat_shield_dns'), 'ip_blocked_1h': blocked}
 
-    part('threat_shield', threat_shield)
+    jobs = {
+        'dpi': lambda: _client('/usr/sbin/nexwall-dpi-catalog', 'status', '--json'),
+        'ips': lambda: _client('/usr/sbin/nexwall-ips-rules', 'status', '--json'),
+        'threat_feeds': lambda: _client('/usr/sbin/nexwall-threat-feeds', 'status', '--json'),
+        'web': lambda: _ubus('ns.webprotection', 'get-catalog-status'),
+        'av': lambda: _ubus('ns.webprotection', 'get-av-status'),
+        'web_rules': lambda: _ubus('ns.webprotection', 'list-rules'),
+        'web_settings': lambda: _ubus('ns.webprotection', 'get-settings'),
+        'web_inspection': lambda: _ubus('ns.webprotection', 'get-inspection-status'),
+        'snort': lambda: _ubus('ns.snort', 'status'),
+        'dpi_rules': lambda: _ubus('ns.dpi', 'list-rules'),
+        'threat_shield': threat_shield,
+    }
+    raw, errors = {}, []
+    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        futures = {name: pool.submit(fn) for name, fn in jobs.items()}
+        for name, fut in futures.items():
+            try:
+                raw[name] = fut.result(timeout=COMMAND_TIMEOUT + 4)
+            except Exception:
+                raw[name] = None
+                errors.append(name)
     raw['errors'] = errors
     return raw, modules_fn()
 
