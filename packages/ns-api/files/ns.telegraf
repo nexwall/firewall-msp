@@ -180,8 +180,15 @@ def metrics_history(args):
     def single(expr):
         return _single_series(q(expr))
 
+    # Peaks: above the sampling interval a point is not the last sample of its step but the highest (or, for free memory, the lowest) of
+    # the step, so a short spike of CPU or memory is still on the chart in a long window
+    def peak(expr, func="max"):
+        if step <= 30:
+            return single(expr)
+        return single(f"{func}_over_time(({expr})[{step}s:15s])")
+
     # Connections (conntrack)
-    s = single("conntrack_ip_conntrack_count")
+    s = peak("conntrack_ip_conntrack_count")
     connections = {
         "labels": s["labels"],
         "datasets": [{"label": "Connections", "data": s["data"]}],
@@ -232,13 +239,13 @@ def metrics_history(args):
         )
 
     # CPU usage (%)
-    s = single('100 - (avg(cpu_usage_idle{cpu="cpu-total"}))')
+    s = peak('100 - (avg(cpu_usage_idle{cpu="cpu-total"}))')
     cpu = {"labels": s["labels"], "datasets": [{"label": "CPU (%)", "data": s["data"]}]}
 
     # System load (1m / 5m / 15m)
-    s1 = single("system_load1")
-    s5 = single("system_load5")
-    s15 = single("system_load15")
+    s1 = peak("system_load1")
+    s5 = peak("system_load5")
+    s15 = peak("system_load15")
     load = {
         "labels": s1["labels"],
         "datasets": [
@@ -284,8 +291,8 @@ def metrics_history(args):
     }
 
     # RAM usage: Used and Free (MB)
-    s_used = single("mem_used / 1048576")
-    s_free = single("mem_free / 1048576")
+    s_used = peak("mem_used / 1048576")
+    s_free = peak("mem_free / 1048576", "min")
     memory = {
         "labels": s_used["labels"],
         "datasets": [
@@ -338,11 +345,14 @@ def latency_and_quality_report(start, end, step):
         quality_data = {"labels": [], "datasets": []}
 
         try:
-            min_values = q_values(f'ping_minimum_response_ms{{url="{host}"}}')
-            max_values = q_values(f'ping_maximum_response_ms{{url="{host}"}}')
-            avg_values = q_values(f'ping_average_response_ms{{url="{host}"}}')
+            def ex(func, metric):
+                return metric if step <= 20 else f'{func}_over_time({metric}[{step}s])'
+
+            min_values = q_values(ex('min', f'ping_minimum_response_ms{{url="{host}"}}'))
+            max_values = q_values(ex('max', f'ping_maximum_response_ms{{url="{host}"}}'))
+            avg_values = q_values(ex('avg', f'ping_average_response_ms{{url="{host}"}}'))
             loss_values = q_values(
-                f'100 - ping_percent_packet_loss{{url="{host}"}} or 100 - ping_percent_reply_loss{{url="{host}"}}'
+                ex('max', f'ping_percent_packet_loss{{url="{host}"}}') + ' or ' + ex('max', f'ping_percent_reply_loss{{url="{host}"}}')
             )
 
             if min_values and max_values and avg_values:
@@ -357,7 +367,7 @@ def latency_and_quality_report(start, end, step):
             if loss_values:
                 quality_data["labels"] = [int(ts) for ts, _ in loss_values]
                 quality_data["datasets"] = [
-                    {"label": "Delivery %", "data": [float(v) for _, v in loss_values]},
+                    {"label": "Packet loss %", "data": [float(v) for _, v in loss_values]},
                 ]
         except Exception:
             pass

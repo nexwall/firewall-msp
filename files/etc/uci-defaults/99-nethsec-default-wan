@@ -1,0 +1,40 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# A unit nobody has configured yet gets its WAN: the second network card (eth1), asking for an address by DHCP, in the wan zone.
+# The board script (board.d/99-default_network) does this on the first start, but it runs before the card drivers are loaded and
+# on a virtual machine it could not see eth1; this script runs later in the same boot, when the cards are there. It never touches a
+# unit that was configured (setup wizard complete), nor one that already uses eth1 or has an interface called wan.
+#
+# UCI_CONF and SYS_NET are for the tests only.
+
+UCI="uci${UCI_CONF:+ -c $UCI_CONF}"
+SYS_NET="${SYS_NET:-/sys/class/net}"
+
+[ "$($UCI -q get ns-wizard.config.complete)" = "1" ] && exit 0
+[ -d "$SYS_NET/eth1" ] || exit 0
+[ -n "$($UCI -q get network.lan)" ] || exit 0
+[ -n "$($UCI -q get network.wan)" ] && exit 0
+# eth1 already belongs to something (an interface, a bridge, a bond, a VLAN)?
+$UCI -q show network | grep -qE "(device|ifname|ports)=.*'?eth1'?" && exit 0
+$UCI -q show network | grep -qE "^network\.[A-Za-z0-9_]+\.(proto)='dhcp'" && exit 0
+
+$UCI -q batch <<EOI
+set network.wan=interface
+set network.wan.device='eth1'
+set network.wan.proto='dhcp'
+commit network
+EOI
+
+# the wan zone of the factory firewall lists the interface called wan; make sure it does
+zone="$($UCI -q show firewall | sed -n "s/^firewall\.\([^.]*\)\.name='wan'$/\1/p" | head -1)"
+if [ -n "$zone" ] && ! $UCI -q get "firewall.$zone.network" | grep -qw wan; then
+	$UCI -q add_list "firewall.$zone.network=wan"
+	$UCI -q commit firewall
+fi
+
+exit 0

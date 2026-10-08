@@ -355,22 +355,38 @@ def system_info():
     ret['storage'] = get_storage()
     return ret
 
-def interface_traffic(interface):
+# The windows of the traffic charts of the WAN uplinks (seconds) and the step of each; same table as the ping charts in ns.report.
+TRAFFIC_WINDOWS = {3600: 20, 21600: 120, 43200: 240, 86400: 480, 604800: 1800}
+
+
+def interface_traffic(interface, window=3600):
+    """Download and upload of an interface in kbit/s. For a step above 20 seconds each point is the highest rate inside the step."""
     ret = {"labels": [], "data": []}
+    try:
+        window = int(window)
+    except (TypeError, ValueError):
+        window = 3600
+    if window not in TRAFFIC_WINDOWS:
+        window = 3600
+    step = TRAFFIC_WINDOWS[window]
     vm_url = f"{VM_URL}/api/v1/query_range"
     now = int(time.time())
-    one_hour_ago = now - 3600
+    start = now - window
 
     def vm_query(expr):
-        params = urllib.parse.urlencode({"query": expr, "start": one_hour_ago, "end": now, "step": 20})
-        with urllib.request.urlopen(f"{vm_url}?{params}", timeout=5) as resp:
+        params = urllib.parse.urlencode({"query": expr, "start": start, "end": now, "step": step})
+        with urllib.request.urlopen(f"{vm_url}?{params}", timeout=5 if window == 3600 else 10) as resp:
             data = json.loads(resp.read())
         result = data.get("data", {}).get("result", [])
         return result[0].get("values", []) if result else []
 
+    def kbps(metric):
+        rate = f'rate({metric}{{interface="{interface}"}}[20s]) * 8 / 1000'
+        return rate if step <= 20 else f'max_over_time(({rate})[{step}s:20s])'
+
     try:
-        recv = vm_query(f'rate(net_bytes_recv{{interface="{interface}"}}[20s]) * 8 / 1000')
-        sent = vm_query(f'rate(net_bytes_sent{{interface="{interface}"}}[20s]) * 8 / 1000')
+        recv = vm_query(kbps('net_bytes_recv'))
+        sent = vm_query(kbps('net_bytes_sent'))
         ret["labels"] = [int(ts) for ts, _ in reversed(recv)]
         ret["data"] = [[float(r), float(s)] for (_, r), (_, s) in zip(reversed(recv), reversed(sent))]
     except Exception:
@@ -509,7 +525,7 @@ def dashboard_v2():
 cmd = sys.argv[1]
 
 if cmd == 'list':
-    print(json.dumps({"system-info": {}, "list-wans":{}, "service-status": {"service": "myservice"}, "counter": {"service": "hosts"}, "interface-traffic": {"interface": "eth0"}, "ipsec-tunnels": {}, "ovpn-tunnels": {}, "dashboard-v2": {}}))
+    print(json.dumps({"system-info": {}, "list-wans":{}, "service-status": {"service": "myservice"}, "counter": {"service": "hosts"}, "interface-traffic": {"interface": "eth0", "range": 3600}, "ipsec-tunnels": {}, "ovpn-tunnels": {}, "dashboard-v2": {}}))
 elif cmd == 'call':
     action = sys.argv[2]
     if action == "system-info":
@@ -524,7 +540,7 @@ elif cmd == 'call':
         ret = counter(args["service"])
     elif action == "interface-traffic":
         args = json.loads(sys.stdin.read())
-        ret = interface_traffic(args["interface"])
+        ret = interface_traffic(args["interface"], args.get("range", 3600))
     elif action == "ipsec-tunnels":
         ret = ipsec_tunnels()
     elif action == "ovpn-tunnels":

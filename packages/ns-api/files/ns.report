@@ -473,37 +473,67 @@ def ovpnrw_bytes_by_hour_and_user(instance, day, user):
     return {"hours": hours_bytes}
 
 
-def get_victoria_metrics_ping_data(host):
+# Time windows of the WAN uplinks charts (seconds) and the step of each one. The data are kept by VictoriaMetrics (7 days without a data disk,
+# a year with one). For a step above the sampling interval every point is the minimum, maximum or average of the samples it covers (and the
+# peak for packet loss and the highest latency), so a longer window still shows the peaks.
+PING_WINDOWS = {3600: 20, 21600: 120, 43200: 240, 86400: 480, 604800: 1800}
+DEFAULT_WINDOW = 3600
+
+
+def ping_window(seconds):
+    """(window, step) for a requested window; the default (one hour) for anything not offered."""
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        seconds = DEFAULT_WINDOW
+    if seconds not in PING_WINDOWS:
+        seconds = DEFAULT_WINDOW
+    return seconds, PING_WINDOWS[seconds]
+
+
+def ping_expr(func, metric, step):
+    """The query for one series: plain for the finest step, else func_over_time over the samples of the step."""
+    if step <= 20:
+        return metric
+    return f'{func}_over_time({metric}[{step}s])'
+
+
+def get_victoria_metrics_ping_data(host, window=DEFAULT_WINDOW):
     """
     Query Victoria Metrics for ping metrics.
     Returns: {"latency": {"labels": [...], "data": [...]}, "quality": {"labels": [...], "data": [...]}}
+    The "quality" series is the packet LOSS in percent (0 = every packet came back).
     """
     ret_latency = {"labels": ["time", "minimum", "maximum", "average"], "data": []}
-    ret_quality = {"labels": ["time", "returned"], "data": []}
+    ret_quality = {"labels": ["time", "loss"], "data": []}
 
+    window, step = ping_window(window)
     vm_url = f"{VM_URL}/api/v1/query_range"
     now = int(time.time())
-    one_hour_ago = now - 3600
-    timeout = 5
+    start = now - window
+    timeout = 10 if window > DEFAULT_WINDOW else 5
 
     def vm_query(metric_expr):
-        params = urllib.parse.urlencode({'query': metric_expr, 'start': one_hour_ago, 'end': now, 'step': 20})
+        params = urllib.parse.urlencode({'query': metric_expr, 'start': start, 'end': now, 'step': step})
         with urllib.request.urlopen(f"{vm_url}?{params}", timeout=timeout) as resp:
             data = json.loads(resp.read())
         result = data.get('data', {}).get('result', [])
         return result[0].get('values', []) if result else []
 
     try:
-        min_values = vm_query(f'ping_minimum_response_ms{{url="{host}"}}')
-        max_values = vm_query(f'ping_maximum_response_ms{{url="{host}"}}')
-        avg_values = vm_query(f'ping_average_response_ms{{url="{host}"}}')
+        min_values = vm_query(ping_expr('min', f'ping_minimum_response_ms{{url="{host}"}}', step))
+        max_values = vm_query(ping_expr('max', f'ping_maximum_response_ms{{url="{host}"}}', step))
+        avg_values = vm_query(ping_expr('avg', f'ping_average_response_ms{{url="{host}"}}', step))
 
         ret_latency["data"] = [
             [int(ts), float(mn), float(mx), float(av)]
             for (ts, mn), (_, mx), (_, av) in zip(min_values, max_values, avg_values)
         ]
 
-        loss_values = vm_query(f'100 - ping_percent_packet_loss{{url="{host}"}} or 100 - ping_percent_reply_loss{{url="{host}"}}')
+        loss_values = vm_query(
+            ping_expr('max', f'ping_percent_packet_loss{{url="{host}"}}', step) + ' or ' +
+            ping_expr('max', f'ping_percent_reply_loss{{url="{host}"}}', step)
+        )
         ret_quality["data"] = [[int(ts), float(val)] for ts, val in loss_values]
 
     except Exception as e:
@@ -512,12 +542,12 @@ def get_victoria_metrics_ping_data(host):
     return {"latency": ret_latency, "quality": ret_quality}
 
 
-def latency_and_quality_report():
+def latency_and_quality_report(window=DEFAULT_WINDOW):
     e_uci = EUci()
     hosts = e_uci.get('telegraf', 'internet', 'pings', dtype=str, list=True, default=[])
     ret = {}
     for host in hosts:
-        ret[host] = get_victoria_metrics_ping_data(host)
+        ret[host] = get_victoria_metrics_ping_data(host, window)
     return ret
 
 
@@ -545,7 +575,7 @@ if cmd == 'list':
         'dns-block-report': {},
         'geo-block-report': {},
         'mwan-report': {},
-        'latency-and-quality-report': {},
+        'latency-and-quality-report': {'range': 3600},
         'get-public-ip-addresses': {
             'device': 'string'
         },
@@ -613,7 +643,8 @@ elif cmd == 'call':
             ret = mwan_report()
             save_cached_report('mwan-report', ret)
     elif action == "latency-and-quality-report":
-        ret = latency_and_quality_report()
+        data = json.loads(sys.stdin.read() or '{}')
+        ret = latency_and_quality_report(data.get('range', DEFAULT_WINDOW))
     elif action == "get-public-ip-addresses":
         data = json.loads(sys.stdin.read())
         if 'device' not in data:
