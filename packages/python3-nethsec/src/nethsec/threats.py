@@ -123,6 +123,11 @@ def parse_syslog_line(line, now=None):
             detail += ' ref %s' % m.group(4)
         return {'ts': ts, 'layer': 'web', 'action': 'blocked', 'severity': 'low', 'client': m.group(1), 'remote': m.group(2).lower(),
                 'reason': 'category: %s' % m.group(3), 'detail': detail}
+    m = re.search(r'content-(blocked|logged) client=(\S+) host=(\S+) category=(\S+) score=(\d+) profile=(\S+) rule=(.*)$', line)
+    if m:  # the content filter of Web Protection read a page over the threshold of its profile (blocked, or only recorded)
+        return {'ts': ts, 'layer': 'web', 'action': 'blocked' if m.group(1) == 'blocked' else 'detected', 'severity': 'low', 'client': m.group(2),
+                'remote': m.group(3).lower(), 'reason': 'content: %s' % m.group(4),
+                'detail': 'rule %s, profile %s, score %s' % (m.group(7).strip(), m.group(6), m.group(5))}
     m = re.search(r'dnsmasq.*config (\S+) is NXDOMAIN', line)
     if m:
         domain = m.group(1).lower()
@@ -286,7 +291,7 @@ def collect(db=None, now=None):
     try:
         events = []
         for line in read_new_lines(db, 'syslog', SYSLOG):
-            if 'banIP' in line or 'NXDOMAIN' in line or 'page-blocked' in line:
+            if 'banIP' in line or 'NXDOMAIN' in line or 'page-blocked' in line or 'content-' in line:
                 ev = parse_syslog_line(line, now)
                 if ev:
                     events.append(ev)

@@ -179,6 +179,7 @@ en: {
  'tab.ha':'High Availability','tab.rproxy':'Reverse Proxy','tab.auth':'Authentication','tab.admin':'Admin activity','tab.sys':'System logs',
  'tab.webprot':'Web Protection','col.event':'Event','col.target':'Site or file','wp.ev.page':'Website blocked (block page)','wp.ev.av':'File blocked by the antivirus','wp.ev.sandbox':'File stopped by the sandbox','wp.ev.verdict':'Sandbox verdict','wp.ev.proxy':'Proxy refused a request','wp.ev.service':'Service message','wp.detail_category':'Category {cat}, rule {rule}','wp.ref':'Reference','wp.proxy_409':'the address does not match the name in the connection (for example SafeSearch or a CDN answered differently)','wp.proxy_other':'status {code}','empty.webprot':'No Web Protection events in this period. Blocked websites (block page), files stopped by the antivirus or the sandbox, and requests the proxy refused are listed here; the raw stream is in System logs.',
  'wp.services':'Service messages','wp.ev.web_allowed':'Allowed','wp.ev.web_tunnel':'Allowed (not inspected)','wp.ev.web_blocked':'Blocked by the proxy','wp.detail_tunnel':'encrypted, passed through','wp.detail_inspected':'decrypted and scanned',
+ 'wp.ev.content':'Page blocked by its content','wp.ev.content_logged':'Page over the content threshold (recorded)','wp.detail_content':'Subject {cat}, score {score}, profile {profile}, rule {rule}',
  'tab.fwtrace':'Live rule trace','tab.drppkt':'Packet path',
  'range.15m':'Last 15 minutes','range.1h':'Last hour','range.6h':'Last 6 hours','range.24h':'Last 24 hours','range.7d':'Last 7 days',
  'ui.search_ph':'Search (IP, free text)...','ui.all_actions':'All actions','ui.only_blocked':'Blocked only','ui.only_allowed':'Allowed only',
@@ -226,6 +227,7 @@ es: {
  'tab.ha':'Alta disponibilidad','tab.rproxy':'Proxy inverso','tab.auth':'Autenticación','tab.admin':'Actividad de administración','tab.sys':'Registros del sistema',
  'tab.webprot':'Web Protection','col.event':'Evento','col.target':'Sitio o archivo','wp.ev.page':'Sitio bloqueado (página de bloqueo)','wp.ev.av':'Archivo bloqueado por el antivirus','wp.ev.sandbox':'Archivo detenido por el sandbox','wp.ev.verdict':'Veredicto del sandbox','wp.ev.proxy':'El proxy rechazó una solicitud','wp.ev.service':'Mensaje de servicio','wp.detail_category':'Categoría {cat}, regla {rule}','wp.ref':'Referencia','wp.proxy_409':'la dirección no coincide con el nombre de la conexión (por ejemplo, SafeSearch o un CDN respondió distinto)','wp.proxy_other':'estado {code}','empty.webprot':'Sin eventos de Web Protection en este período. Aquí se listan los sitios bloqueados (página de bloqueo), los archivos detenidos por el antivirus o el sandbox y las solicitudes que el proxy rechazó; el registro bruto está en Registros del sistema.',
  'wp.services':'Mensajes del servicio','wp.ev.web_allowed':'Permitido','wp.ev.web_tunnel':'Permitido (sin inspeccionar)','wp.ev.web_blocked':'Bloqueado por el proxy','wp.detail_tunnel':'cifrado, pasó sin inspección','wp.detail_inspected':'descifrado y analizado',
+ 'wp.ev.content':'Página bloqueada por su contenido','wp.ev.content_logged':'Página sobre el umbral de contenido (registrada)','wp.detail_content':'Tema {cat}, puntuación {score}, perfil {profile}, regla {rule}',
  'tab.fwtrace':'Traza de reglas en vivo','tab.drppkt':'Ruta del paquete',
  'range.15m':'Últimos 15 minutos','range.1h':'Última hora','range.6h':'Últimas 6 horas','range.24h':'Últimas 24 horas','range.7d':'Últimos 7 días',
  'ui.search_ph':'Buscar (IP, texto libre)...','ui.all_actions':'Todas las acciones','ui.only_blocked':'Solo bloqueados','ui.only_allowed':'Solo permitidos',
@@ -273,6 +275,7 @@ es: {
  'tab.ha':'Alta disponibilidade','tab.rproxy':'Proxy reverso','tab.auth':'Autenticação','tab.admin':'Atividade administrativa','tab.sys':'Logs do sistema',
  'tab.webprot':'Web Protection','col.event':'Evento','col.target':'Site ou arquivo','wp.ev.page':'Site bloqueado (página de bloqueio)','wp.ev.av':'Arquivo bloqueado pelo antivírus','wp.ev.sandbox':'Arquivo barrado pelo sandbox','wp.ev.verdict':'Veredito do sandbox','wp.ev.proxy':'O proxy recusou uma requisição','wp.ev.service':'Mensagem de serviço','wp.detail_category':'Categoria {cat}, regra {rule}','wp.ref':'Referência','wp.proxy_409':'o endereço não corresponde ao nome da conexão (por exemplo, SafeSearch ou um CDN respondeu diferente)','wp.proxy_other':'status {code}','empty.webprot':'Nenhum evento do Web Protection neste período. Aqui aparecem os sites bloqueados (página de bloqueio), os arquivos barrados pelo antivírus ou pelo sandbox e as requisições que o proxy recusou; o registro bruto está em Registros do sistema.',
  'wp.services':'Mensagens do serviço','wp.ev.web_allowed':'Permitido','wp.ev.web_tunnel':'Permitido (sem inspeção)','wp.ev.web_blocked':'Bloqueado pelo proxy','wp.detail_tunnel':'criptografado, passou sem inspeção','wp.detail_inspected':'descriptografado e analisado',
+ 'wp.ev.content':'Página bloqueada pelo conteúdo','wp.ev.content_logged':'Página acima do limite de conteúdo (registrada)','wp.detail_content':'Assunto {cat}, pontuação {score}, perfil {profile}, regra {rule}',
  'tab.fwtrace':'Rastreio de regras ao vivo','tab.drppkt':'Caminho do pacote',
  'range.15m':'Últimos 15 minutos','range.1h':'Última hora','range.6h':'Últimas 6 horas','range.24h':'Últimas 24 horas','range.7d':'Últimos 7 dias',
  'ui.search_ph':'Buscar (IP, texto livre)...','ui.all_actions':'Todas as ações','ui.only_blocked':'Somente bloqueados','ui.only_allowed':'Somente permitidos',
@@ -874,12 +877,15 @@ function openTraceFrom(el){
 // Decisions of Web Protection: block pages of category rules, files stopped by the antivirus or the sandbox, requests the proxy refused.
 // Sources: syslog (nexwall-av, nexwall-sandbox, nexwall-web-*) and the proxy's refusals (squid-web, added by nexwall-extra.conf).
 const WEBPROT_SERVICES_Q = 'app_name:~"(?i)^nexwall-(av|sandbox|web.*|gate)"';
-const WEBPROT_DECISIONS_Q = '(app_name:~"(?i)^nexwall-(av|sandbox|web.*|gate)" ("page-blocked" OR "blocked client" OR "verdict sha="))';
+const WEBPROT_DECISIONS_Q = '(app_name:~"(?i)^nexwall-(av|sandbox|web.*|gate)" ("page-blocked" OR "blocked client" OR "verdict sha=" OR "content-blocked" OR "content-logged"))';
 const WEBPROT_ALLOWED = '_msg:~"(TCP_TUNNEL|TCP_MISS|TCP_HIT|TCP_REFRESH|TCP_MEM_HIT|TCP_NEGATIVE_HIT)/[23]"';
-const WEBPROT_BLOCKED = '("page-blocked" OR "blocked client" OR _msg:~"TCP_DENIED|/40[39] |/5[0-9][0-9] " OR "verdict=malicious")';
+const WEBPROT_BLOCKED = '("page-blocked" OR "blocked client" OR "content-blocked" OR _msg:~"TCP_DENIED|/40[39] |/5[0-9][0-9] " OR "verdict=malicious")';
 function classifyWebProt(r){
   const m = String(r._msg||'');
   let x;
+  if((x = m.match(/content-(blocked|logged) client=(\S+) host=(\S+) category=(\S+) score=(\d+) profile=(\S+) rule=(.*)$/)))
+    return {ev: x[1] === 'blocked' ? 'content' : 'content_logged', cls: x[1] === 'blocked' ? 'block' : 'other', client:x[2], target:x[3],
+            detail: t('wp.detail_content', {cat:x[4], score:x[5], profile:x[6], rule:x[7].trim()})};
   if((x = m.match(/page-blocked client=(\S+) host=(\S+) category=(\S+)(?: ref=(\S+))? rule=(.*)$/)))
     return {ev:'page', cls:'block', client:x[1], target:x[2],
             detail: t('wp.detail_category', {cat:x[3], rule:x[5].trim()}) + (x[4] ? ' · ' + t('wp.ref') + ' ' + x[4] : '')};

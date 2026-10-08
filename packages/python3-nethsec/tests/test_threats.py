@@ -128,3 +128,12 @@ def test_block_page_reference_is_kept_so_the_event_can_be_found_by_it():
     line = 'Oct  8 11:30:05 FW nexwall-av[88]: page-blocked client=192.168.1.20 host=casadeapostas.com category=gambling ref=BCCFD8F9 rule=BP test'
     ev = threats.parse_syslog_line(line, NOW)
     assert ev['detail'] == 'rule BP test ref BCCFD8F9'
+
+
+def test_syslog_content_filter_blocked_and_logged():
+    line = 'Oct  8 11:30:05 FW nexwall-av[88]: content-blocked client=192.168.1.20 host=Bets.Example category=gambling score=87 profile=school rule=Content test'
+    ev = threats.parse_syslog_line(line, NOW)
+    assert ev['layer'] == 'web' and ev['action'] == 'blocked' and ev['client'] == '192.168.1.20' and ev['remote'] == 'bets.example'
+    assert ev['reason'] == 'content: gambling' and ev['detail'] == 'rule Content test, profile school, score 87'
+    logged = threats.parse_syslog_line(line.replace('content-blocked', 'content-logged'), NOW)
+    assert logged['action'] == 'detected' and logged['reason'] == 'content: gambling'
