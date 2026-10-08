@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-scripts
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=9
+PKG_RELEASE:=10
 
 PKG_MAINTAINER:=Nexwall
 PKG_LICENSE:=GPL-2.0-only

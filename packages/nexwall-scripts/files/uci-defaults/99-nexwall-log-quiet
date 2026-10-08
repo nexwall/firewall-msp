@@ -10,4 +10,16 @@ if [ "$(uci -q get firewall.ns_lan_to_wan.log)" = "1" ] && [ "$(uci -q get firew
 	uci commit firewall
 fi
 sysctl -q -w kernel.printk="3 4 1 3" >/dev/null 2>&1
+# Every call of the web interface to the management API wrote "authorization success for user root. POST /api/..." (several a second while a
+# page is open), logged with the severity of an error, which buries the log and fills the System logs tab of the Log Viewer with red lines.
+# Failures stay, and so does every call that CHANGES something (add, edit, delete, set, ...): those are the audit trail the Log Viewer shows in
+# its Administration tab. The rest (reads, log queries, status) is dropped before it is written anywhere.
+MARK_AUTH='Nexwall: authorization success of read calls'
+if [ -f /etc/rsyslog.conf ] && ! grep -q "$MARK_AUTH" /etc/rsyslog.conf; then
+	cat >> /etc/rsyslog.conf <<'RULE'
+# Nexwall: authorization success of read calls of the management API is dropped; failures and calls that change something are kept
+if ($programname == 'nethsecurity-api') and ($msg contains 'authorization success for user') and not re_match($msg, '"method":"(add|edit|delete|set|save|enable|disable|remove|create|update|apply|import|restore|reset|start|stop|restart|reboot|register|unregister|commit|revert|upload|rename|move|renew|regenerate|disconnect)') then stop
+RULE
+	[ -f /var/run/rsyslogd.pid ] && /etc/init.d/rsyslog restart >/dev/null 2>&1
+fi
 exit 0
