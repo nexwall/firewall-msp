@@ -56,6 +56,15 @@ Record of modifications to files inherited from NethSecurity (upstream commit `9
 Internal names (`ns-*` packages, the `nethsec` Python module, UCI option names, the build feed name) are deliberately
 unchanged to keep future merges from upstream small. Original copyright headers are preserved everywhere.
 
+## 2026-10-08 (26.1.1)
+
+- **Web Protection pins**: `packages/nexwall-webprotection` (0.9.0), `packages/nexwall-webd` (1.5.0) and `packages/ns-ui` (2.0.x) move to the new vendor feed versions (block page, content filter, sandbox client, redesigned interface).
+- **Log Viewer** (`packages/ns-log-viewer`, `packages/ns-api/files/ns.log-viewer`): Web Protection tab, the firewall and DPI tabs query fix (`extract_regexp` in a backtick string), the extra rsyslog inputs are listed in the UCI `rsyslog.syslog.includes` so they are loaded.
+- **Reports and metrics** (`packages/ns-api/files/ns.report`, `ns.dashboard`, `ns.telegraf`, `ns.dpireport`): packet loss instead of delivery rate, windows from 1 hour to 30 days with the highest value per step, and the firewall itself is not counted as a device or remote host in the traffic reports.
+- **First start** (`files/etc/board.d/99-default_network`, `files/etc/uci-defaults/99-nethsec-default-wan`, `tests/default-wan.sh`): the default WAN (eth1, DHCP) no longer depends on the card being visible in pre-init, and units that never ran the wizard get it later in the same start.
+- **Quiet logs** (`packages/nexwall-scripts/files/uci-defaults/99-nexwall-log-quiet`): rsyslog drops the authorization success lines of read calls of the management API.
+- **Storage page**: the remove storage button is hidden (the console command `remove-storage` stays).
+
 ## 2026-10-06 (26.1.0)
 
 - **Application Control profiles** (`packages/python3-nethsec/src/nethsec/dpi/profiles.py`): when Web Protection is installed, choosing a profile also creates its website rules (optional hook); the profile list carries what the web side does. `packages/ns-dpi/files/nexwall-dpi-profile` commits that configuration too.
