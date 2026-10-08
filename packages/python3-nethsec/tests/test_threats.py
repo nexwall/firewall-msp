@@ -115,3 +115,10 @@ def test_events_filter_and_search(tmp_path):
     assert threats.events(db, layer='dns', now=NOW)['total'] == 1
     assert threats.events(db, search='a.com', now=NOW)['events'][0]['remote'] == 'a.com'
     assert threats.events(db, limit=1, now=NOW)['total'] == 2
+
+
+def test_syslog_category_block_page():
+    line = 'Oct  8 11:30:05 FW nexwall-av[88]: page-blocked client=192.168.1.20 host=WWW.Bet.Example category=gambling rule=Staff rule 1'
+    ev = threats.parse_syslog_line(line, NOW)
+    assert ev['layer'] == 'web' and ev['client'] == '192.168.1.20' and ev['remote'] == 'www.bet.example'
+    assert ev['reason'] == 'category: gambling' and ev['detail'] == 'rule Staff rule 1'

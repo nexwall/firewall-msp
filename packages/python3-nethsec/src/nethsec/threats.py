@@ -116,6 +116,10 @@ def parse_syslog_line(line, now=None):
     if m:
         return {'ts': ts, 'layer': 'threat_shield', 'action': 'blocked', 'severity': 'high', 'client': '', 'remote': m.group(1),
                 'reason': 'attacker', 'detail': 'address banned after repeated attacks'}
+    m = re.search(r'page-blocked client=(\S+) host=(\S+) category=(\S+) rule=(.*)$', line)
+    if m:  # the category gate of Web Protection showed a block page
+        return {'ts': ts, 'layer': 'web', 'action': 'blocked', 'severity': 'low', 'client': m.group(1), 'remote': m.group(2).lower(),
+                'reason': 'category: %s' % m.group(3), 'detail': 'rule %s' % m.group(4).strip()}
     m = re.search(r'dnsmasq.*config (\S+) is NXDOMAIN', line)
     if m:
         domain = m.group(1).lower()
@@ -279,7 +283,7 @@ def collect(db=None, now=None):
     try:
         events = []
         for line in read_new_lines(db, 'syslog', SYSLOG):
-            if 'banIP' in line or 'NXDOMAIN' in line:
+            if 'banIP' in line or 'NXDOMAIN' in line or 'page-blocked' in line:
                 ev = parse_syslog_line(line, now)
                 if ev:
                     events.append(ev)
