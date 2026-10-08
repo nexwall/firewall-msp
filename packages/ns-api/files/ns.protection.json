@@ -1,0 +1,13 @@
+{
+  "protection-reader": {
+    "description": "Read the protection overview",
+    "write": {},
+    "read": {
+      "ubus": {
+        "ns.protection": [
+          "*"
+        ]
+      }
+    }
+  }
+}

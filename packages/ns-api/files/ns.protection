@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# What each protection has loaded and what it did recently, for the dashboard.
+
+import json
+import sys
+
+from nethsec import license as nx_license
+from nethsec import protection
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({'overview': {}}))
+elif cmd == 'call':
+    action = sys.argv[2]
+    if action == 'overview':
+        print(json.dumps(protection.overview(nx_license.modules)))
