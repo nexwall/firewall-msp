@@ -1,0 +1,12 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Reads what is new in the protection logs into the threat event store (cron, every minute).
+
+from nethsec import threats
+
+threats.collect()

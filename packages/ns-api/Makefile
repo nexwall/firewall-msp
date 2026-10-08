@@ -111,6 +111,9 @@ define Package/ns-api/install
 	$(INSTALL_DATA) ./files/ns.dashboard.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.protection $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./files/ns.protection.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_BIN) ./files/ns.threats $(1)/usr/libexec/rpcd/
+	$(INSTALL_DATA) ./files/ns.threats.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_BIN) ./files/ns-threats-collect $(1)/usr/bin/
 	$(INSTALL_BIN) ./files/ns.subscription $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./files/ns.subscription.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.don $(1)/usr/libexec/rpcd/
@@ -211,6 +214,7 @@ define Package/ns-api/install
 	$(INSTALL_BIN) ./files/uci-defaults/99-ns-api.dropbear $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/uci-defaults/19-ns-api.wizard $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/uci-defaults/99-ns-api.synflood $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/uci-defaults/99-ns-api.threats-cron $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/uci-defaults/99-ns-api.dnsmasq $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/uci-defaults/99-ns-api.wireguard $(1)/etc/uci-defaults
 	$(INSTALL_DIR) $(1)/usr/libexec

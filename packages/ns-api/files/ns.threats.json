@@ -1,0 +1,13 @@
+{
+  "threats-reader": {
+    "description": "Read the threat events and the collector",
+    "write": {},
+    "read": {
+      "ubus": {
+        "ns.threats": [
+          "*"
+        ]
+      }
+    }
+  }
+}

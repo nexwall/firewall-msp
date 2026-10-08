@@ -1,0 +1,36 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Threat events kept for 35 days: summary for Traffic Analytics and the executive report, event list, collector.
+
+import json
+import sys
+
+from nethsec import threats
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    print(json.dumps({
+        'summary': {'days': 1},
+        'events': {'days': 1, 'layer': 'str', 'search': 'str', 'limit': 100, 'offset': 0},
+        'collect': {},
+    }))
+elif cmd == 'call':
+    action = sys.argv[2]
+    args = json.loads(sys.stdin.read() or '{}')
+    if action == 'summary':
+        db = threats.connect()
+        threats.collect(db)
+        print(json.dumps(threats.summary(db, days=int(args.get('days', 1) or 1))))
+    elif action == 'events':
+        db = threats.connect()
+        print(json.dumps(threats.events(
+            db, days=int(args.get('days', 1) or 1), layer=args.get('layer') or None, search=args.get('search') or None,
+            limit=args.get('limit', 100), offset=args.get('offset', 0))))
+    elif action == 'collect':
+        print(json.dumps(threats.collect()))
