@@ -10,7 +10,7 @@
 import json
 import sys
 
-from nethsec import threats
+from nethsec import threats, webcategories
 
 cmd = sys.argv[1]
 
@@ -19,6 +19,7 @@ if cmd == 'list':
         'summary': {'days': 1},
         'events': {'days': 1, 'layer': 'str', 'search': 'str', 'limit': 100, 'offset': 0},
         'collect': {},
+        'web-categories': {'days': 1},
     }))
 elif cmd == 'call':
     action = sys.argv[2]
@@ -34,3 +35,5 @@ elif cmd == 'call':
             limit=args.get('limit', 100), offset=args.get('offset', 0))))
     elif action == 'collect':
         print(json.dumps(threats.collect()))
+    elif action == 'web-categories':
+        print(json.dumps(webcategories.web_categories(days=int(args.get('days', 1) or 1))))
