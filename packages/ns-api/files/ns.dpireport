@@ -15,6 +15,23 @@ from datetime import date
 
 BASE_PATH = '/var/run/dpireport'
 
+def own_addresses():
+    """The addresses of the firewall itself. Its traffic is not the traffic of a device: with the web proxy on, everything the proxy
+    fetches for the clients leaves from the firewall address, so the firewall showed up as the busiest device (and the traffic was
+    counted twice, once from the client and once from the proxy)."""
+    import subprocess
+    own = set()
+    try:
+        out = subprocess.run(['ip', '-o', 'addr'], capture_output=True, text=True, timeout=5).stdout
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) > 3 and parts[2] in ('inet', 'inet6'):
+                own.add(parts[3].split('/')[0])
+    except Exception:
+        pass
+    return own
+
+
 def reverse_dns(ip):
     try:
         return socket.gethostbyaddr(ip)[0]
@@ -39,8 +56,11 @@ def summary(year, month, day, client="*", limit=10):
     # prepenad leading zero, if needed
     month = f'{int(month):02}'
     day = f'{int(day):02}'
+    own = own_addresses() if client == '*' else set()
     for client_f in glob.glob(f'/var/run/dpireport/{year}/{month}/{day}/{client}'):
         client = client_f.removeprefix(f'/var/run/dpireport/{year}/{month}/{day}/')
+        if client in own:
+            continue
         cdetails = _details(year, month, day, client)
         ret["clients"][client] = cdetails["total"]
         ret["names"][client] = cdetails["name"]
@@ -142,8 +162,14 @@ def summary_v2(year=None, month=None, day=None, narrow_client=None, narrow_secti
     raw_remote_hosts = dict[str, int]()
     raw_protocols = dict[str, int]()
 
+    # the firewall itself is not a device (see own_addresses), unless someone asks for it by address
+    own = own_addresses() if narrow_client is None else set()
+    # the clients' connections to the web proxy are connections to the firewall: they are not a "remote host" either
+    own_hosts = set(own) | {reverse_dns(a) for a in own} if narrow_client is None else set()
     for client in data:
         if narrow_client is not None and narrow_client != client:
+            continue
+        if client in own:
             continue
         raw_client_total_traffic = 0
 
@@ -157,6 +183,8 @@ def summary_v2(year=None, month=None, day=None, narrow_client=None, narrow_secti
                     raw_applications[application] = 0
                 raw_applications[application] += data[client][time]['application'][application]
             for host in data[client][time]['host']:
+                if host in own_hosts and narrow_section != 'host':
+                    continue
                 if narrow_section == 'host' and host != narrow_value:
                     continue
                 elif narrow_section is not None and narrow_section != 'host':
