@@ -25,6 +25,15 @@ def run(cmd):
     subprocess.run(cmd, check=True, capture_output=True)
 
 
+def rsyslog_include(on):
+    """rsyslog reads only the files listed in its UCI "includes": without the entry the extra inputs (IPS alerts, proxy
+    traffic) are never loaded, even though the file is in /etc/rsyslog.d."""
+    subprocess.run(["uci", "-q", "del_list", "rsyslog.syslog.includes=" + RSYSLOG_CONF], capture_output=True)
+    if on:
+        subprocess.run(["uci", "add_list", "rsyslog.syslog.includes=" + RSYSLOG_CONF], capture_output=True)
+    subprocess.run(["uci", "commit", "rsyslog"], capture_output=True)
+
+
 def flowlog(*actions):
     """The traffic and application collector (package ns-log-viewer) follows the viewer; absent in builds without it."""
     if os.path.exists("/etc/init.d/ns-flowlog"):
@@ -45,7 +54,8 @@ def status():
 
 
 def already_enabled():
-    return os.path.islink(RSYSLOG_CONF) and os.path.islink(NGINX_INC) and is_running()
+    included = subprocess.run(["uci", "-q", "get", "rsyslog.syslog.includes"], capture_output=True, text=True).stdout
+    return os.path.islink(RSYSLOG_CONF) and os.path.islink(NGINX_INC) and is_running() and RSYSLOG_CONF in included
 
 
 def regenerate_web_config():
@@ -67,6 +77,7 @@ def enable():
                     os.remove(link)
                 os.symlink(target, link)
 
+        rsyslog_include(True)
         run(["/etc/init.d/victoria-logs", "enable"])
         run(["/etc/init.d/victoria-logs", "start"])
         run(["/etc/init.d/rsyslog", "restart"])
@@ -84,6 +95,7 @@ def disable():
             if os.path.islink(link) or os.path.exists(link):
                 os.remove(link)
 
+        rsyslog_include(False)
         flowlog("stop", "disable")
         run(["/etc/init.d/victoria-logs", "stop"])
         run(["/etc/init.d/victoria-logs", "disable"])
