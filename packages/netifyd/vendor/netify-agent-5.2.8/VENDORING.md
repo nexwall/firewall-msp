@@ -36,3 +36,12 @@ scratch here). That broke `automake` when the real OpenWrt build reached it
 (`required file 'example/Makefile.in' not found`, and others). Fixed by re-cloning `libs/ndpi`,
 `libs/inih` and `libs/gperftools` fresh and only stripping their `.git` directories this time -
 nothing else inside them.
+
+
+## Local changes (Nexwall)
+
+- `src/nd-capture-nfq.cpp` (2026-10-12, netifyd release 7): a verdict that cannot be sent because the kernel no longer holds the packet
+  (ENOENT, EINTR, EAGAIN, ENOBUFS) is ignored, and a failed `mnl_cb_run` no longer ends the capture thread (it ends it after 1000 failures
+  in a row). Before, one stale verdict made `ndCaptureNFQueue::Entry` throw: the queue lost its reader and every new connection waited
+  until the watchdog restarted the engine. Found in the logs ("Error processing NFQUEUE data: No such file or directory") and the core
+  dump of a stalled engine (no capture threads left).

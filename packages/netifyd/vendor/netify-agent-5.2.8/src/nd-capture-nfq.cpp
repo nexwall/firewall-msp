@@ -143,6 +143,15 @@ static int ndCaptureNFQueue_SetVerdict(
     if (mnl_socket_sendto(nfq->GetSocket(), nlh_verdict,
           nlh_verdict->nlmsg_len) < 0)
     {
+        // Nexwall: ENOENT (and its like) means the kernel no longer holds this packet: its queue entry was dropped or
+        // flushed (the queue overflowed, the ruleset was reloaded). There is nothing left to decide, and it must NOT
+        // stop the capture thread: the thread is what keeps the queue served, and a queue without a reader holds
+        // every new connection until the watchdog restarts the engine.
+        if (errno == ENOENT || errno == EINTR || errno == EAGAIN || errno == ENOBUFS) {
+            nd_dprintf("%s: verdict not sent (stale packet): %s\n",
+              nfq->GetTag().c_str(), strerror(errno));
+            return MNL_CB_OK;
+        }
         nd_printf("%s: Error setting verdict: %s\n",
           nfq->GetTag().c_str(), strerror(errno));
         return MNL_CB_ERROR;
@@ -432,6 +441,7 @@ ndCaptureNFQueue::~ndCaptureNFQueue() {
 
 void *ndCaptureNFQueue::Entry(void) {
     int rc = 0;
+    unsigned cb_errors = 0;
     struct timeval tv;
     int fd = mnl_socket_get_fd(nl);
     fd_set fds_read;
@@ -488,11 +498,17 @@ void *ndCaptureNFQueue::Entry(void) {
               "%s: Error processing NFQUEUE data: %s [%d]\n",
               tag.c_str(), strerror(errno), rc);
 
-            capture_state = State::OFFLINE;
+            // Nexwall: one bad message must not end the capture thread (see ndCaptureNFQueue_SetVerdict). Only a
+            // run of failures, which means the socket itself is broken, stops it.
+            if (++cb_errors >= 1000) {
+                capture_state = State::OFFLINE;
 
-            throw ndExceptionSystemError(__PRETTY_FUNCTION__,
-              "mnl_cb_run");
+                throw ndExceptionSystemError(__PRETTY_FUNCTION__,
+                  "mnl_cb_run");
+            }
+            continue;
         }
+        cb_errors = 0;
 
         if (pkt_queue.size()) {
             Lock();
