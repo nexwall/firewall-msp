@@ -35,10 +35,14 @@ GRACE = 300             # the viewer counts as open for this long after its last
 VERBOSE_GRACE = 90      # firewall events of ALLOWED traffic are logged only while the page keeps querying (it does every 30 s)
 VERBOSE_TABLE = 'nexwall_logview'
 VERBOSE_RULES = '''table inet %s {
-\tchain fwd { type filter hook forward priority filter + 20; policy accept;
-\t\tct state new limit rate 40/second burst 80 packets log prefix "Allowed forward: " }
-\tchain inp { type filter hook input priority filter + 20; policy accept;
-\t\tiifname != "lo" ct state new limit rate 20/second burst 40 packets log prefix "Allowed input: " }
+\tchain accepted_fwd {
+\t\ttype filter hook forward priority filter + 20; policy accept;
+\t\tct state new limit rate 40/second burst 80 packets log prefix "Allowed forward: "
+\t}
+\tchain accepted_in {
+\t\ttype filter hook input priority filter + 20; policy accept;
+\t\tiifname != "lo" ct state new limit rate 20/second burst 40 packets log prefix "Allowed input: "
+\t}
 }
 ''' % VERBOSE_TABLE
 END_IDLE_MS = 30000     # a connection with no traffic for this long has ended

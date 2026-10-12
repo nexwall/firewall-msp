@@ -171,13 +171,13 @@ def list_talkers(limit = 20, stat_file="/var/run/netifyd/aggregator-stats.json")
             if not (h['download'] or h['upload']) and ip not in stats:
                 continue
             ct_bw = (h['download'] + h['upload']) / seconds
-            dpi = stats.get(ip)
-            if dpi and dpi['totals']['bandwidth'] > ct_bw:
-                totals = dict(dpi['totals'])
+            seen = stats.get(ip)
+            if seen and seen['totals']['bandwidth'] > ct_bw:
+                totals = dict(seen['totals'])
             else:
                 totals = {'download': h['download'], 'upload': h['upload'], 'packets': h['packets'], 'bandwidth': ct_bw}
             ordered.append({'ip': ip, 'host': ip, 'mac': macs.get(ip, ''), 'totals': totals,
-                            'apps': dpi['apps'] if dpi else {}})
+                            'apps': seen['apps'] if seen else {}})
         ordered.sort(key=lambda x: x['totals']['bandwidth'], reverse=True)
     for entry in ordered[:limit]:
         # name resolution can highly slow down the API: only for the hosts that are shown
