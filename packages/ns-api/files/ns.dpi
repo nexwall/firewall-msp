@@ -78,6 +78,10 @@ if cmd == 'list':
         },
         'update-catalog': {},
         'get-engine-settings': {},
+        'get-engine-state': {},
+        'set-engine-enabled': {
+            'enabled': True
+        },
         'get-performance': {},
         'get-engine-metrics': {},
         'set-performance': {
@@ -199,6 +203,14 @@ elif cmd == 'call':
             print(json.dumps(dpi.update_catalog()))
         elif action == 'get-enforcement-status':
             print(json.dumps(enforcement.dpi_enforcement()))
+        elif action == 'get-engine-state':
+            print(json.dumps(dpi.get_engine_state(e_uci)))
+        elif action == 'set-engine-enabled':
+            data = json.JSONDecoder().decode(sys.stdin.read())
+            if not isinstance(data.get('enabled'), bool):
+                raise utils.ValidationError('enabled', 'invalid', str(data.get('enabled')))
+            dpi.set_engine_master(e_uci, data['enabled'])
+            print(json.dumps({'message': 'success'}))
         elif action == 'get-engine-settings':
             print(json.dumps(dpi.get_engine_settings(e_uci)))
         elif action == 'set-engine-settings':

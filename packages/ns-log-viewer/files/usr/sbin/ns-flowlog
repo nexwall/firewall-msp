@@ -21,6 +21,7 @@ Design and limits: nexwall-internal msp/LOG_VIEWER_FLOW_LOG.md and msp/LOG_VIEWE
 import json
 import re
 import signal
+import subprocess
 import sys
 import time
 import urllib.error
@@ -31,6 +32,15 @@ VL = 'http://127.0.0.1:9428'
 POLL = 10               # seconds between reads of the flow table while the viewer is open
 IDLE_POLL = 15          # seconds between looks at VictoriaLogs while it is closed
 GRACE = 300             # the viewer counts as open for this long after its last query
+VERBOSE_GRACE = 90      # firewall events of ALLOWED traffic are logged only while the page keeps querying (it does every 30 s)
+VERBOSE_TABLE = 'nexwall_logview'
+VERBOSE_RULES = '''table inet %s {
+\tchain fwd { type filter hook forward priority filter + 20; policy accept;
+\t\tct state new limit rate 40/second burst 80 packets log prefix "Allowed forward: " }
+\tchain inp { type filter hook input priority filter + 20; policy accept;
+\t\tiifname != "lo" ct state new limit rate 20/second burst 40 packets log prefix "Allowed input: " }
+}
+''' % VERBOSE_TABLE
 END_IDLE_MS = 30000     # a connection with no traffic for this long has ended
 TOMBSTONE_S = 180       # remember ended connections this long (ns-flows keeps expired flows for a while)
 SNAPSHOT_MAX = 2000
@@ -126,6 +136,18 @@ class Tracker:
         return out[:SNAPSHOT_MAX]
 
 
+def firewall_verbose(on):
+    """Log the new connections the firewall ACCEPTS (rate limited), in a table of its own so nothing else is touched. The Log
+    Viewer shows them as allowed traffic; they are switched off again when the page is closed, so a quiet firewall stays quiet."""
+    try:
+        subprocess.run(['nft', 'delete', 'table', 'inet', VERBOSE_TABLE], capture_output=True, timeout=10)
+        if on:
+            subprocess.run(['nft', '-f', '-'], input=VERBOSE_RULES.encode(), capture_output=True, timeout=10, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return True
+
+
 def http_get(url, timeout=10):
     with urllib.request.urlopen(url, timeout=timeout) as r:
         return r.read()
@@ -160,8 +182,9 @@ def store(records):
 
 
 class Service:
-    def __init__(self, now=time.time, sleep=time.sleep, counter=query_counter, flows=read_flows, write=store):
-        self.now, self.sleep, self.counter, self.flows, self.write = now, sleep, counter, flows, write
+    def __init__(self, now=time.time, sleep=time.sleep, counter=query_counter, flows=read_flows, write=store, verbose=firewall_verbose):
+        self.now, self.sleep, self.counter, self.flows, self.write, self.verbose = now, sleep, counter, flows, write, verbose
+        self.verbose_on = False
         self.tracker = Tracker()
         self.last_count = None
         self.last_active = 0.0
@@ -178,9 +201,18 @@ class Service:
         self.last_count = n
         return t - self.last_active < GRACE
 
+    def update_verbose(self):
+        """Allowed-traffic logging follows the page much more closely than the flow collector: it stops 90 s after the last query."""
+        want = self.last_count is not None and self.now() - self.last_active < VERBOSE_GRACE
+        if want != self.verbose_on:
+            if self.verbose(want):
+                self.verbose_on = want
+
+
     def step(self):
         """One round; returns the number of records written (0 when closed)."""
         is_open = self.viewer_open()
+        self.update_verbose()
         if not is_open:
             if self.open:
                 self.tracker.reset()
@@ -209,7 +241,11 @@ class Service:
 
 def main():
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    Service().run()
+    firewall_verbose(False)      # start clean: a crash while the page was open must not leave the logging on
+    try:
+        Service().run()
+    finally:
+        firewall_verbose(False)
 
 
 if __name__ == '__main__':

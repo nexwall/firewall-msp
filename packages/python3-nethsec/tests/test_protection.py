@@ -146,3 +146,19 @@ def test_sandbox_block_only_while_the_unit_uses_it():
     assert shown['analysed'] == 3 and shown['advisory'] is True and 'gateway' not in shown
     assert p.build_overview({'sandbox': on}, {}, now=1)['sandbox']['malicious'] == 1
     assert p.build_overview({'sandbox': off}, {}, now=1)['sandbox'] is None
+
+
+def test_ips_is_active_when_ns_snort_answers_its_nested_status():
+    raw = raw_ok()
+    raw['snort'] = {'status': {'enabled': True, 'events': 12}}   # the real answer of ns.snort status
+    layers = p.build_layers(raw, MODULES)
+    assert layers['ips']['enabled'] is True
+    assert layers['ips']['events_24h'] == 12
+
+
+def test_dpi_layer_follows_the_engine_state_not_only_the_rules():
+    raw = raw_ok()
+    raw['dpi_state'] = {'master': False, 'rules_enabled': 4, 'enabled': False}
+    assert p.build_layers(raw, MODULES)['dpi']['enabled'] is False
+    raw['dpi_state'] = {'master': True, 'rules_enabled': 4, 'enabled': True}
+    assert p.build_layers(raw, MODULES)['dpi']['enabled'] is True

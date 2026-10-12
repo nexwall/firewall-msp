@@ -164,11 +164,20 @@ def list_talkers(limit = 20, stat_file="/var/run/netifyd/aggregator-stats.json")
     if measured:
         hosts, seconds = measured
         macs = {ip: mac for mac in data['stats'] for ip in data['stats'][mac]}
-        ordered = [{'ip': ip, 'host': ip, 'mac': macs.get(ip, ''),
-                    'totals': {'download': h['download'], 'upload': h['upload'], 'packets': h['packets'],
-                               'bandwidth': (h['download'] + h['upload']) / seconds},
-                    'apps': stats[ip]['apps'] if ip in stats else {}}
-                   for ip, h in hosts.items() if h['download'] or h['upload']]
+        # Both sources undercount: the connection tracker stops counting a flow once the kernel fast path carries it, and the
+        # DPI engine only counts what it inspected. The larger of the two is the closest to the truth for each host.
+        ordered = []
+        for ip, h in hosts.items():
+            if not (h['download'] or h['upload']) and ip not in stats:
+                continue
+            ct_bw = (h['download'] + h['upload']) / seconds
+            dpi = stats.get(ip)
+            if dpi and dpi['totals']['bandwidth'] > ct_bw:
+                totals = dict(dpi['totals'])
+            else:
+                totals = {'download': h['download'], 'upload': h['upload'], 'packets': h['packets'], 'bandwidth': ct_bw}
+            ordered.append({'ip': ip, 'host': ip, 'mac': macs.get(ip, ''), 'totals': totals,
+                            'apps': dpi['apps'] if dpi else {}})
         ordered.sort(key=lambda x: x['totals']['bandwidth'], reverse=True)
     for entry in ordered[:limit]:
         # name resolution can highly slow down the API: only for the hosts that are shown

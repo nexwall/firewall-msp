@@ -1304,3 +1304,24 @@ def test_engine_settings_reject_bad_values(e_uci, action, limit, parameter):
         dpi.set_engine_settings(e_uci, action, limit)
     assert exc.value.parameter == parameter
     assert dpi.get_engine_settings(e_uci) == {'overload_action': 'allow', 'queue_limit': 256}
+
+
+def test_engine_master_switch_keeps_the_engine_off_whatever_the_rules_say(e_uci_objects, mock_load):
+    dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [])
+    assert dpi.get_engine_state(e_uci_objects) == {'master': True, 'rules_enabled': 1, 'enabled': True}
+    assert dpi.set_engine_master(e_uci_objects, False) is True
+    assert e_uci_objects.get('dpi', 'config', 'enabled') == '0'
+    assert dpi.get_engine_state(e_uci_objects) == {'master': False, 'rules_enabled': 1, 'enabled': False}
+    # a rule added or enabled while the switch is off does not start the engine
+    dpi.add_rule(e_uci_objects, True, 'eth1', 'block', ['netify.linkedin'], [])
+    assert e_uci_objects.get('dpi', 'config', 'enabled') == '0'
+    assert dpi.set_engine_master(e_uci_objects, False) is False
+
+
+def test_ensure_engine_master_turns_the_switch_on_and_says_so(e_uci_objects, mock_load):
+    dpi.add_rule(e_uci_objects, True, 'eth0', 'block', ['netify.linkedin'], [])
+    assert dpi.ensure_engine_master(e_uci_objects) is False
+    dpi.set_engine_master(e_uci_objects, False)
+    assert dpi.ensure_engine_master(e_uci_objects) is True
+    assert e_uci_objects.get('dpi', 'config', 'enabled') == '1'
+    assert dpi.engine_master_on(e_uci_objects) is True

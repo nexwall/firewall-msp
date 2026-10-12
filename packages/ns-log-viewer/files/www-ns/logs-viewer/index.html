@@ -194,6 +194,7 @@ en: {
  'badge.blocked':'Blocked','badge.allowed':'Allowed','badge.other':'Other','badge.alert':'Alert','badge.ok':'Success','badge.failed':'Failed',
  'dir.in':'inbound','dir.out':'outbound','dir.forward':'forwarded','dir.inbound':'inbound','dir.outbound':'outbound',
  'reason.dpi':'DPI: application or protocol blocked by policy',
+ 'reason.allowed':'Allowed by the firewall rules ({dir})',
  'reason.banip':'IP & Geo Blocking: {dir} traffic matched list {list}',
  'reason.zone':'Zone policy: zone {zone} {action} {dir} traffic (no rule allowed it)',
  'act.reject':'rejects','act.drop':'drops','act.accept':'accepts',
@@ -242,6 +243,7 @@ es: {
  'badge.blocked':'Bloqueado','badge.allowed':'Permitido','badge.other':'Otro','badge.alert':'Alerta','badge.ok':'Correcto','badge.failed':'Fallido',
  'dir.in':'entrante','dir.out':'saliente','dir.forward':'reenviado','dir.inbound':'entrante','dir.outbound':'saliente',
  'reason.dpi':'DPI: aplicación o protocolo bloqueado por política',
+ 'reason.allowed':'Permitido por las reglas del firewall ({dir})',
  'reason.banip':'Bloqueo de IP y geografía: tráfico {dir} coincide con la lista {list}',
  'reason.zone':'Política de zona: la zona {zone} {action} tráfico {dir} (ninguna regla lo permitió)',
  'act.reject':'rechaza','act.drop':'descarta','act.accept':'acepta',
@@ -290,6 +292,7 @@ es: {
  'badge.blocked':'Bloqueado','badge.allowed':'Permitido','badge.other':'Outro','badge.alert':'Alerta','badge.ok':'Sucesso','badge.failed':'Falha',
  'dir.in':'de entrada','dir.out':'de saída','dir.forward':'encaminhado','dir.inbound':'de entrada','dir.outbound':'de saída',
  'reason.dpi':'DPI: aplicação ou protocolo bloqueado por política',
+ 'reason.allowed':'Permitido pelas regras do firewall ({dir})',
  'reason.banip':'Bloqueio de IP e geografia: tráfego {dir} corresponde à lista {list}',
  'reason.zone':'Política da zona: a zona {zone} {action} tráfego {dir} (nenhuma regra o permitiu)',
  'act.reject':'rejeita','act.drop':'descarta','act.accept':'aceita',
@@ -428,6 +431,7 @@ function describeReason(prefix){
   const s = cleanAction(prefix);
   let m;
   if(/^dpi\b/i.test(s)) return t('reason.dpi');
+  if((m = s.match(/^allowed (forward|input)$/i))) return t('reason.allowed', {dir:t('dir.'+m[1].toLowerCase())});
   if((m = s.match(/^banIP\/(inbound|outbound)\/(?:drop|reject)\/(.+)$/i))) return t('reason.banip', {dir:t('dir.'+m[1].toLowerCase()), list:m[2]});
   if(/invalid ct state/i.test(s)) return t('reason.invalid');
   if((m = s.match(/^(reject|drop|accept)\s+(\S+)\s+(in|out|forward)$/i))) return t('reason.zone', {action:t('act.'+m[1].toLowerCase()), zone:m[2], dir:t('dir.'+m[3].toLowerCase())});
@@ -947,6 +951,12 @@ function bindRowInteractions(){
   body.querySelectorAll('.traceit').forEach(el => el.onclick = () => openTraceFrom(el));
 }
 
+// While the page is open and visible it asks for one record every 30 s: the firewall takes that as "somebody is looking" and logs
+// the connections it allows; 90 s after the last query it stops, so a closed viewer costs nothing.
+setInterval(() => {
+  if(document.visibilityState !== 'visible') return;
+  vlQuery('_time:1m | limit 1', 1).catch(() => {});
+}, 30000);
 function runQuery(){
   switch(activeTab.kind){
     case 'netfilter': return runNetfilterTab();

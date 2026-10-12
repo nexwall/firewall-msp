@@ -132,12 +132,14 @@ def apply_profile(e_uci, profile: str) -> dict:
                 e_uci.set('dpi', name, 'proto_category', list(group['proto_category']))
             created += 1
     e_uci.set('dpi', 'config', 'profile', profile)
-    e_uci.set('dpi', 'config', 'enabled', '1' if created else '0')
+    e_uci.set('dpi', 'config', 'enabled', '1' if created and dpi.engine_master_on(e_uci) else '0')
     # blocked flows are logged (rate limited): the Log Viewer shows what Application Control blocked
     e_uci.set('dpi', 'config', 'log_blocked', '1')
     if not e_uci.get('dpi', 'engine', default=''):
         e_uci.set('dpi', 'engine', 'engine')
-    e_uci.set('dpi', 'engine', 'overload_action', 'block')
+    # A profile never makes the firewall drop connections because of the engine: pass uninspected is the safe default
+    if not e_uci.get('dpi', 'engine', 'overload_action', default=''):
+        e_uci.set('dpi', 'engine', 'overload_action', 'allow')
     e_uci.save('dpi')
     result = {'profile': profile, 'rules': created, 'devices': devices}
     if web_result is not None:

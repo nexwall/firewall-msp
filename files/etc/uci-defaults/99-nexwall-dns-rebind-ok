@@ -1,0 +1,21 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# DNS rebind protection drops answers that point to a private address. Windows asks dns.msftncsi.com for an IPv6 address in the
+# fd3e:4f5a:5b81::/48 range (a private one, on purpose) to decide whether it has internet: with the answer dropped, Windows shows
+# "no internet" although everything works, and the log fills with "possible DNS-rebind attack". The protection stays on; only the
+# names of that one service are allowed to answer with private addresses.
+#
+# UCI_CONF is for the tests only.
+
+UCI="uci${UCI_CONF:+ -c $UCI_CONF}"
+
+[ -n "$($UCI -q get dhcp.@dnsmasq[0])" ] || exit 0
+$UCI -q get dhcp.@dnsmasq[0].rebind_domain | grep -qw msftncsi.com && exit 0
+$UCI add_list dhcp.@dnsmasq[0].rebind_domain='msftncsi.com'
+$UCI commit dhcp
+exit 0

@@ -492,16 +492,61 @@ def __save_exemption_data(e_uci: EUci, config_name: str, criteria: str, descript
     e_uci.set('dpi', config_name, 'criteria', criteria)
     e_uci.set('dpi', config_name, 'description', description)
 
+def engine_master_on(e_uci: EUci) -> bool:
+    """The administrator's switch for Application Control. On by default; off keeps the engine stopped whatever the rules say."""
+    return e_uci.get('dpi', 'config', 'master', default='1') != '0'
+
+
 def __toggle_engine(e_uci: EUci):
     count_enabled = 0
     for section in e_uci.get_all('dpi'):
         if e_uci.get('dpi', section, default="") == "rule" and e_uci.get('dpi', section, 'enabled', default="0") == "1":
             count_enabled = count_enabled + 1
 
-    if count_enabled > 0:
+    if count_enabled > 0 and engine_master_on(e_uci):
         e_uci.set('dpi', 'config', 'enabled', '1')
     else:
         e_uci.set('dpi', 'config', 'enabled', '0')
+
+
+def get_engine_state(e_uci: EUci) -> dict:
+    """
+    State of the inspection engine switch.
+
+    Returns:
+        dict with "master" (the administrator's switch), "rules_enabled" (rules that need the engine) and "enabled"
+        (the engine is configured to run: master on and at least one rule enabled)
+    """
+    rules = sum(1 for section in e_uci.get_all('dpi')
+                if e_uci.get('dpi', section, default="") == "rule" and e_uci.get('dpi', section, 'enabled', default="0") == "1")
+    master = engine_master_on(e_uci)
+    return {'master': master, 'rules_enabled': rules, 'enabled': master and rules > 0}
+
+
+def set_engine_master(e_uci: EUci, enabled: bool) -> bool:
+    """
+    Switch Application Control on or off as a whole. Off stops the inspection engine (traffic is then forwarded
+    uninspected); the rules stay saved.
+
+    Returns:
+        True when the switch changed
+    """
+    changed = engine_master_on(e_uci) != bool(enabled)
+    if e_uci.get('dpi', 'config', default=None) is None:
+        e_uci.set('dpi', 'config', 'main')
+    e_uci.set('dpi', 'config', 'master', '1' if enabled else '0')
+    __toggle_engine(e_uci)
+    e_uci.save('dpi')
+    return changed
+
+
+def ensure_engine_master(e_uci: EUci) -> bool:
+    """Turn the master switch on if it was off (a protection that needs the engine, such as Web Protection, calls this). Returns True when it had to."""
+    if engine_master_on(e_uci):
+        return False
+    set_engine_master(e_uci, True)
+    return True
+
 
 def add_rule(e_uci: EUci, enabled: bool, device: str, action: str, applications: list[str],
              protocols: list[str], sources: list[str] = None, description: str = '', log: bool = False) -> str:

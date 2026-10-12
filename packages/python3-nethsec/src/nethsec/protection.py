@@ -192,6 +192,9 @@ def build_layers(raw, modules):
         'counters_since': 'service start',
     }
     snort = raw.get('snort') if isinstance(raw.get('snort'), dict) else {}
+    # ns.snort status answers {"status": {"enabled": ..., "events": ...}}
+    if isinstance(snort.get('status'), dict):
+        snort = snort['status']
     layers['ips'] = {
         'present': bool(snort), 'licensed': bool(modules.get('ips')), 'enabled': bool(snort.get('enabled')),
         'events_24h': _int(snort.get('events')),
@@ -201,6 +204,8 @@ def build_layers(raw, modules):
         'present': dpi_rules is not None, 'licensed': bool(modules.get('dpi')),
         'rules': len(dpi_rules) if dpi_rules is not None else None,
         'rules_enabled': sum(1 for r in dpi_rules or [] if r.get('enabled')) if dpi_rules is not None else None,
+        'master': bool((raw.get('dpi_state') or {}).get('master', True)),
+        'enabled': bool((raw.get('dpi_state') or {}).get('enabled')),
     }
     ts = raw.get('threat_shield') if isinstance(raw.get('threat_shield'), dict) else {}
     layers['threat_shield'] = {
@@ -281,6 +286,7 @@ def gather(modules_fn):
         'web_inspection': lambda: _ubus('ns.webprotection', 'get-inspection-status'),
         'snort': lambda: _ubus('ns.snort', 'status'),
         'dpi_rules': lambda: _ubus('ns.dpi', 'list-rules'),
+        'dpi_state': lambda: _ubus('ns.dpi', 'get-engine-state'),
         'threat_shield': threat_shield,
     }
     raw, errors = {}, []
