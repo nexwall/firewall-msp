@@ -87,7 +87,7 @@ def test_missing_sources_are_left_out_not_invented():
 
 def test_layers_carry_only_real_counters():
     L = p.build_overview(raw_ok(), MODULES, NOW)['layers']
-    assert L['ips'] == {'present': True, 'licensed': True, 'enabled': True, 'events_24h': 87}
+    assert L['ips'] == {'present': True, 'licensed': True, 'enabled': True, 'events_24h': 87, 'running': None}
     assert L['av']['scanned'] == 3912 and L['av']['infected'] == 2 and L['av']['scanning']
     assert L['av']['counters_since'] == 'service start'
     assert L['web']['rules'] == 3 and L['web']['rules_enabled'] == 2 and L['web']['inspecting_rules'] == 2 and L['web']['proxy_running']
@@ -162,3 +162,38 @@ def test_dpi_layer_follows_the_engine_state_not_only_the_rules():
     assert p.build_layers(raw, MODULES)['dpi']['enabled'] is False
     raw['dpi_state'] = {'master': True, 'rules_enabled': 4, 'enabled': True}
     assert p.build_layers(raw, MODULES)['dpi']['enabled'] is True
+
+
+def _runtime(procs, queues):
+    return {'procs': procs, 'queues': queues}
+
+
+def test_layers_report_what_is_really_running_not_only_the_settings():
+    raw = raw_ok()
+    raw['dpi_state'] = {'master': True, 'enabled': True}
+    raw['av']['settings'] = {'enabled': True, 'clamav': True}
+    # everything on and alive
+    raw['runtime'] = _runtime(['snort', 'netifyd', 'squid', 'clamd', 'nexwall-webd'], [4, 5, 50, 51, 54])
+    layers = p.build_layers(raw, MODULES)
+    assert layers['ips']['running'] is True and layers['dpi']['running'] is True
+    assert layers['web']['running'] is True and layers['av']['running'] is True
+    # switched on but the processes are gone: enabled stays true, running is false
+    raw['runtime'] = _runtime(['netifyd'], [])
+    layers = p.build_layers(raw, MODULES)
+    assert layers['ips']['enabled'] is True and layers['ips']['running'] is False
+    assert layers['dpi']['running'] is False            # the process is there, nobody is bound to the queues
+    assert layers['web']['running'] is False and layers['av']['running'] is False
+    # no reading of the processes: unknown, not false
+    raw.pop('runtime')
+    layers = p.build_layers(raw, MODULES)
+    assert all(layers[k]['running'] is None for k in ('ips', 'dpi', 'web', 'av'))
+
+
+def test_web_protection_needs_the_proxy_only_when_a_rule_inspects():
+    raw = raw_ok()
+    raw['dpi_state'] = {'master': True, 'enabled': True}
+    raw['runtime'] = _runtime(['netifyd'], [50, 51])
+    raw['web_inspection'] = {'rules': 0, 'squid': False, 'redirect': False}
+    assert p.build_layers(raw, MODULES)['web']['running'] is True     # category blocking alone runs in the engine
+    raw['web_inspection'] = {'rules': 2, 'squid': False, 'redirect': True}
+    assert p.build_layers(raw, MODULES)['web']['running'] is False    # a rule inspects but the proxy is down

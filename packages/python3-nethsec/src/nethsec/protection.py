@@ -165,6 +165,11 @@ def build_events(catalogs, av_status, now):
 def build_layers(raw, modules):
     """One block per protection with its state and the counters that really exist (each counter says its time window)."""
     layers = {}
+    rt = raw.get('runtime') if isinstance(raw.get('runtime'), dict) else None
+    procs = set(rt.get('procs') or []) if rt is not None else set()
+    queues = set(rt.get('queues') or []) if rt is not None else set()
+    ips_running = ('snort' in procs and 4 in queues) if rt is not None else None
+    dpi_running = ('netifyd' in procs and any(50 <= q <= 57 for q in queues)) if rt is not None else None
     web_rules = (raw.get('web_rules') or {}).get('values') if isinstance(raw.get('web_rules'), dict) else None
     insp = raw.get('web_inspection') if isinstance(raw.get('web_inspection'), dict) else {}
     av = raw.get('av') if isinstance(raw.get('av'), dict) else {}
@@ -180,6 +185,9 @@ def build_layers(raw, modules):
         'proxy_running': insp.get('squid'),
         'redirect_active': insp.get('redirect'),
         'skipped_lists': insp.get('skipped') or [],
+        # the filtering is really working: the engine that blocks by category is up and, when a rule inspects, the proxy answers and the redirect is loaded
+        'running': (bool(settings.get('enabled')) and bool(dpi_running)
+                    and (not _int(insp.get('rules')) or (bool(insp.get('squid')) and bool(insp.get('redirect'))))) if rt is not None else None,
     }
     settings_av = av.get('settings') if isinstance(av.get('settings'), dict) else {}
     layers['av'] = {
@@ -190,6 +198,9 @@ def build_layers(raw, modules):
         'scanning': bool(settings_av.get('enabled')) and not av.get('not_scanning', False),
         'scanned': _int(counters.get('scanned')), 'infected': _int(counters.get('infected')), 'errors': _int(counters.get('errors')),
         'counters_since': 'service start',
+        # the scanner and its ICAP front are alive (and the antivirus engine when it is switched on)
+        'running': (bool(settings_av.get('enabled')) and 'nexwall-webd' in procs and (not settings_av.get('clamav') or 'clamd' in procs)
+                    and not av.get('not_scanning', False)) if rt is not None else None,
     }
     snort = raw.get('snort') if isinstance(raw.get('snort'), dict) else {}
     # ns.snort status answers {"status": {"enabled": ..., "events": ...}}
@@ -198,6 +209,8 @@ def build_layers(raw, modules):
     layers['ips'] = {
         'present': bool(snort), 'licensed': bool(modules.get('ips')), 'enabled': bool(snort.get('enabled')),
         'events_24h': _int(snort.get('events')),
+        # the process is up and bound to its queues (not only switched on in the settings)
+        'running': (bool(snort.get('enabled')) and bool(ips_running)) if rt is not None else None,
     }
     dpi_rules = (raw.get('dpi_rules') or {}).get('values') if isinstance(raw.get('dpi_rules'), dict) else None
     layers['dpi'] = {
@@ -206,6 +219,8 @@ def build_layers(raw, modules):
         'rules_enabled': sum(1 for r in dpi_rules or [] if r.get('enabled')) if dpi_rules is not None else None,
         'master': bool((raw.get('dpi_state') or {}).get('master', True)),
         'enabled': bool((raw.get('dpi_state') or {}).get('enabled')),
+        # the engine is up and its queues are bound
+        'running': (bool((raw.get('dpi_state') or {}).get('enabled')) and bool(dpi_running)) if rt is not None else None,
     }
     ts = raw.get('threat_shield') if isinstance(raw.get('threat_shield'), dict) else {}
     layers['threat_shield'] = {
@@ -263,6 +278,31 @@ def _client(path, *args):
     return _run_json([path] + list(args)) if os.path.exists(path) else None
 
 
+def runtime_state():
+    """What is really running: the names of the processes and the netfilter queues somebody is bound to."""
+    procs = set()
+    try:
+        for pid in os.listdir('/proc'):
+            if pid.isdigit():
+                try:
+                    with open('/proc/%s/comm' % pid) as f:
+                        procs.add(f.read().strip())
+                except OSError:
+                    continue
+    except OSError:
+        return None
+    queues = []
+    try:
+        with open('/proc/net/netfilter/nfnetlink_queue') as f:
+            for line in f:
+                first = line.split()
+                if first and first[0].isdigit():
+                    queues.append(int(first[0]))
+    except OSError:
+        pass
+    return {'procs': sorted(procs), 'queues': queues}
+
+
 def gather(modules_fn):
     """Runs every status command at the same time (each one is a process or a ubus call): the page waits for the slowest, not the sum."""
     from concurrent.futures import ThreadPoolExecutor
@@ -298,6 +338,7 @@ def gather(modules_fn):
             except Exception:
                 raw[name] = None
                 errors.append(name)
+    raw['runtime'] = runtime_state()
     raw['errors'] = errors
     return raw, modules_fn()
 
