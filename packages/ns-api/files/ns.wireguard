@@ -670,6 +670,9 @@ def import_configuration(args):
         if 'DNS' in config_parser['Interface']:
             e_uci.set('network', defaults['instance'], 'dns', [ip.strip() for ip in config_parser["Interface"]["DNS"].split(',')])
         e_uci.set('network', defaults['instance'], 'ns_type', 'tunnel')
+        # no host route to the peer: netifd would pin it to the WAN that is the default at that moment (a stale route to a link that cannot
+        # reach the peer then cuts every other flow to that address). With multi-WAN the endpoint follows the normal routing
+        e_uci.set('network', defaults['instance'], 'nohostroute', '1')
         e_uci.set('network', defaults['instance'], 'ns_name', f"imported_{defaults['instance']}")
 
         peer_id = utils.get_random_id()
@@ -767,6 +770,9 @@ def add_tunnel(args):
     e_uci.set('network', defaults['instance'], 'private_key', args['peer_private_key'])
     e_uci.set('network', defaults['instance'], 'addresses', [args['reserved_ip']])
     e_uci.set('network', defaults['instance'], 'ns_type', 'tunnel')
+    # no host route to the peer: netifd would pin it to the WAN that is the default at that moment (a stale route to a link that cannot
+    # reach the peer then cuts every other flow to that address). With multi-WAN the endpoint follows the normal routing
+    e_uci.set('network', defaults['instance'], 'nohostroute', '1')
     e_uci.set('network', defaults['instance'], 'ns_name', args['name'])
     e_uci.set('network', defaults['instance'], 'disabled', not args['enabled'])
 
