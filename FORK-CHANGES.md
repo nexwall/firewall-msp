@@ -32,7 +32,7 @@ Record of modifications to files inherited from NethSecurity (upstream commit `9
 - **DNS filter client** (`ns-flashstart`): API and dynamic DNS endpoints moved to `services.nexwall.com.br/dns`.
 - **Blocklists**: feed identifiers, file names and labels renamed from the previous vendor names to `nexwall_*`
   (`ns-threat_shield`).
-- **Defaults**: hostname `Nexwall`; default password `Nexwall,1234` (hash in
+- **Defaults**: hostname `FIREWALL`; default password `nexwall` (hash in
   `files/etc/uci-defaults/90-nethsec-root-password` regenerated; same value in the HA, API CLI and inventory defaults).
 - **Runtime references**: the dashboard connectivity check no longer contacts the previous vendor site, the certificate account email and a DHCP example domain were changed (`ns.dashboard`, `ns.reverseproxy`, `ns.dhcp`).
 - **Interface address handling** (`python3-nethsec` `nethsec.ipconf`, `ns.dhcp`, `ns.ovpnrw`): the code
