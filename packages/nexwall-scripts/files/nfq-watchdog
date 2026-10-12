@@ -38,7 +38,7 @@ NFQ_FILE="${NFQ_FILE:-/proc/net/netfilter/nfnetlink_queue}"
 DUMP_ROOT="${DUMP_ROOT:-/root/nfq-stall}"
 EVENTS="$DUMP_ROOT/events.log"
 WAIT="${SAMPLE_WAIT:-10}"
-COOLDOWN=300
+COOLDOWN="${COOLDOWN:-90}"      # seconds between two restarts: traffic is bypassed meanwhile (failsafe), so a short wait is safe
 KEEP=10
 VM_WRITE="${VM_WRITE:-http://127.0.0.1:8428/write}"
 INITD="${INITD:-/etc/init.d}"
@@ -55,7 +55,10 @@ cfg() {
 
 ENABLED=$(cfg enabled);            [ -n "$ENABLED" ]      || ENABLED=1
 RESTART=$(cfg restart);            [ -n "$RESTART" ]      || RESTART=1
-MAX_RESTARTS=$(cfg max_restarts);  [ -n "$MAX_RESTARTS" ] || MAX_RESTARTS=3
+MAX_RESTARTS=$(cfg max_restarts);  [ -n "$MAX_RESTARTS" ] || MAX_RESTARTS=6
+[ -n "$FAILSAFE" ] || FAILSAFE=$(cfg failsafe)
+[ -n "$FAILSAFE" ] || FAILSAFE=1
+NFT="${NFT_CMD:-nft}"
 CORE=$(cfg core);                  [ -n "$CORE" ]         || CORE=0
 [ -n "$BACKLOG" ] || BACKLOG=$(cfg backlog)
 [ -n "$BACKLOG" ] || BACKLOG=64
@@ -161,6 +164,38 @@ capture_core() {
     ls -1t "$DUMP_ROOT"/*/netifyd.core.gz 2>/dev/null | tail -n +$((CORE_KEEP + 1)) | while read -r old; do rm -f "$old"; done
 }
 
+# What happens to new connections of the firewall when the engine is overloaded or stopped: the Application Control setting
+# (dpi.engine.overload_action). Only "allow" (the default) may be helped by the failsafe below.
+overload_action() {
+    [ -n "$OVERLOAD_ACTION" ] && { echo "$OVERLOAD_ACTION"; return; }
+    [ -n "$NO_UCI" ] && { echo allow; return; }
+    uci -q get dpi.engine.overload_action 2>/dev/null || echo allow
+}
+
+# Failsafe: a stalled engine holds every new connection that its queues hash to. Taking the queue rules out of the firewall makes
+# traffic flow (uninspected) at once, whatever the engine does next; the start of the engine writes the rules again. Prints the
+# number of rules removed.
+failsafe_bypass() {
+    removed=0
+    for ch in nfq_input nfq_forward nfq_output; do
+        for h in $($NFT -a list chain inet netifyd "$ch" 2>/dev/null | awk '/[ \t]queue[ \t]/ { for (i = 1; i <= NF; i++) if ($i == "handle") print $(i + 1) }'); do
+            $NFT delete rule inet netifyd "$ch" handle "$h" 2>/dev/null && removed=$((removed + 1))
+        done
+    done
+    echo "$removed"
+}
+
+bypassed=0
+case " $services " in
+*" netifyd "*)
+    case "$action" in
+    restarted|cooldown|limit)
+        if [ "$FAILSAFE" = "1" ] && [ "$(overload_action)" != "block" ]; then
+            bypassed=$(failsafe_bypass)
+        fi ;;
+    esac ;;
+esac
+
 dir="$DUMP_ROOT/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$dir"
 {
@@ -169,6 +204,7 @@ mkdir -p "$dir"
     echo "stalled queues: $(echo $stalled)"
     echo "services: $services"
     echo "action: $action (restarts in the last hour: $restarts_1h of $MAX_RESTARTS)"
+    echo "failsafe: $bypassed queue rule(s) removed so traffic flows uninspected until the engine is restarted"
     echo; echo "== nfnetlink_queue"; cat "$NFQ_FILE"
     echo; echo "== free"; free
     echo; echo "== conntrack"; cat /proc/sys/net/netfilter/nf_conntrack_count 2>/dev/null
@@ -193,6 +229,7 @@ mkdir -p "$dir"
 printf '%s\t%s\t%s\t%s\t%s\n' "$now" "$(echo $stalled | tr ' ' ',')" "$(echo $services | tr ' ' ',')" "$action" "$dir" >> "$EVENTS"
 
 logger -t nexwall-nfq-watchdog -p daemon.crit "queue(s) $(echo $stalled) stalled, owner: $services, action: $action, report: $dir"
+[ "$bypassed" -gt 0 ] && logger -t nexwall-nfq-watchdog -p daemon.crit "failsafe: $bypassed queue rule(s) removed, traffic flows uninspected until the engine is restarted"
 
 if [ "$action" = "restarted" ]; then
     for s in $services; do

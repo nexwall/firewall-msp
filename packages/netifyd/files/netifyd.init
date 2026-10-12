@@ -66,7 +66,7 @@ start_netifyd() {
 
 	procd_open_instance
 	procd_set_param file /etc/netifyd.conf
-	procd_set_param term_timeout 20
+	procd_set_param term_timeout 8
 	procd_set_param respawn 3600 5 0
 	procd_set_param command $PROG -R
 
