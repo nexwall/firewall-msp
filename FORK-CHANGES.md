@@ -85,7 +85,11 @@ unchanged to keep future merges from upstream small. Original copyright headers 
 - **License module list** (`packages/python3-nethsec/src/nethsec/license/__init__.py`): web, av, atp and ztna.
 - **New packages**: `packages/nexwall-webprotection` and `packages/nexwall-webd` (recipes only; the content is proprietary and comes from the vendor feed).
 
-## 26.1.2 update packages (2026-10-13, delivered through System > Update)
-- `python3-nethsec` r15: the protection overview shows the rules the IPS loads (the tier of the installed policy, 35253 on Security) instead of the count of alert-only rules of the catalog (7645).
-- `ns-api` r14: `ns.talkers` measures the window of the statistics snapshot in milliseconds (`log_seconds`) and never below one second.
-- `nexwall-netify-plugins` 1.0.4 (vendor feed): `nx-sink-log` adds the payloads up and writes the snapshot once per window of at least 10 s (a busy firewall sent several payloads per second and the one-second clock made the rate read 2 to 3 times too high, the Top Talkers spike); `nx-proc-aggregator` reports a flow the application database does not know under the registered domain of its server name instead of "Unknown".
+## 26.1.3 (2026-10-13): final release of version 26
+- Image signed with the Nexwall package key: the 26.1.2 image was built without `private-key.pem` in the checkout, so the build generated its own key and the firewall trusted that one; package updates signed with the Nexwall key were refused. Always put the Nexwall `private-key.pem` and `public-key.pem` (dev server `/root/nexwall-secrets/apk`) in the build checkout and check the fingerprint (`f4a336d3f54214be`) of `/etc/apk/keys/public-key.pem` in the image.
+- Update server: `targets/x86/64/packages/` (kernel modules and its `packages.adb`) must be uploaded with the image, otherwise `apk update` fails and System > Update shows an error.
+- `python3-nethsec` r15: the protection overview shows the rules the IPS loads (tier of the installed policy) instead of the count of alert-only rules; `sandbox_status` (enabled / entitled) for the Threat Analytics stages.
+- `ns-api` r14: `ns.talkers` measures the window of the statistics snapshot in milliseconds (`log_seconds`, never below one second) and takes the time of the connection snapshot after reading it.
+- `nexwall-netify-plugins` 1.0.4: `nx-sink-log` adds the payloads up and writes the snapshot once per window of at least 10 s; `nx-proc-aggregator` reports a flow the application database does not know under the registered domain of its server name.
+- `ns-ui` 3.0.1: Threat Analytics Sandbox stage shows its real state.
+- DPI catalog 2026.10.13.1 (license server): `netify.nexwall` application (nexwall.com.br and the Nexwall server).

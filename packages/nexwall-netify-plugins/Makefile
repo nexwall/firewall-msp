@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-netify-plugins
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 PKG_MAINTAINER:=Nexwall
 
@@ -19,8 +19,8 @@ PKG_MAINTAINER:=Nexwall
 # so a mismatch is refused at build time). The enforcement and statistics plugins act only while the Nexwall license
 # core hands them a valid short-lived token. Without the package (community build) the engine still classifies
 # traffic but nothing is blocked, accounted or exported. See nexwall-internal/msp/DPI_PLUGIN_LICENSE_TOKEN.md.
-PLUGIN_FEED_VERSION:=1.0.3
-PLUGIN_FEED_SHA256:=ad425914d51b88c9b54c5c6dcefb45fe2c5aacbde3da9c439036dc0b9daa567e
+PLUGIN_FEED_VERSION:=1.0.4
+PLUGIN_FEED_SHA256:=032da6ee342dc0afa19acf3cb75462b79e9f5dde321888ae9207aff7be11c22d
 PLUGIN_FEED:=https://updates.nexwall.com.br/vendor/stable
 
 NETIFYD_ABI:=$(shell sed -n 's/^PKG_VERSION:=//p' $(CURDIR)/../netifyd/Makefile)-r$(shell sed -n 's/^PKG_RELEASE:=//p' $(CURDIR)/../netifyd/Makefile)

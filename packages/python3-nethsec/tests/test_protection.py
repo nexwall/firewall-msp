@@ -207,3 +207,11 @@ def test_ips_entries_are_the_rules_of_the_installed_tier():
     assert e['entries'] == 35253 and e['entries_unit'] == 'rules'
     raw['installed_policy'] = 'balanced'
     assert p.normalize_ips(raw)['entries'] == 22650
+
+
+def test_sandbox_status_tells_not_in_plan_from_not_enabled():
+    assert p.sandbox_status(None) is None
+    assert p.sandbox_status({'enabled': False, 'entitled': True}) == {'enabled': False, 'entitled': True}
+    assert p.sandbox_status({'enabled': True, 'entitled': False}) == {'enabled': True, 'entitled': False}
+    o = p.build_overview({'sandbox': {'enabled': False, 'entitled': True}}, MODULES, now=NOW)
+    assert o['sandbox'] is None and o['sandbox_status'] == {'enabled': False, 'entitled': True}

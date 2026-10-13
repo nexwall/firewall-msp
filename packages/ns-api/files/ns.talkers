@@ -77,8 +77,10 @@ def read_conntrack(path=CT_FILE):
 def conntrack_hosts(path=CT_FILE, state_path=CT_STATE, now=None):
     """Bytes moved by every local host since the previous call, from the connection tracker counters.
     Returns (hosts, seconds) or None when there is no usable earlier snapshot yet (the first call, or a long pause)."""
-    now = time.time() if now is None else now
     cur = read_conntrack(path)
+    # the time of the snapshot is the time it was read: reading a big table under load takes seconds, and a start time taken
+    # before the read made the window shorter than the traffic it holds (a rate several times too high)
+    now = time.time() if now is None else now
     prev = None
     try:
         with open(state_path) as fp:

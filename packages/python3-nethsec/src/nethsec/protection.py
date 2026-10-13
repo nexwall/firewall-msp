@@ -246,6 +246,13 @@ def normalize_sandbox(raw):
     return {k: raw[k] for k in keep if k in raw}
 
 
+def sandbox_status(raw):
+    """Whether the unit may use the sandbox and whether it does (the pages say \"not in your plan\" or \"not enabled\" from it); None when unknown."""
+    if not isinstance(raw, dict):
+        return None
+    return {'enabled': bool(raw.get('enabled')), 'entitled': bool(raw.get('entitled'))}
+
+
 def build_overview(raw, modules, now=None):
     now = int(now if now is not None else time.time())
     catalogs = build_catalogs(raw, now)
@@ -260,6 +267,7 @@ def build_overview(raw, modules, now=None):
         'layers': layers,
         'events': build_events(catalogs, raw.get('av') if isinstance(raw.get('av'), dict) else {}, now),
         'sandbox': normalize_sandbox(raw.get('sandbox')),
+        'sandbox_status': sandbox_status(raw.get('sandbox')),
         'errors': raw.get('errors', []),
     }
 
