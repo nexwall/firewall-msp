@@ -56,6 +56,16 @@ Record of modifications to files inherited from NethSecurity (upstream commit `9
 Internal names (`ns-*` packages, the `nethsec` Python module, UCI option names, the build feed name) are deliberately
 unchanged to keep future merges from upstream small. Original copyright headers are preserved everywhere.
 
+## 2026-10-13 (26.1.2)
+
+- **Squid** (`patches/feeds/packages/900-squid-connect-host-verify-passthrough.patch`): with the Host check off (default) an intercepted CONNECT whose server name does not match the client's destination address is sent to the destination the client chose (not cached, no peers), as plain HTTP already was. It was answered with a 409 before, which broke sites whose DNS answers differ between the client and the proxy (streaming services, CDNs).
+- **netifyd 5.2.8-r8** (`packages/netifyd`): the engine's nftables table accepts ICMP before the queues (`ns-netifyd-configure`); the reject of QUIC and path MTU discovery of the firewall's own traffic were swallowed by the analysis queue. r7: a vanished queued packet (ENOENT) no longer ends the capture thread (`vendor/.../nd-capture-nfq.cpp`), the engine stops with a longer term timeout.
+- **Watchdog v4** (`packages/nexwall-scripts/files/nfq-watchdog`, 29 tests): removes the engine queue rules while the engine is stalled, cooldown, restart limits; profiles no longer force `overload_action=block`.
+- **Firewall default** (`files/etc/config/firewall`): the WAN zone logs what it rejects (10 per minute) so the Log Viewer shows blocked traffic.
+- **WireGuard** (`packages/ns-api/files/ns.wireguard`): tunnels are created with `nohostroute`, so the route to the peer is not pinned to the WAN that was the default when the tunnel came up.
+- **Protection overview** (`packages/python3-nethsec/src/nethsec/protection.py`): `running` for IPS, Application Control, Web Protection and the antivirus (processes and bound queues), used by the badges of the interface.
+- **Pins**: `nexwall-webprotection` 0.10.0, `ns-ui` 3.0.0, `nexwall-netify-plugins` 1.0.3 (see `nexwall-internal/build-track/REPO_PINS.md`).
+
 ## 2026-10-08 (26.1.1)
 
 - **Web Protection pins**: `packages/nexwall-webprotection` (0.9.0), `packages/nexwall-webd` (1.5.0) and `packages/ns-ui` (2.0.x) move to the new vendor feed versions (block page, content filter, sandbox client, redesigned interface).
