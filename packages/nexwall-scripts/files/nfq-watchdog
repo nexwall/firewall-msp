@@ -13,7 +13,9 @@
 #
 # Runs from cron every minute and takes three samples 10 seconds apart. A queue is stalled when packets are waiting
 # in all three samples and (a) its verdict counter did not move, or (b) at least BACKLOG packets are waiting in
-# every sample. On a stall it saves diagnostics, records the event, raises an alert, and (if allowed) restarts the
+# every sample and its verdict counter moves slower than MINRATE per second (a reader that is alive but far too slow; a reader
+# that keeps up and is only busy because the machine is overloaded is not restarted: a restart would cost more than it gives).
+# On a stall it saves diagnostics, records the event, raises an alert, and (if allowed) restarts the
 # owner of the queue.
 #
 # Settings (/etc/config/netifyd):
@@ -22,6 +24,7 @@
 #       option restart      '1'    '0' keeps detection, report and alert but never restarts anything
 #       option max_restarts '3'    most restarts per hour; over that it only reports and alerts
 #       option backlog      '64'   packets waiting in every sample that count as a stall
+#       option min_rate     '10'   verdicts per second below which a sustained backlog is a stall (above it: overload, no restart)
 #       option core         '0'    '1' saves a core dump (compressed, in the report folder) of a stalled netifyd before
 #                                  restarting it, for root-cause analysis; see analyze-core. A core holds traffic
 #                                  metadata (addresses, host names): keep it private, the newest 2 are kept
@@ -62,6 +65,8 @@ NFT="${NFT_CMD:-nft}"
 CORE=$(cfg core);                  [ -n "$CORE" ]         || CORE=0
 [ -n "$BACKLOG" ] || BACKLOG=$(cfg backlog)
 [ -n "$BACKLOG" ] || BACKLOG=64
+[ -n "$MINRATE" ] || MINRATE=$(cfg min_rate)
+[ -n "$MINRATE" ] || MINRATE=10
 
 [ "$ENABLED" = "0" ] && exit 0
 [ -r "$NFQ_FILE" ] || exit 0
@@ -88,13 +93,15 @@ snap() {
 
 # stalled queues: packets waiting in every sample, and either no verdict progress between the first and the last
 # sample, or a sustained backlog of BACKLOG packets or more
-stalled=$( { snap 1; sleep "$WAIT"; snap 2; sleep "$WAIT"; snap 3; } | awk -v backlog="$BACKLOG" '
+stalled=$( { snap 1; sleep "$WAIT"; snap 2; sleep "$WAIT"; snap 3; } | awk -v backlog="$BACKLOG" -v wait="$WAIT" -v minrate="$MINRATE" '
     { tot[$2, $1] = $3; seq[$2, $1] = $4; q[$2] = 1 }
     END {
         for (k in q) {
             if (!(tot[k, 1] > 0 && tot[k, 2] > 0 && tot[k, 3] > 0)) continue
+            moved = seq[k, 3] - seq[k, 1]
+            if (moved < 0) moved += 4294967296        # the counter wraps
             if (seq[k, 1] == seq[k, 3] ||
-                (tot[k, 1] >= backlog && tot[k, 2] >= backlog && tot[k, 3] >= backlog))
+                (tot[k, 1] >= backlog && tot[k, 2] >= backlog && tot[k, 3] >= backlog && moved < minrate * 2 * wait))
                 print k
         }
     }' | sort -n)
