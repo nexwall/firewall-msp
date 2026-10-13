@@ -1,0 +1,21 @@
+diff --git a/net/squid/patches/900-nexwall-connect-host-verify-passthrough.patch b/net/squid/patches/900-nexwall-connect-host-verify-passthrough.patch
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/net/squid/patches/900-nexwall-connect-host-verify-passthrough.patch
+@@ -0,0 +1,15 @@
++--- a/src/client_side_request.cc
+++++ b/src/client_side_request.cc
++@@ -413,8 +413,10 @@
++ ClientRequestContext::hostHeaderVerifyFailed(const char *A, const char *B)
++ {
++     // IP address validation for Host: failed. Admin wants to ignore them.
++-    // NP: we do not yet handle CONNECT tunnels well, so ignore for them
++-    if (!Config.onoff.hostStrictVerify && http->request->method != Http::METHOD_CONNECT) {
+++    // Nexwall: intercepted CONNECT tunnels are handled like any other intercepted request. The client's own destination address is used
+++    // (no cache, no peers), as already done for plain HTTP; the 409 broke sites whose DNS answers differ between the client and the proxy
+++    // (CDNs with latency or geo based answers, such as the streaming services).
+++    if (!Config.onoff.hostStrictVerify) {
++         debugs(85, 3, "SECURITY ALERT: Host header forgery detected on " << http->getConn()->clientConnection <<
++                " (" << A << " does not match " << B << ") on URL: " << http->request->effectiveRequestUri());
++ 

@@ -168,7 +168,7 @@ def build_layers(raw, modules):
     rt = raw.get('runtime') if isinstance(raw.get('runtime'), dict) else None
     procs = set(rt.get('procs') or []) if rt is not None else set()
     queues = set(rt.get('queues') or []) if rt is not None else set()
-    ips_running = ('snort' in procs and 4 in queues) if rt is not None else None
+    ips_running = (bool(procs & {'snort', 'snort3'}) and 4 in queues) if rt is not None else None
     dpi_running = ('netifyd' in procs and any(50 <= q <= 57 for q in queues)) if rt is not None else None
     web_rules = (raw.get('web_rules') or {}).get('values') if isinstance(raw.get('web_rules'), dict) else None
     insp = raw.get('web_inspection') if isinstance(raw.get('web_inspection'), dict) else {}

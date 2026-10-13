@@ -173,7 +173,7 @@ def test_layers_report_what_is_really_running_not_only_the_settings():
     raw['dpi_state'] = {'master': True, 'enabled': True}
     raw['av']['settings'] = {'enabled': True, 'clamav': True}
     # everything on and alive
-    raw['runtime'] = _runtime(['snort', 'netifyd', 'squid', 'clamd', 'nexwall-webd'], [4, 5, 50, 51, 54])
+    raw['runtime'] = _runtime(['snort3', 'netifyd', 'squid', 'clamd', 'nexwall-webd'], [4, 5, 50, 51, 54])
     layers = p.build_layers(raw, MODULES)
     assert layers['ips']['running'] is True and layers['dpi']['running'] is True
     assert layers['web']['running'] is True and layers['av']['running'] is True

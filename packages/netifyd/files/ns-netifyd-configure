@@ -54,6 +54,11 @@ table inet netifyd {
         type filter hook input priority filter + 10; policy accept;
         iifname lo accept
 
+        # ICMP is control traffic (port unreachable of a reject rule, fragmentation needed, time exceeded): the engine has nothing to
+        # analyse in it and used to swallow it, so a client never saw the refusal of a blocked connection (browsers waited for a timeout
+        # before falling back from QUIC to TCP) and path MTU discovery of the firewall's own traffic broke
+        meta l4proto { icmp, ipv6-icmp } accept
+
         # Skip untracked traffic
         ct state untracked accept
 {%- if 'output' not in firewall_chains %}
@@ -109,6 +114,11 @@ table inet netifyd {
     chain nfq_output {
         type filter hook output priority filter + 10; policy accept;
         oifname lo accept
+
+        # ICMP is control traffic (port unreachable of a reject rule, fragmentation needed, time exceeded): the engine has nothing to
+        # analyse in it and used to swallow it, so a client never saw the refusal of a blocked connection (browsers waited for a timeout
+        # before falling back from QUIC to TCP) and path MTU discovery of the firewall's own traffic broke
+        meta l4proto { icmp, ipv6-icmp } accept
 
         # Skip untracked traffic
         ct state untracked accept

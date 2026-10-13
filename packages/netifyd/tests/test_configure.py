@@ -145,3 +145,13 @@ def test_instances_are_left_alone_without_a_plan(mod, tmp_path):
 
 def test_read_instances_of_a_missing_file(mod, tmp_path):
     assert mod.read_instances(str(tmp_path / 'none')) == (None, None)
+
+
+def test_icmp_is_never_queued_to_the_engine():
+    """The ICMP the firewall itself sends (the port unreachable of a reject rule) must not be swallowed by the analysis queue."""
+    import re
+    src = open(os.path.join(os.path.dirname(__file__), '..', 'files', 'ns-netifyd-configure')).read()
+    for chain in ('nfq_input', 'nfq_output'):
+        body = src[src.index('chain %s {' % chain):]
+        body = body[:body.index('queue flags bypass')]
+        assert re.search(r'meta l4proto \{ icmp, ipv6-icmp \} accept', body), chain
