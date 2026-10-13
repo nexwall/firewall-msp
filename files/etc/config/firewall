@@ -18,6 +18,9 @@ config zone 'ns_wan'
 	option forward		REJECT
 	option masq		1
 	option mtu_fix		1
+	# what the WAN rejects is logged (rate limited): the Firewall traffic tab of the Log Viewer shows the blocked traffic, not only the allowed one
+	option log		1
+	option log_limit		'10/minute'
 
 config forwarding 'ns_lan2wan'
 	option src		lan
