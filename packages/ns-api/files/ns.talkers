@@ -120,7 +120,10 @@ def list_talkers(limit = 20, stat_file="/var/run/netifyd/aggregator-stats.json")
     with open(stat_file, 'r') as fp:
         data = json.load(fp)
 
-    time_diff = data['log_time_end'] - data['log_time_start']
+    # the length of the window of the snapshot, to the millisecond when the sink writes it (older sinks: whole seconds, which
+    # make a short window read too short and the rate too high); never below one second
+    time_diff = data.get('log_seconds') or (data['log_time_end'] - data['log_time_start'])
+    time_diff = max(float(time_diff), 1.0)
 
     for mac in data['stats']:
         for ip in data['stats'][mac]:

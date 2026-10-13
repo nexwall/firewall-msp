@@ -76,8 +76,14 @@ def normalize_ips(raw):
     if not isinstance(raw, dict) or not raw:
         return None
     counts = raw.get('counts')
+    # the rules the engine loads are those of the tier of the installed policy (counts.alerts are the alert-only rules of the
+    # catalog, which are not loaded unless alerts of excluded rules are on)
+    tiers = counts.get('tiers') if isinstance(counts, dict) else None
+    policy = raw.get('installed_policy') or raw.get('policy')
+    loaded = _int(tiers.get(policy)) if isinstance(tiers, dict) and policy else None
     return _entry('ips', licensed=raw.get('license_state') in ('subscribed', 'trial') if raw.get('license_state') else None,
-                  version=raw.get('installed_version') or raw.get('version'), entries=_total(counts), entries_unit='rules',
+                  version=raw.get('installed_version') or raw.get('version'),
+                  entries=loaded if loaded is not None else _total(counts), entries_unit='rules',
                   detail=counts if isinstance(counts, dict) else None, source=raw.get('policy'),
                   checked_at=_int(raw.get('last_check')), updated_at=_int(raw.get('installed_at') or raw.get('last_check')),
                   message=raw.get('last_result'), error=raw.get('last_error') or None)

@@ -84,3 +84,8 @@ unchanged to keep future merges from upstream small. Original copyright headers 
 - **Traffic reports** (`packages/ns-monitoring`): the hourly reports are kept on the data partition for 35 days (`ns-stats` init and cleanup).
 - **License module list** (`packages/python3-nethsec/src/nethsec/license/__init__.py`): web, av, atp and ztna.
 - **New packages**: `packages/nexwall-webprotection` and `packages/nexwall-webd` (recipes only; the content is proprietary and comes from the vendor feed).
+
+## 26.1.2 update packages (2026-10-13, delivered through System > Update)
+- `python3-nethsec` r15: the protection overview shows the rules the IPS loads (the tier of the installed policy, 35253 on Security) instead of the count of alert-only rules of the catalog (7645).
+- `ns-api` r14: `ns.talkers` measures the window of the statistics snapshot in milliseconds (`log_seconds`) and never below one second.
+- `nexwall-netify-plugins` 1.0.4 (vendor feed): `nx-sink-log` adds the payloads up and writes the snapshot once per window of at least 10 s (a busy firewall sent several payloads per second and the one-second clock made the rate read 2 to 3 times too high, the Top Talkers spike); `nx-proc-aggregator` reports a flow the application database does not know under the registered domain of its server name instead of "Unknown".

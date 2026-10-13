@@ -197,3 +197,13 @@ def test_web_protection_needs_the_proxy_only_when_a_rule_inspects():
     assert p.build_layers(raw, MODULES)['web']['running'] is True     # category blocking alone runs in the engine
     raw['web_inspection'] = {'rules': 2, 'squid': False, 'redirect': True}
     assert p.build_layers(raw, MODULES)['web']['running'] is False    # a rule inspects but the proxy is down
+
+
+def test_ips_entries_are_the_rules_of_the_installed_tier():
+    # shape of the real signature status: alert-only rules of the catalog must not be shown as the loaded rules
+    raw = {'license_state': 'subscribed', 'installed_version': '2026.10.02.1', 'installed_policy': 'security', 'policy': 'security',
+           'counts': {'alerts': 7645, 'sources': {'community': 4017, 'et_open': 51893}, 'tiers': {'balanced': 22650, 'connectivity': 3905, 'security': 35253}}}
+    e = p.normalize_ips(raw)
+    assert e['entries'] == 35253 and e['entries_unit'] == 'rules'
+    raw['installed_policy'] = 'balanced'
+    assert p.normalize_ips(raw)['entries'] == 22650
