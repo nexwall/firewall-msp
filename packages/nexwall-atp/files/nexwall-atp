@@ -1,0 +1,292 @@
+#!/usr/bin/python3
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+"""nexwall-atp: the flow scorer of Advanced Threat Protection on the firewall (phase 5b of the ATP roadmap, docs/FIREWALL-ATP.md in nexwall/nexwall-atp).
+
+It reads the flows the DPI engine already keeps (`ubus call ns.flows list`) and the DNS names the inner networks ask (a read-only packet view), keeps them
+for a few windows in bounded memory, and scores every host against the model file on the unit. A host at `review` or `high` level becomes an advisory event
+with the evidence in words; nothing is blocked and nothing leaves the unit.
+
+  nexwall-atp daemon     the service (procd): one scoring cycle every `interval` seconds, at low priority
+  nexwall-atp once       one cycle from the flows now (for tests and the lab)
+  nexwall-atp status     JSON of the last state
+
+Files (under /mnt/data/atp): model.json (the model; the signed download is a later step), events.jsonl (advisory events, one JSON per line, rotated at 1 MiB),
+status.json. Settings: /etc/config/nexwall_atp (enabled, interval, max_hosts, budget).
+Environment (tests): ATP_DIR, ATP_LIB, FLOWS_JSON (a file with the output of `ubus call ns.flows list`), ATP_NO_LICENSE=1 (skip the license check)."""
+import ipaddress
+import json
+import os
+import subprocess
+import sys
+import time
+
+LIB = os.environ.get('ATP_LIB', '/usr/lib/nexwall-atp')
+sys.path.insert(0, LIB)
+
+from atp.capture import flowlog          # noqa: E402
+from atp.edge import model as M          # noqa: E402
+from atp.edge import scorer as S         # noqa: E402
+
+DIR = os.environ.get('ATP_DIR', '/mnt/data/atp')
+MAX_EVENTS_BYTES = 1 << 20
+LICENSE_RECHECK = 300
+NICE = 10
+
+
+def uci(key, default):
+    try:
+        p = subprocess.run(['uci', '-q', 'get', key], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return default
+    return p.stdout.strip() if p.returncode == 0 and p.stdout.strip() else default
+
+
+def settings():
+    def num(key, default, cast):
+        try:
+            return cast(uci('nexwall_atp.main.' + key, default))
+        except ValueError:
+            return cast(default)
+    return {'enabled': uci('nexwall_atp.main.enabled', '1') == '1', 'interval': max(10, num('interval', '60', int)),
+            'max_hosts': max(1, num('max_hosts', '200', int)), 'budget': max(0.1, num('budget', '2.0', float))}
+
+
+def licensed():
+    """True when this unit may use the ATP module (subscription or trial)."""
+    if os.environ.get('ATP_NO_LICENSE'):
+        return True
+    try:
+        from nethsec import license as nx_license
+        return nx_license.state() in ('subscribed', 'trial') and bool(nx_license.modules().get('atp'))
+    except Exception:       # noqa: BLE001 - no answer is "not licensed": the unit never scores without knowing
+        return False
+
+
+def is_internal(ip):
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return a.is_private and not a.is_loopback and not a.is_link_local
+
+
+def read_flows():
+    p = os.environ.get('FLOWS_JSON')
+    try:
+        if p:
+            with open(p) as fp:
+                text = fp.read()
+        else:
+            text = subprocess.run(['ubus', 'call', 'ns.flows', 'list'], capture_output=True, text=True, timeout=30).stdout
+        return json.loads(text).get('flows', [])
+    except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
+        return None
+
+
+def flow_records(entries):
+    """ns.flows entries -> flow records of the hosts inside (the firewall's own connections and outside addresses are left out)."""
+    out = []
+    for e in entries or []:
+        f = e.get('flow') if isinstance(e, dict) else None
+        if not isinstance(f, dict) or f.get('local_origin'):
+            continue
+        rec = flowlog.normalise(f)
+        if rec and rec['digest'] and is_internal(rec['local_ip']):
+            out.append(rec)
+    return out
+
+
+def inner_devices():
+    """Bridges and interfaces of the inner zones (LAN, guest, ...): every zone except the Internet-facing ones; tunnels are left to their own tools."""
+    try:
+        text = subprocess.run(['uci', '-q', 'show', 'firewall'], capture_output=True, text=True, timeout=10).stdout
+        net = subprocess.run(['uci', '-q', 'show', 'network'], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    import re
+    zones, cur = {}, None
+    for line in text.splitlines():
+        m = re.match(r"firewall\.(\w+)=zone", line)
+        if m:
+            cur = zones.setdefault(m.group(1), {'name': '', 'networks': []})
+            continue
+        m = re.match(r"firewall\.(\w+)\.(name|network)='?(.*?)'?$", line)
+        if m and m.group(1) in zones:
+            if m.group(2) == 'name':
+                zones[m.group(1)]['name'] = m.group(3)
+            else:
+                zones[m.group(1)]['networks'] += re.findall(r"'([^']*)'", line.split('=', 1)[1]) or [m.group(3)]
+    devs = {}
+    for line in net.splitlines():
+        m = re.match(r"network\.(\w+)\.(?:device|ifname)='?([\w.\-]+)'?$", line)
+        if m:
+            devs[m.group(1)] = m.group(2)
+    out = []
+    for z in zones.values():
+        if re.match(r'(wan|internet|uplink)', z['name'], re.I) or re.search(r'ipsec|wireguard|^wg', z['name'], re.I):
+            continue
+        out += [devs[n] for n in z['networks'] if n in devs and not re.match(r'(wg|ipsec|tun)', devs[n])]
+    return sorted(set(out))
+
+
+class Service:
+    def __init__(self, cfg=None, clock=time.time):
+        self.cfg, self.clock = cfg or settings(), clock
+        self.scorer, self.model_mtime, self.sniffer = None, None, None
+        self.last = {}          # host -> (level rank, ts) of the last event written
+        self.stats = {'cycles': 0, 'flows_read': 0, 'dns_records': 0, 'events_total': 0, 'last_cycle_ms': 0.0, 'last_error': None}
+
+    # ---- model
+    def model_path(self):
+        return os.path.join(DIR, 'model.json')
+
+    def load_model(self):
+        try:
+            mt = os.stat(self.model_path()).st_mtime
+        except OSError:
+            self.scorer, self.model_mtime = None, None
+            return None
+        if self.scorer is not None and mt == self.model_mtime:
+            return self.scorer.model
+        try:
+            m = M.load(self.model_path())
+        except (M.ModelError, OSError) as e:
+            self.stats['last_error'] = 'model: %s' % e
+            self.scorer = None
+            return None
+        old = self.scorer
+        self.scorer = S.Scorer(m, max_hosts=self.cfg['max_hosts'], budget_seconds=self.cfg['budget'])
+        if old is not None:                    # a new model keeps what was seen: the features do not depend on it unless the window changed
+            if old.model['window'] == m['window'] and old.model['history_windows'] == m['history_windows']:
+                self.scorer.flows, self.scorer.dns = old.flows, old.dns
+        self.model_mtime = mt
+        return m
+
+    # ---- one cycle
+    def cycle(self, dns_records=()):
+        t0 = time.monotonic()
+        now = self.clock()
+        if not self.load_model():
+            self.write_status('no_model')
+            return []
+        entries = read_flows()
+        if entries is None:
+            self.stats['last_error'] = 'ns.flows did not answer'
+            entries = []
+        recs = flow_records(entries)
+        self.scorer.add_flows(recs)
+        self.scorer.add_dns(list(dns_records))
+        self.stats['flows_read'] += len(recs)
+        self.stats['dns_records'] += len(dns_records)
+        events = self.fresh(self.scorer.cycle(now), now)
+        if events:
+            self.write_events(events)
+        self.stats['cycles'] += 1
+        self.stats['events_total'] += len(events)
+        self.stats['last_cycle_ms'] = round((time.monotonic() - t0) * 1000, 1)
+        self.write_status('scoring')
+        return events
+
+    RANK = {'normal': 0, 'review': 1, 'high': 2}
+
+    def fresh(self, events, now):
+        """A host is written again when its level rises or when a window has passed (the event store merges equal events of one minute anyway)."""
+        window = self.scorer.model['window']
+        out = []
+        for ev in events:
+            r = self.RANK[ev['level']]
+            prev = self.last.get(ev['host'])
+            if prev is None or r > prev[0] or now - prev[1] >= window:
+                self.last[ev['host']] = (r, now)
+                out.append(ev)
+        for h in [h for h, (_, ts) in self.last.items() if now - ts > 4 * window]:
+            del self.last[h]
+        return out
+
+    # ---- files
+    def write_events(self, events):
+        os.makedirs(DIR, exist_ok=True)
+        path = os.path.join(DIR, 'events.jsonl')
+        try:
+            if os.path.getsize(path) > MAX_EVENTS_BYTES:
+                os.replace(path, path + '.1')
+        except OSError:
+            pass
+        with open(path, 'a') as fp:
+            for ev in events:
+                fp.write(json.dumps(ev, sort_keys=True) + '\n')
+
+    def write_status(self, state):
+        m = self.scorer.model if self.scorer else None
+        st = dict(self.stats, state=state, ts=int(self.clock()), model=(m or {}).get('name'), model_version=(m or {}).get('version'),
+                  hosts=len(self.scorer.flows) if self.scorer else 0,
+                  dns_view=self.sniffer.interfaces() if self.sniffer else [])
+        os.makedirs(DIR, exist_ok=True)
+        tmp = os.path.join(DIR, 'status.json.tmp')
+        with open(tmp, 'w') as fp:
+            json.dump(st, fp)
+        os.replace(tmp, os.path.join(DIR, 'status.json'))
+
+    # ---- DNS view
+    def start_sniffer(self):
+        try:
+            from atp.edge import dnssniff
+            self.sniffer = dnssniff.Sniffer(inner_devices())
+        except Exception as e:      # noqa: BLE001 - scoring continues without the DNS names
+            self.sniffer = None
+            self.stats['last_error'] = 'dns view: %s' % e
+
+
+def daemon():
+    try:
+        os.nice(NICE)
+    except OSError:
+        pass
+    svc = Service()
+    svc.start_sniffer()
+    ok_until, allowed, next_cycle = 0, False, 0
+    dns = []
+    while True:
+        now = time.time()
+        if now >= ok_until:
+            svc.cfg = settings()
+            allowed = svc.cfg['enabled'] and licensed()
+            ok_until = now + LICENSE_RECHECK
+        if svc.sniffer and allowed:
+            dns += svc.sniffer.poll(timeout=1.0)
+        else:
+            time.sleep(1.0)
+        if now >= next_cycle:
+            next_cycle = now + svc.cfg['interval']
+            if allowed:
+                try:
+                    svc.cycle(dns)
+                except Exception as e:      # noqa: BLE001 - one bad cycle must not stop the service
+                    svc.stats['last_error'] = 'cycle: %s' % e
+                dns = []
+            else:
+                svc.write_status('off' if not svc.cfg['enabled'] else 'not_licensed')
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else 'status'
+    if cmd == 'daemon':
+        daemon()
+    elif cmd == 'once':
+        svc = Service()
+        print(json.dumps(svc.cycle(), indent=1))
+    elif cmd == 'status':
+        try:
+            with open(os.path.join(DIR, 'status.json')) as fp:
+                print(fp.read())
+        except OSError:
+            print(json.dumps({'state': 'not_running'}))
+    else:
+        print(__doc__)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
