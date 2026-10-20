@@ -1,0 +1,369 @@
+#!/usr/bin/python3
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+"""nexwall-usage: measures how the firewall is used, for the license size check (see nexwall-license-server docs/USAGE-METERING.md).
+
+What is counted (owner decision, 2026-10-19):
+  * active devices per day: distinct internal endpoints that sent traffic through the firewall (hardware address when the flow engine knows it,
+    otherwise the IP address). OpenVPN remote-access users are devices like any other, guest networks count in full, one device is one user;
+  * throughput: the average of both directions on the inner interfaces in 5-minute samples (peak and 95th percentile per day).
+  IPsec and WireGuard tunnels are NOT measured (neither as devices nor in the throughput), nor is the management tunnel to the controller.
+
+Only numbers leave the firewall: the day's set of endpoints is kept hashed with a salt that never leaves the device and is deleted when the day closes.
+
+usage: nexwall-usage sample      (cron, every 5 minutes: adds the current flows and the interface counters to the day)
+       nexwall-usage summary     (JSON: the last 7 days and the 95th percentile of the last 30 days; this is what the license check-in sends)
+       nexwall-usage status      (the same in words)
+Environment (tests): USAGE_DIR, SYS_NET, FLOWS_JSON (a file with the output of `ubus call ns.flows list`), TOPOLOGY_JSON (a file with the topology)."""
+import hashlib
+import ipaddress
+import json
+import os
+import re
+import secrets
+import subprocess
+import sys
+import time
+
+DIR = os.environ.get('USAGE_DIR', '/mnt/data/usage')
+SYS_NET = os.environ.get('SYS_NET', '/sys/class/net')
+KEEP_DAYS = 90
+WINDOW_DAYS = 30
+SEND_DAYS = 7
+MIN_DT, MAX_DT = 60.0, 900.0
+ZERO_MAC = '00:00:00:00:00:00'
+
+OUTER_ZONE = re.compile(r'^(wan|internet|uplink)', re.I)           # zones that face the Internet
+TUNNEL_ZONE = re.compile(r'(ipsec|wireguard|^wg|site.?to.?site|^tunsec)', re.I)   # tunnels that are not measured
+TUNNEL_DEV = re.compile(r'^(wg|ipsec|xfrm|gre|tunsec|lo$)')         # devices that are not measured
+
+
+# ----------------------------------------------------------------------------- pure helpers
+def percentile(values, p):
+    """Nearest-rank percentile (p in 0..100); 0 for an empty list."""
+    v = sorted(values)
+    if not v:
+        return 0
+    k = max(1, int(-(-p * len(v) // 100)))
+    return v[min(k, len(v)) - 1]
+
+
+def parse_uci_show(text):
+    """`uci show` output -> {section: {'.type': type, option: value or [values]}} (section as printed, e.g. firewall.ns_lan)."""
+    out = {}
+    for line in text.splitlines():
+        if '=' not in line:
+            continue
+        key, val = line.strip().split('=', 1)
+        if key.count('.') == 1:
+            out.setdefault(key, {})['.type'] = val.strip("'")
+            continue
+        sec, opt = key.rsplit('.', 1)
+        vals = re.findall(r"'([^']*)'", val)
+        out.setdefault(sec, {})[opt] = vals if len(vals) > 1 else (vals[0] if vals else val)
+    return out
+
+
+def inner_interfaces(zones, networks):
+    """zones: [{'name', 'networks': [...], 'devices': [...]}]; networks: {name: {'proto': str, 'device': str}}.
+    Returns (logical names, device patterns) of the inner interfaces: every zone except the Internet-facing ones and the tunnel zones, minus
+    the WireGuard and IPsec interfaces."""
+    names, devs = set(), set()
+    for z in zones:
+        zn = z.get('name', '')
+        if OUTER_ZONE.search(zn) or TUNNEL_ZONE.search(zn):
+            continue
+        for n in z.get('networks', []):
+            proto = (networks.get(n) or {}).get('proto', '')
+            dev = (networks.get(n) or {}).get('device', '')
+            if proto == 'wireguard' or TUNNEL_DEV.match(dev or '') or TUNNEL_ZONE.search(n):
+                continue
+            names.add(n)
+            if dev:
+                devs.add(dev)
+        for d in z.get('devices', []):
+            if not TUNNEL_DEV.match(d):
+                devs.add(d)
+        names.add(zn)   # the flow engine may report the zone name as the interface
+    return names, devs
+
+
+def expand_devices(patterns, available):
+    """Device names or `tun+`-style patterns -> the existing devices that are measured (tunnels removed)."""
+    out = set()
+    for p in patterns:
+        if p.endswith('+'):
+            out |= {d for d in available if d.startswith(p[:-1])}
+        elif p in available:
+            out.add(p)
+    return {d for d in out if not TUNNEL_DEV.match(d)}
+
+
+def in_nets(ip, nets):
+    """True if the IPv4 address is inside one of the directly connected subnets (nets: list of ipaddress networks)."""
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(a in n for n in nets if a.version == n.version)
+
+
+def endpoint_id(ip, mac, salt, nets=None):
+    """Hash of the endpoint. The hardware address identifies a device that shares our layer 2 segment (one device with several addresses is one
+    device); an address that is routed in from behind another router is identified by its IP, because the MAC seen there is the router's.
+    nets=None means: every endpoint is on a directly connected segment."""
+    mac = (mac or '').lower()
+    use_mac = bool(mac) and mac != ZERO_MAC and (nets is None or ':' in str(ip) or in_nets(ip, nets))
+    ident = 'm:' + mac if use_mac else 'i:' + str(ip)
+    return hashlib.sha256((salt + ident).encode()).hexdigest()[:12]
+
+
+def device_id(flow, salt, nets=None):
+    return endpoint_id(flow.get('local_ip', ''), flow.get('local_mac'), salt, nets)
+
+
+def count_flows(items, inner_names, salt, vpn_names=(), nets=None):
+    """items: the `flows` list of ns.flows. Returns {id: seen_via_vpn} for the internal endpoints seen on the inner interfaces."""
+    ids = {}
+    for it in items:
+        iface = it.get('interface', '')
+        fl = it.get('flow') or {}
+        if not fl or fl.get('local_origin') or iface not in inner_names or not fl.get('local_ip'):
+            continue
+        i = device_id(fl, salt, nets)
+        ids[i] = ids.get(i, False) or iface in vpn_names
+    return ids
+
+
+NEIGH = re.compile(r'^(\S+) dev (\S+) lladdr ([0-9a-fA-F:]{17}).*?used (\d+)/\d+/\d+.*?(REACHABLE|STALE|DELAY|PROBE)\s*$')
+NEIGH_ACTIVE_SECONDS = 900
+
+
+def neighbor_ids(text, inner_devs, salt, nets=None, active=NEIGH_ACTIVE_SECONDS):
+    """The neighbour table (`ip -s neigh show`) shows the endpoints the firewall exchanged packets with on the inner interfaces, and for how long
+    ago: a short burst of traffic between two samples of the flow table is still seen here. Entries not used for `active` seconds are ignored."""
+    ids = {}
+    for line in text.splitlines():
+        m = NEIGH.match(line.strip())
+        if not m:
+            continue
+        ip, dev, mac, used, _state = m.groups()
+        if dev not in inner_devs or int(used) > active:
+            continue
+        ids[endpoint_id(ip, mac, salt, nets)] = False
+    return ids
+
+
+def mbps(prev_bytes, cur_bytes, dt):
+    return max(0, cur_bytes - prev_bytes) * 8.0 / dt / 1e6
+
+
+# ----------------------------------------------------------------------------- state
+def _path(name):
+    return os.path.join(DIR, name)
+
+
+def _load(name, default):
+    try:
+        with open(_path(name)) as fp:
+            return json.load(fp)
+    except (OSError, ValueError):
+        return default
+
+
+def _save(name, obj, mode=0o600):
+    os.makedirs(DIR, mode=0o700, exist_ok=True)
+    tmp = _path(name + '.tmp')
+    with open(tmp, 'w') as fp:
+        json.dump(obj, fp)
+    os.chmod(tmp, mode)
+    os.replace(tmp, _path(name))
+
+
+def salt():
+    p = _path('salt')
+    try:
+        with open(p) as fp:
+            s = fp.read().strip()
+            if s:
+                return s
+    except OSError:
+        pass
+    s = secrets.token_hex(16)
+    os.makedirs(DIR, mode=0o700, exist_ok=True)
+    with open(p, 'w') as fp:
+        fp.write(s)
+    os.chmod(p, 0o600)
+    return s
+
+
+def day_of(ts):
+    return time.strftime('%Y-%m-%d', time.localtime(ts))
+
+
+def finalize(state):
+    """The record of a closed day from the accumulated state."""
+    samples = state.get('mbps', [])
+    return {'day': state['day'], 'devices': len(state.get('ids', {})), 'vpn_devices': sum(1 for v in state.get('ids', {}).values() if v),
+            'peak_mbps': round(max(samples), 2) if samples else 0.0, 'p95_mbps': round(percentile(samples, 95), 2) if samples else 0.0, 'samples': len(samples)}
+
+
+def summary(days, today=None):
+    """days: list of day records (oldest first). The last SEND_DAYS days and the 95th percentile of the last WINDOW_DAYS days."""
+    recent = days[-WINDOW_DAYS:]
+    out = {'version': 1, 'window_days': WINDOW_DAYS, 'days': days[-SEND_DAYS:],
+           'p95_devices': percentile([d['devices'] for d in recent], 95), 'p95_mbps': round(percentile([d['p95_mbps'] for d in recent], 95), 2),
+           'peak_mbps': round(max([d['peak_mbps'] for d in recent] or [0]), 2), 'observed_days': len(recent)}
+    if today:
+        out['today'] = today
+    return out
+
+
+def update(state, days, now, ids, throughput):
+    """Adds one sample. Returns (state, days). A change of day closes the previous one."""
+    d = day_of(now)
+    if state.get('day') and state['day'] != d:
+        days.append(finalize(state))
+        days[:] = days[-KEEP_DAYS:]
+        state = {}
+    state.setdefault('day', d)
+    state.setdefault('ids', {})
+    state.setdefault('mbps', [])
+    for i, v in ids.items():
+        state['ids'][i] = state['ids'].get(i, False) or v
+    if throughput is not None:
+        state['mbps'].append(round(throughput, 3))
+    return state, days
+
+
+# ----------------------------------------------------------------------------- system access
+def _run(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ''
+
+
+def topology():
+    """The zones and networks of the firewall (from UCI)."""
+    tp = os.environ.get('TOPOLOGY_JSON')
+    if tp:
+        with open(tp) as fp:
+            return json.load(fp)
+    fw = parse_uci_show(_run(['uci', '-q', 'show', 'firewall']))
+    nw = parse_uci_show(_run(['uci', '-q', 'show', 'network']))
+
+    def as_list(v):
+        return [] if v is None else ([v] if isinstance(v, str) else list(v))
+    zones = [{'name': o.get('name', ''), 'networks': as_list(o.get('network')), 'devices': as_list(o.get('device'))}
+             for o in fw.values() if o.get('.type') == 'zone']
+    nets = {}
+    for sec, o in nw.items():
+        if o.get('.type') == 'interface':
+            dev = o.get('device') or o.get('ifname') or ''
+            nets[sec.split('.', 1)[1]] = {'proto': o.get('proto', ''), 'device': dev if isinstance(dev, str) else ''}
+    return {'zones': zones, 'networks': nets}
+
+
+def read_flows():
+    p = os.environ.get('FLOWS_JSON')
+    text = open(p).read() if p else _run(['ubus', 'call', 'ns.flows', 'list'])
+    try:
+        return json.loads(text).get('flows', [])
+    except ValueError:
+        return []
+
+
+def read_bytes(dev):
+    try:
+        with open(os.path.join(SYS_NET, dev, 'statistics', 'rx_bytes')) as a, open(os.path.join(SYS_NET, dev, 'statistics', 'tx_bytes')) as b:
+            return int(a.read()) + int(b.read())
+    except (OSError, ValueError):
+        return None
+
+
+def vpn_names(zones, available=()):
+    """Interface names of the OpenVPN remote-access zones (informational split of the device count)."""
+    out = set()
+    for z in zones:
+        if re.search(r'openvpn|^rw', z.get('name', ''), re.I) or any(d.startswith('tun') for d in z.get('devices', [])):
+            out.add(z.get('name', ''))
+            out |= set(z.get('networks', [])) | set(z.get('devices', [])) | expand_devices(set(z.get('devices', [])), available)
+    return out
+
+
+def direct_nets(devs):
+    """The IPv4 subnets directly connected to the inner interfaces."""
+    out = []
+    for d in sorted(devs):
+        for line in _run(['ip', '-4', '-o', 'addr', 'show', 'dev', d]).splitlines():
+            m = re.search(r'inet (\d+\.\d+\.\d+\.\d+/\d+)', line)
+            if m:
+                try:
+                    out.append(ipaddress.ip_network(m.group(1), strict=False))
+                except ValueError:
+                    pass
+    return out
+
+
+def sample(now=None):
+    now = now or time.time()
+    tp = topology()
+    names, patterns = inner_interfaces(tp['zones'], tp['networks'])
+    try:
+        available = set(os.listdir(SYS_NET))
+    except OSError:
+        available = set()
+    devs = expand_devices(patterns, available)
+    vpn = vpn_names(tp['zones'], available)
+    nets = direct_nets(devs)
+    sl = salt()
+    ids = count_flows(read_flows(), names | devs, sl, vpn, nets)
+    for i, v in neighbor_ids(_run(['ip', '-s', 'neigh', 'show']), devs, sl, nets).items():
+        ids[i] = ids.get(i, False) or v
+    st = _load('state.json', {})
+    days = _load('days.json', [])
+    total = 0
+    ok = True
+    for d in sorted(devs):
+        b = read_bytes(d)
+        if b is None:
+            ok = False
+            continue
+        total += b
+    prev = st.get('last')
+    through = None
+    if ok and prev:
+        dt = now - prev['t']
+        if MIN_DT <= dt <= MAX_DT and total >= prev['bytes'] and prev.get('devs') == sorted(devs):
+            through = mbps(prev['bytes'], total, dt)
+    st, days = update(st, days, now, ids, through)
+    st['last'] = {'t': now, 'bytes': total, 'devs': sorted(devs)}
+    _save('state.json', st)
+    _save('days.json', days)
+    today = finalize(st)
+    _save('summary.json', summary(days, today), 0o644)
+    return today
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else 'summary'
+    if cmd == 'sample':
+        sample()
+    elif cmd == 'summary':
+        print(json.dumps(_load('summary.json', summary(_load('days.json', [])))))
+    elif cmd == 'status':
+        s = _load('summary.json', {})
+        if not s:
+            print('no data yet')
+            return 0
+        print('devices today %d (VPN %d), 95th percentile over %d day(s): %d devices, %.1f Mbps (peak %.1f Mbps)' % (
+            s.get('today', {}).get('devices', 0), s.get('today', {}).get('vpn_devices', 0), s.get('observed_days', 0), s.get('p95_devices', 0), s.get('p95_mbps', 0), s.get('peak_mbps', 0)))
+    else:
+        print(__doc__)
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

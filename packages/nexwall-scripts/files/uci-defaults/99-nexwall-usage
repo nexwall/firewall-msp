@@ -1,0 +1,10 @@
+#!/bin/sh
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# license usage sample (devices and throughput), every 5 minutes
+grep -q nexwall-usage /etc/crontabs/root 2>/dev/null || \
+    echo "*/5 * * * * /usr/sbin/nexwall-usage sample" >> /etc/crontabs/root
