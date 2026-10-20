@@ -1,0 +1,57 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Advanced Threat Protection settings and status for the web interface: the scorer switch and the sharing switch (reports of remote indicators,
+# never data; see /usr/sbin/nexwall-atp). Changes are staged like every other setting and applied with the usual commit.
+
+import json
+import sys
+
+from euci import EUci
+from nethsec import utils
+from nethsec.utils import ValidationError
+
+CONFIG = 'nexwall_atp'
+STATUS_CMD = '/usr/sbin/nexwall-atp'
+
+
+def settings(e_uci):
+    return {
+        'enabled': e_uci.get(CONFIG, 'main', 'enabled', dtype=bool, default=True),
+        'share': e_uci.get(CONFIG, 'main', 'share', dtype=bool, default=True),
+    }
+
+
+cmd = sys.argv[1]
+
+if cmd == 'list':
+    json.dump({'get-settings': {}, 'set-settings': {'enabled': True, 'share': True}, 'status': {}}, sys.stdout)
+elif cmd == 'call':
+    action = sys.argv[2]
+    e_uci = EUci()
+    if action == 'get-settings':
+        json.dump(settings(e_uci), sys.stdout)
+    elif action == 'set-settings':
+        try:
+            data = json.loads(sys.stdin.read() or '{}')
+            for key in ('enabled', 'share'):
+                if key in data:
+                    if not isinstance(data[key], bool):
+                        raise ValidationError(key, 'invalid', data[key])
+                    e_uci.set(CONFIG, 'main', key, data[key])
+            e_uci.save(CONFIG)
+            json.dump({'message': 'successful'}, sys.stdout)
+        except ValidationError as ex:
+            json.dump(utils.validation_error(ex.parameter, ex.message, ex.value), sys.stdout)
+    elif action == 'status':
+        import subprocess
+        try:
+            out = subprocess.run([STATUS_CMD, 'status'], capture_output=True, text=True, timeout=10).stdout
+            st = json.loads(out) if out.strip() else {'state': 'not_running'}
+        except (OSError, ValueError, subprocess.SubprocessError):
+            st = {'state': 'not_running'}
+        json.dump(st, sys.stdout)

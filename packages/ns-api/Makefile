@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
  
 PKG_NAME:=ns-api
 PKG_VERSION:=3.8.0
-PKG_RELEASE:=14
+PKG_RELEASE:=15
  
 PKG_BUILD_DIR:=$(BUILD_DIR)/ns-api-$(PKG_VERSION)
 
@@ -111,6 +111,8 @@ define Package/ns-api/install
 	$(INSTALL_DATA) ./files/ns.dashboard.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.protection $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./files/ns.protection.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_BIN) ./files/ns.atp $(1)/usr/libexec/rpcd/
+	$(INSTALL_DATA) ./files/ns.atp.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.threats $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./files/ns.threats.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns-threats-collect $(1)/usr/bin/

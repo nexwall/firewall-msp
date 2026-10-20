@@ -1,0 +1,13 @@
+{
+  "atp": {
+    "description": "Advanced Threat Protection settings and status",
+    "write": {},
+    "read": {
+      "ubus": {
+        "ns.atp": [
+          "*"
+        ]
+      }
+    }
+  }
+}
