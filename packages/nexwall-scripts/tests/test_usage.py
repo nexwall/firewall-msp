@@ -93,25 +93,42 @@ def test_expand_devices_drops_tunnels(mod):
     assert got == {'br-lan', 'tunrw1', 'tunrw2'}
 
 
-def flow(ip, mac='aa:bb:cc:00:00:01', iface='lan', origin=False):
+def flow(ip, mac='aa:bb:cc:00:00:01', iface='wan', origin=True):
+    """A flow as the flow daemon of a real unit reports it: labelled with the capture role (`wan`) and `local_origin` true (the local side opened it)."""
     return {'interface': iface, 'flow': {'local_ip': ip, 'local_mac': mac, 'local_origin': origin}}
+
+
+def nets(*cidrs):
+    import ipaddress
+    return [ipaddress.ip_network(c) for c in cidrs]
 
 
 def test_count_flows_rules(mod):
     items = [flow('192.168.1.10', 'aa:00:00:00:00:01'), flow('192.168.1.10', 'aa:00:00:00:00:01'),      # same device twice
              flow('192.168.1.11', 'aa:00:00:00:00:01'),                                                  # same MAC with a new IP: still one device
              flow('192.168.1.12', '00:00:00:00:00:00'), flow('192.168.1.12', '00:00:00:00:00:00'),      # no MAC: by IP
-             flow('192.168.1.1', origin=True),                                                           # the firewall itself
-             flow('203.0.113.5', iface='wan'),                                                           # outer side
-             flow('10.9.0.2', 'aa:00:00:00:00:09', iface='tunrw1'),                                     # OpenVPN user
-             flow('10.9.0.2', 'aa:00:00:00:00:09', iface='wg0')]                                         # tunnel not measured
-    ids = mod.count_flows(items, {'lan', 'tunrw1'}, 'salt', vpn_names={'tunrw1'})
-    assert len(ids) == 3
+             flow('192.168.1.1'),                                                                        # the firewall itself
+             flow('192.168.0.136'),                                                                      # the firewall's WAN address
+             flow('192.168.0.8', 'aa:00:00:00:00:08'),                                                   # a host on the Internet-facing subnet (private range too)
+             flow('203.0.113.5'),                                                                        # a public address is never an internal device
+             flow('10.5.0.7', 'aa:00:00:00:00:07'),                                                      # private address routed in from behind a LAN router: by IP
+             flow('10.9.0.2', 'aa:00:00:00:00:09')]                                                      # OpenVPN remote-access user
+    ids = mod.count_flows(items, nets('192.168.1.0/24', '10.9.0.0/24'), {'192.168.1.1', '192.168.0.136'}, 'salt',
+                          vpn_nets=nets('10.9.0.0/24'), outer_nets=nets('192.168.0.0/24'))
+    assert len(ids) == 5          # .10/.11 (one MAC), .12, 10.5.0.7, 10.9.0.2
     assert sum(1 for v in ids.values() if v) == 1
 
 
+def test_the_interface_name_and_local_origin_do_not_matter(mod):
+    # every flow of a real unit says interface "wan"; whatever the label, the address decides
+    for iface in ('wan', 'lan', 'nfq0', ''):
+        for origin in (True, False):
+            ids = mod.count_flows([flow('192.168.1.20', iface=iface, origin=origin)], nets('192.168.1.0/24'), {'192.168.1.1'}, 'salt')
+            assert len(ids) == 1
+
+
 def test_ids_are_hashed(mod):
-    ids = mod.count_flows([flow('192.168.1.10')], {'lan'}, 'salt')
+    ids = mod.count_flows([flow('192.168.1.10')], nets('192.168.1.0/24'), set(), 'salt')
     key = next(iter(ids))
     assert '192.168' not in key and len(key) == 12
     assert mod.device_id({'local_ip': '1.1.1.1', 'local_mac': ''}, 'a') != mod.device_id({'local_ip': '1.1.1.1', 'local_mac': ''}, 'b')
@@ -151,10 +168,18 @@ def test_sample_end_to_end(mod, tmp_path, monkeypatch):
         (net / d / 'statistics' / 'tx_bytes').write_text('1000')
     zones, nets = topo(mod)
     (tmp_path / 'topo.json').write_text(json.dumps({'zones': zones, 'networks': nets}))
-    flows = {'flows': [flow('192.168.1.10'), flow('192.168.1.11', 'aa:00:00:00:00:02'), flow('10.9.0.2', 'aa:00:00:00:00:09', iface='tunrw1')]}
+    flows = {'flows': [flow('192.168.1.10'), flow('192.168.1.11', 'aa:00:00:00:00:02'), flow('10.9.0.2', 'aa:00:00:00:00:09'), flow('192.168.1.1'), flow('192.168.0.136')]}
     (tmp_path / 'flows.json').write_text(json.dumps(flows))
     monkeypatch.setenv('TOPOLOGY_JSON', str(tmp_path / 'topo.json'))
     monkeypatch.setenv('FLOWS_JSON', str(tmp_path / 'flows.json'))
+    addr = {'br-lan': '192.168.1.1/24', 'tunrw1': '10.9.0.1/24', 'eth1': '192.168.0.136/24', 'wg0': '10.99.0.1/24'}
+
+    def fake_run(cmd):
+        if cmd[:4] == ['ip', '-4', '-o', 'addr']:
+            devs = [cmd[-1]] if 'dev' in cmd else list(addr)
+            return ''.join('%d: %s    inet %s brd x scope global %s\n' % (i, d, addr[d], d) for i, d in enumerate(devs) if d in addr)
+        return ''
+    monkeypatch.setattr(mod, '_run', fake_run)
     t = time.mktime((2026, 10, 19, 10, 0, 0, 0, 0, -1))
     mod.sample(t)
     for d in ('br-lan', 'tunrw1'):

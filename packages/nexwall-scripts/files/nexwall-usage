@@ -122,16 +122,36 @@ def device_id(flow, salt, nets=None):
     return endpoint_id(flow.get('local_ip', ''), flow.get('local_mac'), salt, nets)
 
 
-def count_flows(items, inner_names, salt, vpn_names=(), nets=None):
-    """items: the `flows` list of ns.flows. Returns {id: seen_via_vpn} for the internal endpoints seen on the inner interfaces."""
+def is_private(ip):
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return a.is_private and not a.is_loopback and not a.is_link_local
+
+
+def counts_as_device(ip, nets, outer_nets, own):
+    """An internal endpoint: an address inside a directly connected inner subnet, or a private address routed in from behind another router,
+    but never the firewall's own address nor an address of the Internet-facing subnets."""
+    if not ip or ip in own:
+        return False
+    if in_nets(ip, nets):
+        return True
+    return is_private(ip) and not in_nets(ip, outer_nets)
+
+
+def count_flows(items, nets, own, salt, vpn_nets=(), outer_nets=()):
+    """items: the flows of the flow daemon. Returns {id: seen_via_vpn} for the internal endpoints that sent traffic. The interface name of a flow and
+    its `local_origin` flag are NOT used: on a real unit every flow is labelled with the capture role (`wan`) and `local_origin` is true for every
+    connection the local side opened."""
     ids = {}
     for it in items:
-        iface = it.get('interface', '')
         fl = it.get('flow') or {}
-        if not fl or fl.get('local_origin') or iface not in inner_names or not fl.get('local_ip'):
+        ip = fl.get('local_ip')
+        if not counts_as_device(ip, nets, outer_nets, own):
             continue
-        i = device_id(fl, salt, nets)
-        ids[i] = ids.get(i, False) or iface in vpn_names
+        i = endpoint_id(ip, fl.get('local_mac'), salt, nets)
+        ids[i] = ids.get(i, False) or in_nets(ip, vpn_nets)
     return ids
 
 
@@ -318,18 +338,37 @@ def vpn_names(zones, available=()):
     return out
 
 
-def direct_nets(devs):
-    """The IPv4 subnets directly connected to the inner interfaces."""
-    out = []
+def device_nets(devs):
+    """-> ({device: [IPv4 subnets directly connected]}, {the firewall's own addresses on these devices})."""
+    nets, own = {}, set()
     for d in sorted(devs):
         for line in _run(['ip', '-4', '-o', 'addr', 'show', 'dev', d]).splitlines():
-            m = re.search(r'inet (\d+\.\d+\.\d+\.\d+/\d+)', line)
+            m = re.search(r'inet (\d+\.\d+\.\d+\.\d+)/(\d+)', line)
             if m:
                 try:
-                    out.append(ipaddress.ip_network(m.group(1), strict=False))
+                    nets.setdefault(d, []).append(ipaddress.ip_network('%s/%s' % m.groups(), strict=False))
+                    own.add(m.group(1))
                 except ValueError:
                     pass
+    return nets, own
+
+
+def outer_interfaces(zones, networks):
+    """Device names of the Internet-facing zones."""
+    out = set()
+    for z in zones:
+        if OUTER_ZONE.search(z.get('name', '')):
+            for n in z.get('networks', []):
+                dev = (networks.get(n) or {}).get('device', '')
+                if dev:
+                    out.add(dev)
+            out |= set(z.get('devices', []))
     return out
+
+
+def firewall_addresses():
+    """Every IPv4 address of the firewall itself (all interfaces, the tunnels included)."""
+    return {m.group(1) for m in re.finditer(r'inet (\d+\.\d+\.\d+\.\d+)', _run(['ip', '-4', '-o', 'addr', 'show']))}
 
 
 def sample(now=None):
@@ -342,9 +381,15 @@ def sample(now=None):
         available = set()
     devs = expand_devices(patterns, available)
     vpn = vpn_names(tp['zones'], available)
-    nets = direct_nets(devs)
+    inner_nets, own = device_nets(devs)
+    outer_nets_by_dev, outer_own = device_nets(outer_interfaces(tp['zones'], tp['networks']) & available)
+    own = own | outer_own | firewall_addresses()
+    nets = [n for v in inner_nets.values() for n in v]
+    outer_nets = [n for v in outer_nets_by_dev.values() for n in v]
+    vpn_devs = expand_devices(vpn & available, available) | (vpn & devs)
+    vpn_nets = [n for d in vpn_devs for n in inner_nets.get(d, [])]
     sl = salt()
-    ids = count_flows(read_flows(), names | devs, sl, vpn, nets)
+    ids = count_flows(read_flows(), nets, own, sl, vpn_nets, outer_nets)
     for i, v in neighbor_ids(_run(['ip', '-s', 'neigh', 'show']), devs, sl, nets).items():
         ids[i] = ids.get(i, False) or v
     st = _load('state.json', {})
