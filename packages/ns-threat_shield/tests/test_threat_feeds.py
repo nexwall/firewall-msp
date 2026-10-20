@@ -235,3 +235,37 @@ def test_sync_reloads_only_when_something_changed(mod, monkeypatch):
     monkeypatch.setattr(mod, 'cmd_update', lambda force=False: 1)
     calls.clear()
     assert mod.cmd_sync() == 1 and calls == []
+
+
+def auto_manifest(version='2026.10.20.1'):
+    manifest, blobs = make_manifest(version)
+    for cid, kind in (('atp_ip', 'ip'), ('atp_dns', 'dns')):
+        raw = b''
+        data = gzip.compress(raw, mtime=0)
+        name = '%s-%s.gz' % (kind, cid)
+        manifest['files'][name] = {'name': '%s-%s.txt' % (kind, cid), 'sha256': hashlib.sha256(data).hexdigest(), 'size': len(data),
+                                   'raw_sha256': hashlib.sha256(raw).hexdigest(), 'raw_size': 0, 'count': 0}
+        manifest['categories'][cid] = {'kind': kind, 'title': cid, 'description': 'd', 'default': True, 'auto_enable': True, 'count': 0, 'file': name}
+        manifest['counts'][cid] = 0
+    return manifest
+
+
+def test_collective_categories_are_switched_on_once_even_on_a_unit_that_already_chose(mod, monkeypatch):
+    u = Uci(mod, monkeypatch, lists={'adblock.global.adb_feed': ['nexwall_malware'], 'banip.global.ban_feed': ['nexwall_attackers']})
+    manifest = auto_manifest()
+    state = {'defaults_applied': True}
+    assert mod.enable_auto(manifest, state) is True
+    assert u.lists['adblock.global.adb_feed'] == ['nexwall_malware', 'nexwall_atp_dns']
+    assert u.lists['banip.global.ban_feed'] == ['nexwall_attackers', 'nexwall_atp_ip']
+    assert state['auto_enabled'] == ['atp_dns', 'atp_ip']
+    # the administrator switches one off: it stays off
+    u.lists['adblock.global.adb_feed'].remove('nexwall_atp_dns')
+    assert mod.enable_auto(manifest, state) is False
+    assert 'nexwall_atp_dns' not in u.lists['adblock.global.adb_feed']
+
+
+def test_a_category_without_the_flag_is_never_switched_on_by_this_rule(mod, monkeypatch):
+    u = Uci(mod, monkeypatch, lists={'adblock.global.adb_feed': ['nexwall_malware']})
+    manifest, _ = make_manifest()
+    assert mod.enable_auto(manifest, {}) is False
+    assert u.lists['adblock.global.adb_feed'] == ['nexwall_malware']

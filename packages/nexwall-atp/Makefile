@@ -7,7 +7,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=nexwall-atp
-PKG_VERSION:=0.1.0
+PKG_VERSION:=0.2.0
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=Nexwall
@@ -19,7 +19,7 @@ define Package/nexwall-atp
 	SECTION:=base
 	CATEGORY:=Nexwall
 	TITLE:=Advanced Threat Protection: flow scorer
-	DEPENDS:=+python3-light +python3-ctypes +python3-nethsec
+	DEPENDS:=+python3-light +python3-ctypes +python3-cryptodome +python3-nethsec
 	PKGARCH:=all
 endef
 
@@ -41,6 +41,8 @@ define Package/nexwall-atp/install
 	$(INSTALL_BIN) ./files/nexwall-atp $(1)/usr/sbin/nexwall-atp
 	$(INSTALL_BIN) ./files/nexwall-atp.init $(1)/etc/init.d/nexwall-atp
 	$(INSTALL_CONF) ./files/nexwall_atp.config $(1)/etc/config/nexwall_atp
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/99-nexwall-atp.uci-defaults $(1)/etc/uci-defaults/99-nexwall-atp
 	$(INSTALL_DIR) $(1)/usr/lib/nexwall-atp
 	$(CP) ./files/lib/atp $(1)/usr/lib/nexwall-atp/
 endef

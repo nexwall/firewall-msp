@@ -275,6 +275,25 @@ def apply_defaults(manifest):
     return changed
 
 
+def enable_auto(manifest, state):
+    """Categories the catalog marks `auto_enable` (Collective Defense) are switched on once on every unit, also on a unit whose choices were made
+    before the category existed. After that the administrator's choice stands: a category switched off again is not switched on again."""
+    seen = set(state.get('auto_enabled', []))
+    changed = False
+    for cid, cat in sorted(manifest.get('categories', {}).items()):
+        if not cat.get('auto_enable') or cid in seen or cat.get('kind') not in ('dns', 'ip'):
+            continue
+        seen.add(cid)
+        key = 'adblock.global.adb_feed' if cat['kind'] == 'dns' else 'banip.global.ban_feed'
+        feed = FEED_PREFIX + cid
+        if feed not in uci_list(key):
+            subprocess.run(['uci', 'add_list', '%s=%s' % (key, feed)], check=False)
+            subprocess.run(['uci', 'commit', 'adblock' if cat['kind'] == 'dns' else 'banip'], check=False)
+            changed = True
+    state['auto_enabled'] = sorted(seen)
+    return changed
+
+
 def enable_services():
     """The lists were just switched on for the first time: DNS Filtering and the IP lists must be running too, the same
     way the web interface starts them (a unit configured by hand keeps its choice: this is only reached on the first
@@ -341,6 +360,7 @@ def cmd_update(force=False):
             migrate_legacy(manifest)
             apply_defaults(manifest)
             state['defaults_applied'] = True
+        enable_auto(manifest, state)
         downloaded = []
         for cid in sorted(enabled_categories(manifest)):
             if download_category(manifest, cid):

@@ -10,13 +10,23 @@ with the evidence in words; nothing is blocked and nothing leaves the unit.
   nexwall-atp daemon     the service (procd): one scoring cycle every `interval` seconds, at low priority
   nexwall-atp once       one cycle from the flows now (for tests and the lab)
   nexwall-atp status     JSON of the last state
+  nexwall-atp update     download the signed model from the license server (verified; the previous model is kept)
+  nexwall-atp rollback   go back to the previous model
+  nexwall-atp report     send the consented report: remote indicators only (see below)
+  nexwall-atp sync       update, then report (cron)
 
+The report (step 4 of docs/FIREWALL-ATP.md) carries only remote parties: public addresses and domain names that flagged hosts contacted or asked, the kind of
+evidence, the model version and the day. Never an internal address, a host name of the network, a user, a payload or a URL. It is sent when `share` is on
+(the default; the wizard and the settings page say so next to the switch) and the unit is licensed.
 Files (under /mnt/data/atp): model.json (the model; the signed download is a later step), events.jsonl (advisory events, one JSON per line, rotated at 1 MiB),
-status.json. Settings: /etc/config/nexwall_atp (enabled, interval, max_hosts, budget).
+status.json. Settings: /etc/config/nexwall_atp (enabled, share, interval, max_hosts, budget).
 Environment (tests): ATP_DIR, ATP_LIB, FLOWS_JSON (a file with the output of `ubus call ns.flows list`), ATP_NO_LICENSE=1 (skip the license check)."""
+import base64
+import hashlib
 import ipaddress
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -32,6 +42,15 @@ DIR = os.environ.get('ATP_DIR', '/mnt/data/atp')
 MAX_EVENTS_BYTES = 1 << 20
 LICENSE_RECHECK = 300
 NICE = 10
+CORE_CTL = '/usr/sbin/licensectl'
+PUBKEY = '/etc/nexwall-license/pubkey.pem'
+UPDATE_MIN_INTERVAL = 25 * 60
+REPORT_MIN_INTERVAL = 60 * 60
+MAX_REPORT_INDICATORS = 100
+# top-level names that belong to private networks: a name under them is never reported
+PRIVATE_TLDS = {'local', 'lan', 'internal', 'intranet', 'home', 'corp', 'private', 'localdomain', 'localhost', 'arpa', 'example', 'test', 'invalid', 'home.arpa'}
+DOMAIN_RE = re.compile(r'^(?=.{4,253}$)(?:[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z0-9-]{2,63}$')
+VERSION_RE = re.compile(r'^\d{4}\.\d{2}\.\d{2}\.\d{1,3}$')
 
 
 def uci(key, default):
@@ -48,7 +67,7 @@ def settings():
             return cast(uci('nexwall_atp.main.' + key, default))
         except ValueError:
             return cast(default)
-    return {'enabled': uci('nexwall_atp.main.enabled', '1') == '1', 'interval': max(10, num('interval', '60', int)),
+    return {'enabled': uci('nexwall_atp.main.enabled', '1') == '1', 'share': uci('nexwall_atp.main.share', '1') == '1', 'interval': max(10, num('interval', '60', int)),
             'max_hosts': max(1, num('max_hosts', '200', int)), 'budget': max(0.1, num('budget', '2.0', float))}
 
 
@@ -164,6 +183,223 @@ def inner_devices():
     return sorted(set(out))
 
 
+def load_json(name):
+    try:
+        with open(os.path.join(DIR, name)) as fp:
+            d = json.load(fp)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_json(name, obj):
+    os.makedirs(DIR, exist_ok=True)
+    tmp = os.path.join(DIR, name + '.tmp')
+    with open(tmp, 'w') as fp:
+        json.dump(obj, fp)
+    os.replace(tmp, os.path.join(DIR, name))
+
+
+def log(msg):
+    print(msg, file=sys.stderr)
+    try:
+        subprocess.run(['logger', '-t', 'nexwall-atp', msg], check=False, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+# ---- signed model download (step 3): same trust chain as the threat feeds, the license server key the unit already holds
+def fetch(path):
+    p = subprocess.run([CORE_CTL, 'get', path], capture_output=True, timeout=600)
+    if p.returncode != 0:
+        raise RuntimeError('%s: %s' % (path, p.stderr.decode(errors='replace').strip() or 'request failed'))
+    return p.stdout
+
+
+def verify_manifest(resp, pubkey=None):
+    from Crypto.Hash import SHA256
+    from Crypto.PublicKey import RSA
+    from Crypto.Signature import pkcs1_15
+    with open(pubkey or PUBKEY, 'rb') as f:
+        key = RSA.import_key(f.read())
+    payload = base64.b64decode(resp['payload'])
+    pkcs1_15.new(key).verify(SHA256.new(payload), base64.b64decode(resp['signature']))
+    m = json.loads(payload)
+    if m.get('kind') != 'atp-model':
+        raise ValueError('not a model manifest')
+    return m
+
+
+def install_model(data, manifest):
+    """Check the bytes against the signed manifest, then against the model rules, then switch: the previous model stays as model.prev.json."""
+    want = manifest['files']['model.json']
+    if len(data) != want['size'] or hashlib.sha256(data).hexdigest() != want['sha256']:
+        raise ValueError('model.json does not match the signed manifest')
+    os.makedirs(DIR, exist_ok=True)
+    tmp = os.path.join(DIR, 'model.json.new')
+    with open(tmp, 'wb') as fp:
+        fp.write(data)
+    try:
+        m = M.load(tmp)
+        if m['version'] != manifest['model']['model_version']:
+            raise ValueError('the model says version %s, the manifest %s' % (m['version'], manifest['model']['model_version']))
+    except (M.ModelError, KeyError) as e:
+        os.remove(tmp)
+        raise ValueError('refused: %s' % e)
+    cur = os.path.join(DIR, 'model.json')
+    if os.path.exists(cur):
+        os.replace(cur, os.path.join(DIR, 'model.prev.json'))
+    os.replace(tmp, cur)
+    return m
+
+
+def cmd_update(force=False, fetch_fn=None, now=None):
+    """-> exit status: 0 ok or nothing new, 1 failed (the installed model stays), 2 nothing published, 3 not licensed or not entitled"""
+    fetch_fn = fetch_fn or fetch
+    now = int(now or time.time())
+    st = load_json('update.json')
+    if not licensed():
+        st.update(last_check=now, last_result='not licensed')
+        save_json('update.json', st)
+        return 3
+    if not force and now - st.get('last_check', 0) < UPDATE_MIN_INTERVAL and st.get('version'):
+        return 0
+    try:
+        resp = json.loads(fetch_fn('/api/v1/atp/manifest'))
+        if not resp.get('entitled'):
+            st.update(last_check=now, last_result='server: not entitled (%s)' % resp.get('license_state'))
+            save_json('update.json', st)
+            return 3
+        if not resp.get('payload'):
+            st.update(last_check=now, last_result='no model published yet')
+            save_json('update.json', st)
+            return 2
+        manifest = verify_manifest(resp)
+        version = manifest['version']
+        if not VERSION_RE.match(version):
+            raise ValueError('bad version')
+        if st.get('version') == version and os.path.exists(os.path.join(DIR, 'model.json')):
+            st.update(last_check=now, last_result='ok %s' % version, last_error=None)
+            save_json('update.json', st)
+            return 0
+        install_model(fetch_fn('/api/v1/atp/file/%s/model.json' % version), manifest)
+        st.update(version=version, model_version=manifest['model']['model_version'], last_check=now, last_result='installed %s' % version, last_error=None)
+        save_json('update.json', st)
+        log('model %s installed' % version)
+        return 0
+    except Exception as e:      # noqa: BLE001 - the installed model stays whatever happens here
+        st.update(last_check=now, last_result='update failed', last_error=str(e)[:300])
+        save_json('update.json', st)
+        log('update failed: %s' % e)
+        return 1
+
+
+def cmd_rollback():
+    prev, cur = os.path.join(DIR, 'model.prev.json'), os.path.join(DIR, 'model.json')
+    if not os.path.exists(prev):
+        print('no previous model', file=sys.stderr)
+        return 1
+    M.load(prev)
+    os.replace(prev, cur)
+    st = load_json('update.json')
+    st.update(version=None, last_result='rolled back')       # the next update installs the published version again
+    save_json('update.json', st)
+    return 0
+
+
+# ---- consented report (step 4): remote indicators only
+def public_ip(value):
+    try:
+        a = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return a.version == 4 and a.is_global and not a.is_multicast
+
+
+def public_domain(value):
+    v = str(value).strip().lower()
+    return bool(DOMAIN_RE.match(v)) and v.rsplit('.', 1)[-1] not in PRIVATE_TLDS and not public_ip(v)
+
+
+def read_events(since):
+    out = []
+    for name in ('events.jsonl.1', 'events.jsonl'):
+        try:
+            with open(os.path.join(DIR, name)) as fp:
+                for line in fp:
+                    try:
+                        ev = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(ev, dict) and ev.get('ts', 0) >= since:
+                        out.append(ev)
+        except OSError:
+            pass
+    return out
+
+
+def build_report(events, now, model_version=''):
+    """The report document from the advisory events of the last day. Only remote indicators; the host of an event is never read."""
+    best = {}
+    for ev in events:
+        for ind in ev.get('indicators') or []:
+            if not isinstance(ind, dict):
+                continue
+            if ind.get('type') == 'ip' and public_ip(ind.get('value', '')):
+                key, evidence, score = ('ip', ind['value']), 'beacon', ind.get('beacon', 0)
+            elif ind.get('type') == 'domain' and public_domain(ind.get('value', '')):
+                key, evidence, score = ('domain', str(ind['value']).lower()), 'generated-name', ind.get('dga', 0)
+            else:
+                continue
+            if key not in best or score > best[key][1]:
+                best[key] = (evidence, score)
+    items = sorted(best.items(), key=lambda kv: -kv[1][1])[:MAX_REPORT_INDICATORS]
+    return {'version': 1, 'day': time.strftime('%Y-%m-%d', time.gmtime(now)), 'model_version': model_version,
+            'indicators': [{'type': k[0], 'value': k[1], 'evidence': ev, 'score': round(float(sc), 2)} for k, (ev, sc) in items]}
+
+
+def post(path, doc):
+    p = subprocess.run([CORE_CTL, 'post', path], input=json.dumps(doc).encode(), capture_output=True, timeout=120)
+    if p.returncode != 0:
+        raise RuntimeError('%s: %s' % (path, p.stderr.decode(errors='replace').strip() or 'request failed'))
+    return p.stdout
+
+
+def cmd_report(force=False, post_fn=None, now=None):
+    """-> exit status: 0 sent or nothing to send, 1 failed, 3 sharing is off or the unit is not licensed. Nothing leaves the unit unless sharing is on."""
+    post_fn = post_fn or post
+    now = int(now or time.time())
+    cfg = settings()
+    st = load_json('report.json')
+    if not cfg['share'] or not cfg['enabled'] or not licensed():
+        return 3
+    if not force and now - st.get('last_try', 0) < REPORT_MIN_INTERVAL:
+        return 0
+    st['last_try'] = now
+    try:
+        model = M.load(os.path.join(DIR, 'model.json'))['version']
+    except (M.ModelError, OSError):
+        model = ''
+    doc = build_report(read_events(now - 86400), now, model)
+    if not doc['indicators']:
+        save_json('report.json', st)
+        return 0
+    digest = hashlib.sha256(json.dumps([doc['day'], doc['indicators']], sort_keys=True).encode()).hexdigest()
+    if digest == st.get('last_digest'):
+        save_json('report.json', st)
+        return 0
+    try:
+        post_fn('/api/v1/atp/report', doc)
+        st.update(last_digest=digest, last_sent=now, last_result='sent %d indicator(s)' % len(doc['indicators']), last_error=None)
+        save_json('report.json', st)
+        return 0
+    except Exception as e:      # noqa: BLE001 - tried again at the next sync
+        st.update(last_result='failed', last_error=str(e)[:300])
+        save_json('report.json', st)
+        log('report failed: %s' % e)
+        return 1
+
+
 class Service:
     def __init__(self, cfg=None, clock=time.time):
         self.cfg, self.clock = cfg or settings(), clock
@@ -257,7 +493,8 @@ class Service:
 
     def write_status(self, state):
         m = self.scorer.model if self.scorer else None
-        st = dict(self.stats, state=state, ts=int(self.clock()), enabled=self.cfg['enabled'], entitled=self.entitled, interval=self.cfg['interval'], model=(m or {}).get('name'), model_version=(m or {}).get('version'),
+        st = dict(self.stats, state=state, ts=int(self.clock()), enabled=self.cfg['enabled'], share=self.cfg.get('share', True), entitled=self.entitled, interval=self.cfg['interval'],
+                  last_report=load_json('report.json').get('last_sent'), model_updated=load_json('update.json').get('last_result'), model=(m or {}).get('name'), model_version=(m or {}).get('version'),
                   hosts=len(self.scorer.flows) if self.scorer else 0,
                   dns_view=self.sniffer.interfaces() if self.sniffer else [])
         os.makedirs(DIR, exist_ok=True)
@@ -315,6 +552,14 @@ def main(argv):
     elif cmd == 'once':
         svc = Service()
         print(json.dumps(svc.cycle(), indent=1))
+    elif cmd == 'update':
+        return cmd_update(force='--force' in argv)
+    elif cmd == 'rollback':
+        return cmd_rollback()
+    elif cmd == 'report':
+        return cmd_report(force='--force' in argv)
+    elif cmd == 'sync':
+        return 1 if 1 in (cmd_update(), cmd_report()) else 0
     elif cmd == 'status':
         try:
             with open(os.path.join(DIR, 'status.json')) as fp:

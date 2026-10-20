@@ -169,5 +169,185 @@ class ReadFlowsTests(unittest.TestCase):
         self.assertIsNone(self.mod.read_flows())
 
 
+def make_keys(tmp):
+    from Crypto.PublicKey import RSA
+    key = RSA.generate(2048)
+    pub = os.path.join(tmp, 'pubkey.pem')
+    with open(pub, 'wb') as fp:
+        fp.write(key.publickey().export_key())
+    return key, pub
+
+
+def signed(key, manifest):
+    import base64 as b64
+    from Crypto.Hash import SHA256
+    from Crypto.Signature import pkcs1_15
+    payload = json.dumps(manifest).encode()
+    return {'entitled': True, 'license_state': 'subscribed', 'payload': b64.b64encode(payload).decode(),
+            'signature': b64.b64encode(pkcs1_15.new(key).sign(SHA256.new(payload))).decode()}
+
+
+@unittest.skipUnless(importlib.util.find_spec('Crypto'), 'pycryptodome is needed for the signature checks')
+class UpdateTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.mod = load(self.tmp)
+        self.key, self.mod.PUBKEY = make_keys(self.tmp)
+        self.model = toy_model(self.mod)
+        self.raw = json.dumps(self.model).encode()
+
+    def manifest(self, version='2026.10.20.1', raw=None, kind='atp-model', model_version=None):
+        import hashlib as h
+        raw = raw or self.raw
+        return {'kind': kind, 'version': version, 'model': {'model_version': model_version or self.model['version']},
+                'files': {'model.json': {'size': len(raw), 'sha256': h.sha256(raw).hexdigest()}}}
+
+    def fetcher(self, resp, data):
+        calls = []
+
+        def fetch(path):
+            calls.append(path)
+            return json.dumps(resp).encode() if 'manifest' in path else data
+        fetch.calls = calls
+        return fetch
+
+    def do_update(self, resp, data=None, **kw):
+        f = self.fetcher(resp, self.raw if data is None else data)
+        return self.mod.cmd_update(force=True, fetch_fn=f, now=1000, **kw), f
+
+    def test_a_signed_model_is_installed_and_the_previous_one_is_kept(self):
+        rc, f = self.do_update(signed(self.key, self.manifest()))
+        self.assertEqual(rc, 0)
+        self.assertEqual(open(os.path.join(self.tmp, 'model.json'), 'rb').read(), self.raw)
+        newer = dict(self.model, version='2')
+        raw2 = json.dumps(newer).encode()
+        rc, _ = self.do_update(signed(self.key, self.manifest('2026.10.21.1', raw2, model_version='2')), raw2)
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.load(open(os.path.join(self.tmp, 'model.json')))['version'], '2')
+        self.assertEqual(open(os.path.join(self.tmp, 'model.prev.json'), 'rb').read(), self.raw)
+        self.assertEqual(self.mod.cmd_rollback(), 0)
+        self.assertEqual(open(os.path.join(self.tmp, 'model.json'), 'rb').read(), self.raw)
+
+    def test_the_same_version_is_not_downloaded_again(self):
+        self.do_update(signed(self.key, self.manifest()))
+        rc, f = self.do_update(signed(self.key, self.manifest()))
+        self.assertEqual((rc, f.calls), (0, ['/api/v1/atp/manifest']))
+
+    def test_a_tampered_model_a_bad_signature_and_a_wrong_kind_are_refused(self):
+        rc, _ = self.do_update(signed(self.key, self.manifest()), data=self.raw + b' ')
+        self.assertEqual(rc, 1)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, 'model.json')))
+        other, _ = make_keys(tempfile.mkdtemp())
+        rc, _ = self.do_update(signed(other, self.manifest()))
+        self.assertEqual(rc, 1)
+        rc, _ = self.do_update(signed(self.key, self.manifest(kind='threat-feeds')))
+        self.assertEqual(rc, 1)
+        rc, _ = self.do_update(signed(self.key, self.manifest(model_version='other')))
+        self.assertEqual(rc, 1)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, 'model.json')))
+        self.assertIn('failed', load_state(self.tmp, 'update.json')['last_result'])
+
+    def test_an_unusable_model_is_refused_even_when_signed(self):
+        bad = json.dumps({'format': 1}).encode()
+        rc, _ = self.do_update(signed(self.key, self.manifest(raw=bad)), data=bad)
+        self.assertEqual(rc, 1)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, 'model.json')))
+
+    def test_not_entitled_and_nothing_published(self):
+        rc, _ = self.do_update({'entitled': False, 'license_state': 'unlicensed'})
+        self.assertEqual(rc, 3)
+        rc, _ = self.do_update({'entitled': True, 'license_state': 'subscribed'})
+        self.assertEqual(rc, 2)
+
+    def test_the_installed_model_stays_when_the_server_cannot_be_reached(self):
+        self.do_update(signed(self.key, self.manifest()))
+
+        def down(path):
+            raise RuntimeError('could not reach the server')
+        self.assertEqual(self.mod.cmd_update(force=True, fetch_fn=down, now=2000), 1)
+        self.assertEqual(open(os.path.join(self.tmp, 'model.json'), 'rb').read(), self.raw)
+
+
+def load_state(tmp, name):
+    with open(os.path.join(tmp, name)) as fp:
+        return json.load(fp)
+
+
+class ReportTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.mod = load(self.tmp)
+        self.sent = []
+        self.now = 1792459000
+
+    def put_events(self, *events):
+        with open(os.path.join(self.tmp, 'events.jsonl'), 'w') as fp:
+            for ev in events:
+                fp.write(json.dumps(ev) + '\n')
+
+    def event(self, indicators, host='192.168.1.50'):
+        return {'layer': 'atp', 'host': host, 'level': 'high', 'ts': self.now - 100, 'indicators': indicators}
+
+    def post(self, path, doc):
+        self.sent.append((path, doc))
+
+    def report(self, **kw):
+        return self.mod.cmd_report(force=True, post_fn=self.post, now=self.now, **kw)
+
+    def test_only_remote_public_indicators_are_sent_never_the_host(self):
+        self.put_events(self.event([{'type': 'ip', 'value': '8.8.4.4', 'beacon': 0.97}, {'type': 'ip', 'value': '192.168.1.9', 'beacon': 0.9},
+                                    {'type': 'ip', 'value': '10.0.0.1', 'beacon': 0.9}, {'type': 'domain', 'value': 'qzxvbnmkrtplwq.net', 'dga': 0.99},
+                                    {'type': 'domain', 'value': 'printer.lan', 'dga': 0.95}, {'type': 'domain', 'value': 'nas.local', 'dga': 0.95},
+                                    {'type': 'domain', 'value': '8.8.8.8', 'dga': 0.9}, {'type': 'url', 'value': 'http://x.example.net/a?b=1'}, 'junk']))
+        self.assertEqual(self.report(), 0)
+        path, doc = self.sent[0]
+        self.assertEqual(path, '/api/v1/atp/report')
+        self.assertEqual(sorted((i['type'], i['value']) for i in doc['indicators']), [('domain', 'qzxvbnmkrtplwq.net'), ('ip', '8.8.4.4')])
+        text = json.dumps(doc)
+        for secret in ('192.168.1.50', '192.168.1.9', '10.0.0.1', 'printer', 'nas.local', 'host'):
+            self.assertNotIn(secret, text)
+        self.assertEqual(set(doc), {'version', 'day', 'model_version', 'indicators'})
+
+    def test_nothing_is_sent_when_sharing_is_off(self):
+        self.put_events(self.event([{'type': 'ip', 'value': '8.8.4.4', 'beacon': 0.97}]))
+        self.mod.settings = lambda: {'enabled': True, 'share': False, 'interval': 60, 'max_hosts': 200, 'budget': 2.0}
+        self.assertEqual(self.report(), 3)
+        self.assertEqual(self.sent, [])
+
+    def test_nothing_is_sent_when_not_licensed(self):
+        self.put_events(self.event([{'type': 'ip', 'value': '8.8.4.4', 'beacon': 0.97}]))
+        os.environ.pop('ATP_NO_LICENSE')
+        try:
+            self.assertEqual(self.report(), 3)
+        finally:
+            os.environ['ATP_NO_LICENSE'] = '1'
+        self.assertEqual(self.sent, [])
+
+    def test_the_same_report_is_not_sent_twice_and_a_failure_is_retried(self):
+        self.put_events(self.event([{'type': 'ip', 'value': '8.8.4.4', 'beacon': 0.97}]))
+        self.assertEqual(self.report(), 0)
+        self.assertEqual(self.report(), 0)
+        self.assertEqual(len(self.sent), 1)
+
+        def broken(path, doc):
+            raise RuntimeError('server down')
+        self.put_events(self.event([{'type': 'ip', 'value': '8.8.8.8', 'beacon': 0.97}]))
+        self.assertEqual(self.mod.cmd_report(force=True, post_fn=broken, now=self.now), 1)
+        self.assertEqual(self.report(), 0)
+        self.assertEqual(len(self.sent), 2)
+
+    def test_no_indicators_means_no_report(self):
+        self.put_events(self.event([]))
+        self.assertEqual(self.report(), 0)
+        self.assertEqual(self.sent, [])
+
+    def test_old_events_are_not_reported(self):
+        ev = self.event([{'type': 'ip', 'value': '8.8.4.4', 'beacon': 0.97}])
+        ev['ts'] = self.now - 3 * 86400
+        self.put_events(ev)
+        self.assertEqual(self.report(), 0)
+        self.assertEqual(self.sent, [])
+
+
 if __name__ == '__main__':
     unittest.main()
