@@ -247,8 +247,7 @@ def build_layers(raw, modules, now=None):
     }
     collective_cfg = {'collective': atp_raw.get('collective', True), 'share': atp_raw.get('share', True)}
     feeds = raw.get('threat_feeds') if isinstance(raw.get('threat_feeds'), dict) else {}
-    ts = raw.get('threat_shield') if isinstance(raw.get('threat_shield'), dict) else {}
-    services = {'ip': {'enabled': True, 'disabled': False}.get(ts.get('ip_status')), 'dns': {'enabled': True, 'disabled': False}.get(ts.get('dns_status'))}
+    services = raw.get('atp_services') if isinstance(raw.get('atp_services'), dict) else {}
     coll = atp.assess_collective(collective_cfg, feeds, atp_raw, modules, services) if (atp_raw or feeds) else {'state': 'off', 'reasons': []}
     layers['collective'] = {
         'present': bool(feeds), 'licensed': bool(modules.get('atp')), 'enabled': bool(collective_cfg['collective']) and coll['state'] != 'not_in_plan',
@@ -380,6 +379,7 @@ def gather(modules_fn):
         'av': lambda: _ubus('ns.webprotection', 'get-av-status'),
         'sandbox': lambda: _ubus('ns.webprotection', 'get-sandbox-status'),
         'atp': lambda: atp.derive_status(_client('/usr/sbin/nexwall-atp', 'status')),
+        'atp_services': atp.read_services,
         'web_rules': lambda: _ubus('ns.webprotection', 'list-rules'),
         'web_settings': lambda: _ubus('ns.webprotection', 'get-settings'),
         'web_inspection': lambda: _ubus('ns.webprotection', 'get-inspection-status'),

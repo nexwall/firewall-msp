@@ -144,17 +144,13 @@ def test_a_shared_list_in_a_service_that_is_off_is_degraded():
         set(atp.assess_collective(cfg, FEEDS, {}, None, {'ip': False, 'dns': False})['reasons']) == {'service_off:ip', 'service_off:dns'}
 
 
-def test_read_services_maps_the_dashboard_answer(monkeypatch):
-    answers = {'threat_shield_ip': 'disabled', 'threat_shield_dns': 'enabled'}
+def test_services_come_from_the_switches_in_the_configuration():
+    values = {'banip.global.ban_enabled': '0', 'adblock.global.adb_enabled': '1'}
+    assert atp.services_from_uci(lambda k: values.get(k, '')) == {'ip': False, 'dns': True}
+    assert atp.services_from_uci(lambda k: '') == {'ip': False, 'dns': False}               # an option that is not set is off
+    assert atp.services_from_uci(lambda k: 'x') == {'ip': None, 'dns': None}                # unreadable: unknown, no complaint
 
-    class P:
-        def __init__(self, stdout):
-            self.stdout = stdout
 
-    def fake_run(cmd, **kw):
-        service = __import__('json').loads(cmd[-1])['service']
-        return P('{"result": {"status": "%s"}}' % answers[service])
-    monkeypatch.setattr(atp.subprocess, 'run', fake_run)
-    assert atp.read_services() == {'ip': False, 'dns': True}
-    monkeypatch.setattr(atp.subprocess, 'run', lambda *a, **k: (_ for _ in ()).throw(OSError('no ubus')))
+def test_read_services_survives_a_missing_uci(monkeypatch):
+    monkeypatch.setattr(atp.subprocess, 'run', lambda *a, **k: (_ for _ in ()).throw(OSError('no uci')))
     assert atp.read_services() == {'ip': None, 'dns': None}

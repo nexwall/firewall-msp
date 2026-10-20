@@ -169,17 +169,23 @@ def read_status():
     return derive_status(_run_json([STATUS_CMD, 'status']))
 
 
+def services_from_uci(get):
+    """{'ip': bool|None, 'dns': bool|None} from the switches of the services that apply the lists: banIP (IP & Geo Blocking) and adblock
+    (DNS Filtering). `get(key)` returns the UCI value or ''. Read from the configuration, not from the services' status commands: those are
+    slow and the page is polled."""
+    def flag(key):
+        v = get(key)
+        return True if v == '1' else False if v in ('0', '') else None
+    return {'ip': flag('banip.global.ban_enabled'), 'dns': flag('adblock.global.adb_enabled')}
+
+
 def read_services():
-    """{'ip': bool|None, 'dns': bool|None}: are IP & Geo Blocking and DNS Filtering switched on (they apply the shared lists)."""
-    out = {}
-    for key, name in (('ip', 'threat_shield_ip'), ('dns', 'threat_shield_dns')):
+    def get(key):
         try:
-            p = subprocess.run(['ubus', 'call', 'ns.dashboard', 'service-status', json.dumps({'service': name})], capture_output=True, text=True, timeout=15)
-            status = json.loads(p.stdout).get('result', {}).get('status')
-        except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
-            status = None
-        out[key] = True if status == 'enabled' else False if status == 'disabled' else None
-    return out
+            return subprocess.run(['uci', '-q', 'get', key], capture_output=True, text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return 'x'          # unreadable: not 0, not 1, not empty: the services are reported as unknown
+    return services_from_uci(get)
 
 
 def read_feeds():

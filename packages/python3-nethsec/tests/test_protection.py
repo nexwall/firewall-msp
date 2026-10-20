@@ -257,6 +257,6 @@ def test_collective_layer_is_degraded_when_the_service_that_applies_a_list_is_of
     atp_ok = {'enabled': True, 'entitled': True, 'alive': True, 'age': 10, 'interval': 60, 'state': 'scoring', 'dns_view': ['br-lan'], 'collective': True, 'share': False}
     feeds = {'license_state': 'subscribed', 'version': 'v', 'categories': [{'id': 'atp_ip', 'enabled': True, 'downloaded': True, 'count': 1},
                                                                             {'id': 'atp_dns', 'enabled': True, 'downloaded': True, 'count': 1}]}
-    ts = {'ip_status': 'disabled', 'dns_status': 'enabled'}
-    c = p.build_layers({'atp': atp_ok, 'threat_feeds': feeds, 'threat_shield': ts}, MODULES, now=NOW)['collective']
+    services = {'ip': False, 'dns': True}
+    c = p.build_layers({'atp': atp_ok, 'threat_feeds': feeds, 'atp_services': services}, MODULES, now=NOW)['collective']
     assert c['state'] == 'degraded' and c['reasons'] == ['service_off:ip'] and c['running'] is True
