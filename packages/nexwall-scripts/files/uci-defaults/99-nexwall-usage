@@ -7,4 +7,4 @@
 
 # license usage sample (devices and throughput), every 5 minutes
 grep -q nexwall-usage /etc/crontabs/root 2>/dev/null || \
-    echo "*/5 * * * * /usr/sbin/nexwall-usage sample" >> /etc/crontabs/root
+    echo '*/5 * * * * /usr/sbin/nexwall-usage sample' >> /etc/crontabs/root
