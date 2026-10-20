@@ -108,15 +108,25 @@ def read_flows():
     return out
 
 
-def flow_records(entries):
-    """ns.flows entries -> flow records of the hosts inside (the firewall's own connections and outside addresses are left out)."""
+def own_addresses():
+    """The addresses of the firewall itself (its own connections are not a host to score)."""
+    try:
+        out = subprocess.run(['ip', '-o', '-4', 'addr', 'show'], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    return {line.split()[3].split('/')[0] for line in out.splitlines() if len(line.split()) > 3}
+
+
+def flow_records(entries, own=frozenset()):
+    """ns.flows entries -> flow records of the internal hosts. `local_origin` only says that the local side opened the connection (it is true for
+    nearly every flow), so it is not used; the firewall's own addresses and outside addresses are left out."""
     out = []
     for e in entries or []:
         f = e.get('flow') if isinstance(e, dict) else None
-        if not isinstance(f, dict) or f.get('local_origin'):
+        if not isinstance(f, dict):
             continue
         rec = flowlog.normalise(f)
-        if rec and rec['digest'] and is_internal(rec['local_ip']):
+        if rec and rec['digest'] and is_internal(rec['local_ip']) and rec['local_ip'] not in own:
             out.append(rec)
     return out
 
@@ -159,6 +169,7 @@ class Service:
         self.cfg, self.clock = cfg or settings(), clock
         self.scorer, self.model_mtime, self.sniffer = None, None, None
         self.last = {}          # host -> (level rank, ts) of the last event written
+        self.own, self.own_at = set(), 0.0
         self.stats = {'cycles': 0, 'flows_read': 0, 'dns_records': 0, 'events_total': 0, 'last_cycle_ms': 0.0, 'last_error': None}
 
     # ---- model
@@ -198,7 +209,9 @@ class Service:
         if entries is None:
             self.stats['last_error'] = 'ns.flows did not answer'
             entries = []
-        recs = flow_records(entries)
+        if now - self.own_at > LICENSE_RECHECK:
+            self.own, self.own_at = own_addresses(), now
+        recs = flow_records(entries, self.own)
         self.scorer.add_flows(recs)
         self.scorer.add_dns(list(dns_records))
         self.stats['flows_read'] += len(recs)

@@ -31,7 +31,7 @@ def toy_model(mod):
             'features': names, 'mean': [0.0] * len(names), 'std': [1.0] * len(names), 'coef': coef, 'intercept': -3.0, 'thresholds': {'review': 0.6, 'high': 0.9}}
 
 
-def entry(host, i, period, start, other='203.0.113.9', port=8443, origin=False):
+def entry(host, i, period, start, other='203.0.113.9', port=8443, origin=True):
     first = (start + i * period) * 1000
     return {'interface': 'lan', 'flow': {'digest': '%s-%d' % (host, i), 'local_ip': host, 'other_ip': other, 'other_port': port, 'ip_protocol': 6,
             'first_seen_at': first, 'last_seen_at': first + 1000, 'local_bytes': 400, 'other_bytes': 300, 'local_packets': 4, 'other_packets': 3,
@@ -86,11 +86,12 @@ class ServiceTests(unittest.TestCase):
         t[0] += 900
         self.assertEqual(len(svc.cycle()), 1)
 
-    def test_outside_and_firewall_own_flows_are_ignored(self):
+    def test_outside_loopback_and_firewall_own_addresses_are_ignored(self):
         self.put_model()
-        self.put_flows([entry('8.8.8.8', i, 60, 5000 - 2400) for i in range(40)] + [entry('192.168.1.1', i, 60, 5000 - 2400, origin=True) for i in range(40)]
+        self.put_flows([entry('8.8.8.8', i, 60, 5000 - 2400) for i in range(40)] + [entry('192.168.1.1', i, 60, 5000 - 2400) for i in range(40)]
                        + [entry('127.0.0.1', i, 60, 5000 - 2400) for i in range(40)])
         svc = self.service()
+        svc.own, svc.own_at = {'192.168.1.1'}, 5000.0
         self.assertEqual(svc.cycle(), [])
         self.assertEqual(svc.scorer.flows, {})
 
@@ -118,6 +119,14 @@ class ServiceTests(unittest.TestCase):
         svc.write_events([{'a': 1}])
         self.assertTrue(os.path.exists(path + '.1'))
         self.assertEqual(open(path).read().strip(), '{"a": 1}')
+
+    def test_client_flows_with_local_origin_true_are_scored(self):
+        # on a real unit local_origin is true for the connections the client opened
+        self.put_model()
+        self.put_flows([entry('192.168.1.50', i, 60, 5000 - 2400, origin=True) for i in range(40)])
+        svc = self.service()
+        svc.own, svc.own_at = {'192.168.1.1'}, 5000.0
+        self.assertEqual([e['host'] for e in svc.cycle()], ['192.168.1.50'])
 
     def test_event_has_no_internal_address_in_its_indicators(self):
         self.put_model()
