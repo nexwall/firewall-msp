@@ -247,7 +247,9 @@ def build_layers(raw, modules, now=None):
     }
     collective_cfg = {'collective': atp_raw.get('collective', True), 'share': atp_raw.get('share', True)}
     feeds = raw.get('threat_feeds') if isinstance(raw.get('threat_feeds'), dict) else {}
-    coll = atp.assess_collective(collective_cfg, feeds, atp_raw, modules) if (atp_raw or feeds) else {'state': 'off', 'reasons': []}
+    ts = raw.get('threat_shield') if isinstance(raw.get('threat_shield'), dict) else {}
+    services = {'ip': {'enabled': True, 'disabled': False}.get(ts.get('ip_status')), 'dns': {'enabled': True, 'disabled': False}.get(ts.get('dns_status'))}
+    coll = atp.assess_collective(collective_cfg, feeds, atp_raw, modules, services) if (atp_raw or feeds) else {'state': 'off', 'reasons': []}
     layers['collective'] = {
         'present': bool(feeds), 'licensed': bool(modules.get('atp')), 'enabled': bool(collective_cfg['collective']) and coll['state'] != 'not_in_plan',
         'state': coll['state'], 'reasons': coll['reasons'], 'degraded': coll['state'] == 'degraded',

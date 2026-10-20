@@ -66,9 +66,11 @@ def assess_scorer(status, now=None):
     return {'state': 'degraded' if reasons else 'running', 'reasons': reasons}
 
 
-def assess_collective(settings, feeds, status, modules=None):
+def assess_collective(settings, feeds, status, modules=None, services=None):
     """Collective Protection = the shared lists (atp_ip, atp_dns of the threat feed bundle) and, when sharing is on, the reports.
-    ``feeds`` is the JSON of ``nexwall-threat-feeds status --json``; ``status`` the scorer status (for the report state)."""
+    ``feeds`` is the JSON of ``nexwall-threat-feeds status --json``; ``status`` the scorer status (for the report state);
+    ``services`` says whether the services that apply the lists are switched on: {'ip': IP & Geo Blocking (banIP), 'dns': DNS Filtering (adblock)},
+    True / False, or None when unknown. A shared list in a service that is off is not applied."""
     s = settings if isinstance(settings, dict) else {}
     f = feeds if isinstance(feeds, dict) else {}
     if modules is not None and not modules.get('atp', True):
@@ -77,6 +79,7 @@ def assess_collective(settings, feeds, status, modules=None):
         return {'state': 'not_in_plan', 'reasons': []}
     if not s.get('collective', True):
         return {'state': 'off', 'reasons': []}
+    svc = services if isinstance(services, dict) else {}
     cats = {c.get('id'): c for c in (f.get('categories') or []) if isinstance(c, dict) and c.get('id') in ATP_CATEGORIES}
     reasons = []
     if not f.get('version'):
@@ -89,6 +92,8 @@ def assess_collective(settings, feeds, status, modules=None):
                 reasons.append('list_off:' + cid)
             elif not c.get('downloaded'):
                 reasons.append('list_missing:' + cid)
+            elif svc.get({'atp_ip': 'ip', 'atp_dns': 'dns'}.get(cid)) is False:
+                reasons.append('service_off:' + {'atp_ip': 'ip', 'atp_dns': 'dns'}[cid])
     if f.get('last_error'):
         reasons.append('update_error')
     if s.get('share', True) and isinstance(status, dict) and status.get('entitled') is not False:
@@ -162,6 +167,19 @@ def _run_json(cmd, timeout=15):
 
 def read_status():
     return derive_status(_run_json([STATUS_CMD, 'status']))
+
+
+def read_services():
+    """{'ip': bool|None, 'dns': bool|None}: are IP & Geo Blocking and DNS Filtering switched on (they apply the shared lists)."""
+    out = {}
+    for key, name in (('ip', 'threat_shield_ip'), ('dns', 'threat_shield_dns')):
+        try:
+            p = subprocess.run(['ubus', 'call', 'ns.dashboard', 'service-status', json.dumps({'service': name})], capture_output=True, text=True, timeout=15)
+            status = json.loads(p.stdout).get('result', {}).get('status')
+        except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
+            status = None
+        out[key] = True if status == 'enabled' else False if status == 'disabled' else None
+    return out
 
 
 def read_feeds():

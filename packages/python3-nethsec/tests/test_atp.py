@@ -132,3 +132,29 @@ def test_updating_finds_a_running_command_line(tmp_path):
 
 def test_update_hours_offered():
     assert atp.UPDATE_HOURS == (1, 3, 6, 12, 24)
+
+
+def test_a_shared_list_in_a_service_that_is_off_is_degraded():
+    cfg = {'collective': True, 'share': False}
+    assert atp.assess_collective(cfg, FEEDS, {}, None, {'ip': True, 'dns': True})['state'] == 'running'
+    assert atp.assess_collective(cfg, FEEDS, {}, None, {'ip': None, 'dns': None})['state'] == 'running'        # unknown: no complaint
+    r = atp.assess_collective(cfg, FEEDS, {}, None, {'ip': False, 'dns': True})
+    assert r == {'state': 'degraded', 'reasons': ['service_off:ip']}
+    assert atp.assess_collective(cfg, FEEDS, {}, None, {'ip': False, 'dns': False})['reasons'] == ['service_off:ip', 'service_off:dns'] or \
+        set(atp.assess_collective(cfg, FEEDS, {}, None, {'ip': False, 'dns': False})['reasons']) == {'service_off:ip', 'service_off:dns'}
+
+
+def test_read_services_maps_the_dashboard_answer(monkeypatch):
+    answers = {'threat_shield_ip': 'disabled', 'threat_shield_dns': 'enabled'}
+
+    class P:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    def fake_run(cmd, **kw):
+        service = __import__('json').loads(cmd[-1])['service']
+        return P('{"result": {"status": "%s"}}' % answers[service])
+    monkeypatch.setattr(atp.subprocess, 'run', fake_run)
+    assert atp.read_services() == {'ip': False, 'dns': True}
+    monkeypatch.setattr(atp.subprocess, 'run', lambda *a, **k: (_ for _ in ()).throw(OSError('no ubus')))
+    assert atp.read_services() == {'ip': None, 'dns': None}

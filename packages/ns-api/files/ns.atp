@@ -90,10 +90,11 @@ elif cmd == 'call':
         json.dump(atp.read_status(), sys.stdout)
     elif action == 'get-status':
         st, feeds, cfg = atp.read_status(), atp.read_feeds(), settings(e_uci)
+        services = atp.read_services()
         json.dump({
             'settings': cfg,
             'scorer': {**atp.assess_scorer(st), 'status': st},
-            'collective': {**atp.assess_collective(cfg, feeds, st), 'lists': atp.lists_summary(feeds)},
+            'collective': {**atp.assess_collective(cfg, feeds, st, None, services), 'lists': atp.lists_summary(feeds), 'services': services},
             'updating': atp.updating(atp.STATUS_CMD, 'update') or atp.updating(atp.FEED_CMD, 'update'),
         }, sys.stdout)
     elif action == 'get-metrics':

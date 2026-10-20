@@ -251,3 +251,12 @@ def test_atp_and_collective_layers_for_the_status_badges():
     assert none['atp']['present'] is False and none['atp']['running'] is None and none['collective']['running'] is None
     outside = p.build_layers({'atp': dict(atp_ok, entitled=False), 'threat_feeds': feeds}, {'atp': False}, now=NOW)
     assert outside['atp']['state'] == 'not_in_plan' and outside['atp']['licensed'] is False and outside['collective']['state'] == 'not_in_plan'
+
+
+def test_collective_layer_is_degraded_when_the_service_that_applies_a_list_is_off():
+    atp_ok = {'enabled': True, 'entitled': True, 'alive': True, 'age': 10, 'interval': 60, 'state': 'scoring', 'dns_view': ['br-lan'], 'collective': True, 'share': False}
+    feeds = {'license_state': 'subscribed', 'version': 'v', 'categories': [{'id': 'atp_ip', 'enabled': True, 'downloaded': True, 'count': 1},
+                                                                            {'id': 'atp_dns', 'enabled': True, 'downloaded': True, 'count': 1}]}
+    ts = {'ip_status': 'disabled', 'dns_status': 'enabled'}
+    c = p.build_layers({'atp': atp_ok, 'threat_feeds': feeds, 'threat_shield': ts}, MODULES, now=NOW)['collective']
+    assert c['state'] == 'degraded' and c['reasons'] == ['service_off:ip'] and c['running'] is True
