@@ -232,3 +232,22 @@ def test_atp_block_only_while_the_unit_uses_it_and_status_tells_why():
     assert o['atp']['events_total'] == 2 and o['atp_status'] == {'enabled': True, 'entitled': True}
     o = p.build_overview({'atp': off}, MODULES, now=NOW)
     assert o['atp'] is None and o['atp_status'] == {'enabled': False, 'entitled': True}
+
+
+def test_atp_and_collective_layers_for_the_status_badges():
+    atp_ok = {'enabled': True, 'entitled': True, 'alive': True, 'age': 10, 'interval': 60, 'state': 'scoring', 'dns_view': ['br-lan'], 'collective': True, 'share': True}
+    feeds = {'license_state': 'subscribed', 'version': 'v', 'categories': [{'id': 'atp_ip', 'enabled': True, 'downloaded': True, 'count': 1},
+                                                                            {'id': 'atp_dns', 'enabled': True, 'downloaded': True, 'count': 1}]}
+    layers = p.build_layers({'atp': atp_ok, 'threat_feeds': feeds}, MODULES, now=NOW)
+    assert layers['atp']['state'] == 'running' and layers['atp']['running'] is True and layers['atp']['enabled'] is True and layers['atp']['degraded'] is False
+    assert layers['collective']['state'] == 'running' and layers['collective']['running'] is True
+    deg = p.build_layers({'atp': dict(atp_ok, dns_view=[]), 'threat_feeds': feeds}, MODULES, now=NOW)['atp']
+    assert deg['state'] == 'degraded' and deg['running'] is True and deg['degraded'] is True and deg['reasons'] == ['no_dns_view']
+    stopped = p.build_layers({'atp': dict(atp_ok, alive=False), 'threat_feeds': feeds}, MODULES, now=NOW)['atp']
+    assert stopped['state'] == 'stopped' and stopped['running'] is False and stopped['enabled'] is True
+    off = p.build_layers({'atp': dict(atp_ok, enabled=False, collective=False), 'threat_feeds': feeds}, MODULES, now=NOW)
+    assert off['atp']['state'] == 'off' and off['atp']['enabled'] is False and off['collective']['state'] == 'off'
+    none = p.build_layers({}, MODULES, now=NOW)
+    assert none['atp']['present'] is False and none['atp']['running'] is None and none['collective']['running'] is None
+    outside = p.build_layers({'atp': dict(atp_ok, entitled=False), 'threat_feeds': feeds}, {'atp': False}, now=NOW)
+    assert outside['atp']['state'] == 'not_in_plan' and outside['atp']['licensed'] is False and outside['collective']['state'] == 'not_in_plan'

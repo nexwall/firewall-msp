@@ -349,5 +349,75 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(self.sent, [])
 
 
+class SettingsAndStatusTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.mod = load(self.tmp)
+        self.values = {}
+        self.mod.uci = lambda key, default: self.values.get(key, default)
+
+    def test_defaults_collective_and_sharing_on_updates_every_six_hours(self):
+        c = self.mod.settings()
+        self.assertEqual((c['enabled'], c['collective'], c['share'], c['auto_update'], c['update_hours']), (True, True, True, True, 6))
+
+    def test_update_hours_only_takes_the_offered_values(self):
+        for given, want in (('1', 1), ('24', 24), ('7', 6), ('abc', 6), ('0', 6)):
+            self.values['nexwall_atp.main.update_hours'] = given
+            self.assertEqual(self.mod.settings()['update_hours'], want)
+
+    def test_the_update_interval_follows_the_choice_and_never_goes_below_the_servers_minimum(self):
+        self.assertEqual(self.mod.update_interval({'update_hours': 12}), 12 * 3600)
+        self.assertEqual(self.mod.update_interval({'update_hours': 0}), self.mod.UPDATE_MIN_INTERVAL)
+
+    def test_automatic_updates_off_means_sync_does_not_look_but_update_now_does(self):
+        self.values['nexwall_atp.main.auto_update'] = '0'
+        calls = []
+        self.assertEqual(self.mod.cmd_update(force=False, fetch_fn=lambda p: calls.append(p) or b'{}'), 0)
+        self.assertEqual(calls, [])
+        self.mod.cmd_update(force=True, fetch_fn=lambda p: calls.append(p) or b'{"entitled": false}')
+        self.assertEqual(calls, ['/api/v1/atp/manifest'])
+
+    def test_a_recent_update_check_is_not_repeated_before_the_chosen_interval(self):
+        self.mod.save_json('update.json', {'last_check': 1000, 'version': '2026.10.20.1'})
+        calls = []
+        self.values['nexwall_atp.main.update_hours'] = '12'
+        self.assertEqual(self.mod.cmd_update(force=False, fetch_fn=lambda p: calls.append(p) or b'{}', now=1000 + 11 * 3600), 0)
+        self.assertEqual(calls, [])
+
+    def test_collective_off_stops_the_reports_even_with_sharing_on(self):
+        self.values['nexwall_atp.main.collective'] = '0'
+        sent = []
+        os.makedirs(self.tmp, exist_ok=True)
+        with open(os.path.join(self.tmp, 'events.jsonl'), 'w') as fp:
+            fp.write(json.dumps({'layer': 'atp', 'host': '192.168.1.5', 'level': 'high', 'ts': 1792459000 - 10, 'indicators': [{'type': 'ip', 'value': '8.8.4.4', 'beacon': 0.9}]}) + '\n')
+        self.assertEqual(self.mod.cmd_report(force=True, post_fn=lambda p, d: sent.append(d), now=1792459000), 3)
+        self.assertEqual(sent, [])
+
+    def test_status_carries_the_current_settings_the_update_and_the_report(self):
+        self.mod.save_json('update.json', {'last_result': 'installed 2026.10.20.1', 'version': '2026.10.20.1'})
+        self.mod.save_json('report.json', {'last_sent': 5, 'last_result': 'sent 2 indicator(s)'})
+        self.mod.save_json('status.json', {'state': 'scoring', 'enabled': True, 'ts': 1, 'pid': 1})
+        self.values['nexwall_atp.main.enabled'] = '0'            # switched off just now: the status shows it before the service has stopped
+        st = self.mod.read_status()
+        self.assertEqual((st['state'], st['enabled'], st['update']['version'], st['report']['last_sent']), ('scoring', False, '2026.10.20.1', 5))
+
+    def test_status_of_a_service_that_never_ran(self):
+        st = self.mod.read_status()
+        self.assertEqual((st['state'], st['enabled'], st['collective']), ('not_running', True, True))
+
+    def test_errors_carry_their_time_and_the_status_has_the_pid_and_the_model_details(self):
+        self.mod.save_json('update.json', {'last_check': 1792459000 - 100 * 3600})
+        with open(os.path.join(self.tmp, 'model.json'), 'w') as fp:
+            json.dump(toy_model(self.mod), fp)
+        svc = self.mod.Service(cfg=dict(self.mod.settings()), clock=lambda: 1792459000)
+        svc.fail('ns.flows did not answer')
+        svc.load_model()
+        svc.write_status('scoring')
+        st = json.load(open(os.path.join(self.tmp, 'status.json')))
+        self.assertEqual((st['last_error'], st['last_error_ts'], st['pid']), ('ns.flows did not answer', 1792459000, os.getpid()))
+        self.assertEqual(st['model_info']['window'], 900.0)
+        self.assertTrue(st['model_stale'])                       # 100 hours without looking for a model while updates are automatic
+
+
 if __name__ == '__main__':
     unittest.main()

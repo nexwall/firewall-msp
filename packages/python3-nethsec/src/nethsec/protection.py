@@ -16,6 +16,8 @@ import os
 import subprocess
 import time
 
+from nethsec import atp
+
 CACHE_FILE = '/tmp/nexwall-protection-overview.json'
 CACHE_SECONDS = 15
 COMMAND_TIMEOUT = 8
@@ -168,7 +170,7 @@ def build_events(catalogs, av_status, now):
     return events[:MAX_EVENTS]
 
 
-def build_layers(raw, modules):
+def build_layers(raw, modules, now=None):
     """One block per protection with its state and the counters that really exist (each counter says its time window)."""
     layers = {}
     rt = raw.get('runtime') if isinstance(raw.get('runtime'), dict) else None
@@ -234,6 +236,23 @@ def build_layers(raw, modules):
         'ip_status': ts.get('ip_status'), 'dns_status': ts.get('dns_status'),
         'ip_blocked_1h': _int(ts.get('ip_blocked_1h')),
     }
+    now = now if now is not None else time.time()
+    # Advanced Protection (the scorer) and Collective Protection (the shared lists and reports): the state as the firewall really has it
+    atp_raw = raw.get('atp') if isinstance(raw.get('atp'), dict) else {}
+    scorer = atp.assess_scorer(atp_raw, now) if atp_raw else {'state': 'off', 'reasons': []}
+    layers['atp'] = {
+        'present': bool(atp_raw), 'licensed': bool(modules.get('atp')), 'enabled': bool(atp_raw.get('enabled')) and scorer['state'] != 'not_in_plan',
+        'state': scorer['state'], 'reasons': scorer['reasons'], 'degraded': scorer['state'] == 'degraded',
+        'running': (scorer['state'] in ('running', 'degraded')) if atp_raw else None,
+    }
+    collective_cfg = {'collective': atp_raw.get('collective', True), 'share': atp_raw.get('share', True)}
+    feeds = raw.get('threat_feeds') if isinstance(raw.get('threat_feeds'), dict) else {}
+    coll = atp.assess_collective(collective_cfg, feeds, atp_raw, modules) if (atp_raw or feeds) else {'state': 'off', 'reasons': []}
+    layers['collective'] = {
+        'present': bool(feeds), 'licensed': bool(modules.get('atp')), 'enabled': bool(collective_cfg['collective']) and coll['state'] != 'not_in_plan',
+        'state': coll['state'], 'reasons': coll['reasons'], 'degraded': coll['state'] == 'degraded',
+        'running': (coll['state'] in ('running', 'degraded')) if feeds else None,
+    }
     return layers
 
 
@@ -279,7 +298,7 @@ def build_overview(raw, modules, now=None):
     catalogs = build_catalogs(raw, now)
     current = sum(1 for c in catalogs if c['status'] == 'ok')
     counted = sum(1 for c in catalogs if c['status'] != 'unlicensed')
-    layers = build_layers(raw, modules)
+    layers = build_layers(raw, modules, now)
     return {
         'generated_at': now,
         'modules': {k: bool(v) for k, v in modules.items()},
@@ -358,7 +377,7 @@ def gather(modules_fn):
         'web': lambda: _ubus('ns.webprotection', 'get-catalog-status'),
         'av': lambda: _ubus('ns.webprotection', 'get-av-status'),
         'sandbox': lambda: _ubus('ns.webprotection', 'get-sandbox-status'),
-        'atp': lambda: _client('/usr/sbin/nexwall-atp', 'status'),
+        'atp': lambda: atp.derive_status(_client('/usr/sbin/nexwall-atp', 'status')),
         'web_rules': lambda: _ubus('ns.webprotection', 'list-rules'),
         'web_settings': lambda: _ubus('ns.webprotection', 'get-settings'),
         'web_inspection': lambda: _ubus('ns.webprotection', 'get-inspection-status'),

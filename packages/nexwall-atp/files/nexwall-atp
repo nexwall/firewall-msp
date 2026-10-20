@@ -41,6 +41,7 @@ from atp.edge import scorer as S         # noqa: E402
 DIR = os.environ.get('ATP_DIR', '/mnt/data/atp')
 MAX_EVENTS_BYTES = 1 << 20
 LICENSE_RECHECK = 300
+SNIFFER_RECHECK = 600
 NICE = 10
 CORE_CTL = os.environ.get('ATP_CORE_CTL', '/usr/sbin/licensectl')
 PUBKEY = os.environ.get('ATP_PUBKEY', '/etc/nexwall-license/pubkey.pem')
@@ -61,14 +62,25 @@ def uci(key, default):
     return p.stdout.strip() if p.returncode == 0 and p.stdout.strip() else default
 
 
+UPDATE_HOURS = (1, 3, 6, 12, 24)
+
+
 def settings():
     def num(key, default, cast):
         try:
             return cast(uci('nexwall_atp.main.' + key, default))
         except ValueError:
             return cast(default)
-    return {'enabled': uci('nexwall_atp.main.enabled', '1') == '1', 'share': uci('nexwall_atp.main.share', '1') == '1', 'interval': max(10, num('interval', '60', int)),
+    hours = num('update_hours', '6', int)
+    return {'enabled': uci('nexwall_atp.main.enabled', '1') == '1', 'collective': uci('nexwall_atp.main.collective', '1') == '1',
+            'share': uci('nexwall_atp.main.share', '1') == '1', 'auto_update': uci('nexwall_atp.main.auto_update', '1') == '1',
+            'update_hours': hours if hours in UPDATE_HOURS else 6, 'interval': max(10, num('interval', '60', int)),
             'max_hosts': max(1, num('max_hosts', '200', int)), 'budget': max(0.1, num('budget', '2.0', float))}
+
+
+def update_interval(cfg):
+    """Seconds between two looks for a new model: the administrator's choice, never below the minimum of the server's rate limit."""
+    return max(UPDATE_MIN_INTERVAL, cfg.get('update_hours', 6) * 3600)
 
 
 def licensed():
@@ -262,7 +274,10 @@ def cmd_update(force=False, fetch_fn=None, now=None):
         st.update(last_check=now, last_result='not licensed')
         save_json('update.json', st)
         return 3
-    if not force and now - st.get('last_check', 0) < UPDATE_MIN_INTERVAL and st.get('version'):
+    cfg = settings()
+    if not force and not cfg['auto_update']:
+        return 0
+    if not force and now - st.get('last_check', 0) < update_interval(cfg) and st.get('version'):
         return 0
     try:
         resp = json.loads(fetch_fn('/api/v1/atp/manifest'))
@@ -371,7 +386,7 @@ def cmd_report(force=False, post_fn=None, now=None):
     now = int(now or time.time())
     cfg = settings()
     st = load_json('report.json')
-    if not cfg['share'] or not cfg['enabled'] or not licensed():
+    if not cfg['share'] or not cfg['collective'] or not cfg['enabled'] or not licensed():
         return 3
     if not force and now - st.get('last_try', 0) < REPORT_MIN_INTERVAL:
         return 0
@@ -407,7 +422,12 @@ class Service:
         self.last = {}          # host -> (level rank, ts) of the last event written
         self.own, self.own_at = set(), 0.0
         self.entitled = True
-        self.stats = {'cycles': 0, 'flows_read': 0, 'dns_records': 0, 'events_total': 0, 'last_cycle_ms': 0.0, 'last_error': None}
+        self.stats = {'cycles': 0, 'flows_read': 0, 'dns_records': 0, 'events_total': 0, 'last_cycle_ms': 0.0, 'last_error': None, 'last_error_ts': None}
+
+    def fail(self, message):
+        """Remember the last problem with its time: the web interface calls the service degraded only while the problem is recent."""
+        self.stats['last_error'] = message
+        self.stats['last_error_ts'] = int(self.clock())
 
     # ---- model
     def model_path(self):
@@ -424,7 +444,7 @@ class Service:
         try:
             m = M.load(self.model_path())
         except (M.ModelError, OSError) as e:
-            self.stats['last_error'] = 'model: %s' % e
+            self.fail('model: %s' % e)
             self.scorer = None
             return None
         old = self.scorer
@@ -444,7 +464,7 @@ class Service:
             return []
         entries = read_flows()
         if entries is None:
-            self.stats['last_error'] = 'ns.flows did not answer'
+            self.fail('ns.flows did not answer')
             entries = []
         if now - self.own_at > LICENSE_RECHECK:
             self.own, self.own_at = own_addresses(), now
@@ -493,8 +513,15 @@ class Service:
 
     def write_status(self, state):
         m = self.scorer.model if self.scorer else None
-        st = dict(self.stats, state=state, ts=int(self.clock()), enabled=self.cfg['enabled'], share=self.cfg.get('share', True), entitled=self.entitled, interval=self.cfg['interval'],
-                  last_report=load_json('report.json').get('last_sent'), model_updated=load_json('update.json').get('last_result'), model=(m or {}).get('name'), model_version=(m or {}).get('version'),
+        upd, rep = load_json('update.json'), load_json('report.json')
+        hours = self.cfg.get('update_hours', 6)
+        checked = upd.get('last_check')
+        st = dict(self.stats, state=state, ts=int(self.clock()), pid=os.getpid(), enabled=self.cfg['enabled'], share=self.cfg.get('share', True),
+                  collective=self.cfg.get('collective', True), auto_update=self.cfg.get('auto_update', True), update_hours=hours, entitled=self.entitled,
+                  interval=self.cfg['interval'], update=upd, report=rep, last_report=rep.get('last_sent'), model_updated=upd.get('last_result'),
+                  model=(m or {}).get('name'), model_version=(m or {}).get('version'),
+                  model_info={k: (m or {}).get(k) for k in ('window', 'history_windows', 'trained', 'trained_on', 'thresholds', 'proxy_ports')} if m else None,
+                  model_stale=bool(self.cfg.get('auto_update', True) and checked and self.clock() - checked > max(48 * 3600, 4 * hours * 3600)),
                   hosts=len(self.scorer.flows) if self.scorer else 0,
                   dns_view=self.sniffer.interfaces() if self.sniffer else [])
         os.makedirs(DIR, exist_ok=True)
@@ -510,7 +537,7 @@ class Service:
             self.sniffer = dnssniff.Sniffer(inner_devices())
         except Exception as e:      # noqa: BLE001 - scoring continues without the DNS names
             self.sniffer = None
-            self.stats['last_error'] = 'dns view: %s' % e
+            self.fail('dns view: %s' % e)
 
 
 def daemon():
@@ -520,10 +547,16 @@ def daemon():
         pass
     svc = Service()
     svc.start_sniffer()
-    ok_until, allowed, next_cycle = 0, False, 0
+    ok_until, allowed, next_cycle, next_view = 0, False, 0, time.time() + SNIFFER_RECHECK
     dns = []
     while True:
         now = time.time()
+        if now >= next_view:             # an interface that appeared or went away (a new VLAN, a bridge change): open the DNS view again
+            next_view = now + SNIFFER_RECHECK
+            if svc.sniffer is None or svc.sniffer.interfaces() != sorted(set(inner_devices())):
+                if svc.sniffer:
+                    svc.sniffer.close()
+                svc.start_sniffer()
         if now >= ok_until:
             svc.cfg = settings()
             svc.entitled = licensed()
@@ -539,10 +572,24 @@ def daemon():
                 try:
                     svc.cycle(dns)
                 except Exception as e:      # noqa: BLE001 - one bad cycle must not stop the service
-                    svc.stats['last_error'] = 'cycle: %s' % e
+                    svc.fail('cycle: %s' % e)
                 dns = []
             else:
                 svc.write_status('off' if not svc.cfg['enabled'] else 'not_licensed')
+
+
+def read_status():
+    """The last status of the service, with the current settings on top (a switch is seen at once, before the service has restarted) and the
+    state of the update and of the report. The reader adds whether the process is there (nethsec.atp.derive_status)."""
+    cfg = settings()
+    try:
+        with open(os.path.join(DIR, 'status.json')) as fp:
+            st = json.load(fp)
+    except (OSError, ValueError):
+        st = {'state': 'not_running'}
+    st.update(enabled=cfg['enabled'], share=cfg['share'], collective=cfg['collective'], auto_update=cfg['auto_update'], update_hours=cfg['update_hours'])
+    st['update'], st['report'] = load_json('update.json'), load_json('report.json')
+    return st
 
 
 def main(argv):
@@ -561,11 +608,7 @@ def main(argv):
     elif cmd == 'sync':
         return 1 if 1 in (cmd_update(), cmd_report()) else 0
     elif cmd == 'status':
-        try:
-            with open(os.path.join(DIR, 'status.json')) as fp:
-                print(fp.read())
-        except OSError:
-            print(json.dumps({'state': 'not_running'}))
+        print(json.dumps(read_status()))
     else:
         print(__doc__)
         return 1

@@ -5,31 +5,64 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 
-# Advanced Threat Protection settings and status for the web interface: the scorer switch and the sharing switch (reports of remote indicators,
-# never data; see /usr/sbin/nexwall-atp). Changes are staged like every other setting and applied with the usual commit.
+# Advanced and Collective Protection (AI): the page of the web interface (Protection services). Settings are staged like every other setting and
+# applied with the usual commit; the status and the live figures are read from the scorer service and the threat feed client.
+#
+#   enabled      the scorer (Advanced Protection): reads the flows and the DNS names of the inner networks and raises advisory events
+#   collective   Collective Protection: use the shared lists of Nexwall and, when `share` is on, send reports of remote indicators
+#   share        send the reports (remote addresses and domain names only, never data)
+#   auto_update / update_hours    how often the model is looked for (the shared lists follow the Threat Shield schedule)
 
 import json
 import sys
 
 from euci import EUci
-from nethsec import utils
+from nethsec import atp, utils
 from nethsec.utils import ValidationError
 
 CONFIG = 'nexwall_atp'
-STATUS_CMD = '/usr/sbin/nexwall-atp'
+FEEDS = {'atp_ip': ('banip', 'global', 'ban_feed', 'nexwall_atp_ip'), 'atp_dns': ('adblock', 'global', 'adb_feed', 'nexwall_atp_dns')}
 
 
 def settings(e_uci):
+    hours = e_uci.get(CONFIG, 'main', 'update_hours', dtype=int, default=6)
     return {
         'enabled': e_uci.get(CONFIG, 'main', 'enabled', dtype=bool, default=True),
+        'collective': e_uci.get(CONFIG, 'main', 'collective', dtype=bool, default=True),
         'share': e_uci.get(CONFIG, 'main', 'share', dtype=bool, default=True),
+        'auto_update': e_uci.get(CONFIG, 'main', 'auto_update', dtype=bool, default=True),
+        'update_hours': hours if hours in atp.UPDATE_HOURS else 6,
     }
+
+
+def set_lists(e_uci, on):
+    """Collective Protection on: the shared lists are among the lists banIP and the DNS filter use; off: they are taken out (the administrator's other
+    lists are left as they are)."""
+    for _cid, (cfg, sect, opt, feed) in FEEDS.items():
+        try:
+            current = list(e_uci.get_all(cfg, sect, opt))
+        except Exception:  # noqa: BLE001 - option not set yet
+            current = []
+        if on:
+            want = current if feed in current else current + [feed]
+        else:
+            want = [f for f in current if f != feed]
+        if want != current:
+            e_uci.set(cfg, sect, opt, want)
+            e_uci.save(cfg)
 
 
 cmd = sys.argv[1]
 
 if cmd == 'list':
-    json.dump({'get-settings': {}, 'set-settings': {'enabled': True, 'share': True}, 'status': {}}, sys.stdout)
+    json.dump({
+        'get-settings': {},
+        'set-settings': {'enabled': True, 'collective': True, 'share': True, 'auto_update': True, 'update_hours': 6},
+        'status': {},
+        'get-status': {},
+        'get-metrics': {},
+        'update-now': {},
+    }, sys.stdout)
 elif cmd == 'call':
     action = sys.argv[2]
     e_uci = EUci()
@@ -38,20 +71,32 @@ elif cmd == 'call':
     elif action == 'set-settings':
         try:
             data = json.loads(sys.stdin.read() or '{}')
-            for key in ('enabled', 'share'):
+            for key in ('enabled', 'collective', 'share', 'auto_update'):
                 if key in data:
                     if not isinstance(data[key], bool):
                         raise ValidationError(key, 'invalid', data[key])
                     e_uci.set(CONFIG, 'main', key, data[key])
+            if 'update_hours' in data:
+                if data['update_hours'] not in atp.UPDATE_HOURS or isinstance(data['update_hours'], bool):
+                    raise ValidationError('update_hours', 'invalid', data['update_hours'])
+                e_uci.set(CONFIG, 'main', 'update_hours', data['update_hours'])
+            if 'collective' in data:
+                set_lists(e_uci, data['collective'])
             e_uci.save(CONFIG)
             json.dump({'message': 'successful'}, sys.stdout)
         except ValidationError as ex:
             json.dump(utils.validation_error(ex.parameter, ex.message, ex.value), sys.stdout)
     elif action == 'status':
-        import subprocess
-        try:
-            out = subprocess.run([STATUS_CMD, 'status'], capture_output=True, text=True, timeout=10).stdout
-            st = json.loads(out) if out.strip() else {'state': 'not_running'}
-        except (OSError, ValueError, subprocess.SubprocessError):
-            st = {'state': 'not_running'}
-        json.dump(st, sys.stdout)
+        json.dump(atp.read_status(), sys.stdout)
+    elif action == 'get-status':
+        st, feeds, cfg = atp.read_status(), atp.read_feeds(), settings(e_uci)
+        json.dump({
+            'settings': cfg,
+            'scorer': {**atp.assess_scorer(st), 'status': st},
+            'collective': {**atp.assess_collective(cfg, feeds, st), 'lists': atp.lists_summary(feeds)},
+            'updating': atp.updating(atp.STATUS_CMD, 'update') or atp.updating(atp.FEED_CMD, 'update'),
+        }, sys.stdout)
+    elif action == 'get-metrics':
+        json.dump(atp.collect(atp.read_status()), sys.stdout)
+    elif action == 'update-now':
+        json.dump(atp.start_update(), sys.stdout)
