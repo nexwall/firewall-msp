@@ -20,7 +20,7 @@ evidence, the model version and the day. Never an internal address, a host name 
 (the default; the wizard and the settings page say so next to the switch) and the unit is licensed.
 Files (under /mnt/data/atp): model.json (the model; the signed download is a later step), events.jsonl (advisory events, one JSON per line, rotated at 1 MiB),
 status.json. Settings: /etc/config/nexwall_atp (enabled, share, interval, max_hosts, budget).
-Environment (tests): ATP_DIR, ATP_LIB, FLOWS_JSON (a file with the output of `ubus call ns.flows list`), ATP_NO_LICENSE=1 (skip the license check)."""
+Environment (tests): ATP_DIR, ATP_LIB, FLOWS_JSON (a file with the output of `ubus call ns.flows list`), ATP_NO_LICENSE=1 (skip the license check), ATP_CORE_CTL and ATP_PUBKEY (a stand-in for licensectl and the public key)."""
 import base64
 import hashlib
 import ipaddress
@@ -42,8 +42,8 @@ DIR = os.environ.get('ATP_DIR', '/mnt/data/atp')
 MAX_EVENTS_BYTES = 1 << 20
 LICENSE_RECHECK = 300
 NICE = 10
-CORE_CTL = '/usr/sbin/licensectl'
-PUBKEY = '/etc/nexwall-license/pubkey.pem'
+CORE_CTL = os.environ.get('ATP_CORE_CTL', '/usr/sbin/licensectl')
+PUBKEY = os.environ.get('ATP_PUBKEY', '/etc/nexwall-license/pubkey.pem')
 UPDATE_MIN_INTERVAL = 25 * 60
 REPORT_MIN_INTERVAL = 60 * 60
 MAX_REPORT_INDICATORS = 100
