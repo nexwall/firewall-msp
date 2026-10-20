@@ -215,3 +215,20 @@ def test_sandbox_status_tells_not_in_plan_from_not_enabled():
     assert p.sandbox_status({'enabled': True, 'entitled': False}) == {'enabled': True, 'entitled': False}
     o = p.build_overview({'sandbox': {'enabled': False, 'entitled': True}}, MODULES, now=NOW)
     assert o['sandbox'] is None and o['sandbox_status'] == {'enabled': False, 'entitled': True}
+
+
+def test_atp_block_only_while_the_unit_uses_it_and_status_tells_why():
+    on = {'enabled': True, 'entitled': True, 'state': 'scoring', 'model': 'm', 'model_version': '1', 'hosts': 12, 'cycles': 5, 'events_total': 2,
+          'last_cycle_ms': 40.0, 'last_error': None, 'ts': NOW, 'interval': 60, 'dns_view': ['br-lan']}
+    off = dict(on, enabled=False)
+    outside = dict(on, entitled=False)
+    assert p.normalize_atp(None, NOW) is None and p.normalize_atp(off, NOW) is None and p.normalize_atp(outside, NOW) is None
+    shown = p.normalize_atp(on, NOW)
+    assert shown['state'] == 'scoring' and shown['hosts'] == 12 and shown['dns_view'] == 1
+    assert p.normalize_atp(on, NOW + 5 * 60 + 1)['state'] == 'not_running'      # the status file stopped being rewritten
+    assert p.atp_status(None) is None and p.atp_status({'state': 'not_running'}) is None
+    assert p.atp_status(off) == {'enabled': False, 'entitled': True} and p.atp_status(outside) == {'enabled': True, 'entitled': False}
+    o = p.build_overview({'atp': on}, MODULES, now=NOW)
+    assert o['atp']['events_total'] == 2 and o['atp_status'] == {'enabled': True, 'entitled': True}
+    o = p.build_overview({'atp': off}, MODULES, now=NOW)
+    assert o['atp'] is None and o['atp_status'] == {'enabled': False, 'entitled': True}

@@ -74,6 +74,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         st = json.load(open(os.path.join(self.tmp, 'status.json')))
         self.assertEqual((st['state'], st['model'], st['hosts']), ('scoring', 'toy', 1))
+        self.assertEqual((st['enabled'], st['entitled'], st['interval']), (True, True, 60))
 
     def test_same_host_is_not_written_again_inside_a_window(self):
         self.put_model()

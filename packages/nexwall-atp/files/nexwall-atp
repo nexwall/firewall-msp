@@ -170,6 +170,7 @@ class Service:
         self.scorer, self.model_mtime, self.sniffer = None, None, None
         self.last = {}          # host -> (level rank, ts) of the last event written
         self.own, self.own_at = set(), 0.0
+        self.entitled = True
         self.stats = {'cycles': 0, 'flows_read': 0, 'dns_records': 0, 'events_total': 0, 'last_cycle_ms': 0.0, 'last_error': None}
 
     # ---- model
@@ -256,7 +257,7 @@ class Service:
 
     def write_status(self, state):
         m = self.scorer.model if self.scorer else None
-        st = dict(self.stats, state=state, ts=int(self.clock()), model=(m or {}).get('name'), model_version=(m or {}).get('version'),
+        st = dict(self.stats, state=state, ts=int(self.clock()), enabled=self.cfg['enabled'], entitled=self.entitled, interval=self.cfg['interval'], model=(m or {}).get('name'), model_version=(m or {}).get('version'),
                   hosts=len(self.scorer.flows) if self.scorer else 0,
                   dns_view=self.sniffer.interfaces() if self.sniffer else [])
         os.makedirs(DIR, exist_ok=True)
@@ -288,7 +289,8 @@ def daemon():
         now = time.time()
         if now >= ok_until:
             svc.cfg = settings()
-            allowed = svc.cfg['enabled'] and licensed()
+            svc.entitled = licensed()
+            allowed = svc.cfg['enabled'] and svc.entitled
             ok_until = now + LICENSE_RECHECK
         if svc.sniffer and allowed:
             dns += svc.sniffer.poll(timeout=1.0)

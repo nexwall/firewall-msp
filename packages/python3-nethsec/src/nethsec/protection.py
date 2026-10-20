@@ -253,6 +253,27 @@ def sandbox_status(raw):
     return {'enabled': bool(raw.get('enabled')), 'entitled': bool(raw.get('entitled'))}
 
 
+def normalize_atp(raw, now):
+    """The ATP block of the overview: only while the unit uses it (switched on and entitled); never placeholder numbers. A status file that has not
+    been rewritten for five intervals means the service is not running."""
+    if not isinstance(raw, dict) or not raw.get('enabled') or not raw.get('entitled'):
+        return None
+    out = {k: raw[k] for k in ('state', 'model', 'model_version', 'hosts', 'cycles', 'events_total', 'last_cycle_ms', 'last_error', 'ts') if k in raw}
+    out['dns_view'] = len(raw.get('dns_view') or [])
+    interval = _int(raw.get('interval')) or 60
+    ts = _int(raw.get('ts'))
+    if ts is None or now - ts > 5 * interval:
+        out['state'] = 'not_running'
+    return out
+
+
+def atp_status(raw):
+    """Whether the unit may use ATP and whether it does (the pages say \"not in your plan\" or \"not enabled\" from it); None when unknown."""
+    if not isinstance(raw, dict) or 'enabled' not in raw or 'entitled' not in raw:
+        return None
+    return {'enabled': bool(raw.get('enabled')), 'entitled': bool(raw.get('entitled'))}
+
+
 def build_overview(raw, modules, now=None):
     now = int(now if now is not None else time.time())
     catalogs = build_catalogs(raw, now)
@@ -268,6 +289,8 @@ def build_overview(raw, modules, now=None):
         'events': build_events(catalogs, raw.get('av') if isinstance(raw.get('av'), dict) else {}, now),
         'sandbox': normalize_sandbox(raw.get('sandbox')),
         'sandbox_status': sandbox_status(raw.get('sandbox')),
+        'atp': normalize_atp(raw.get('atp'), now),
+        'atp_status': atp_status(raw.get('atp')),
         'errors': raw.get('errors', []),
     }
 
@@ -335,6 +358,7 @@ def gather(modules_fn):
         'web': lambda: _ubus('ns.webprotection', 'get-catalog-status'),
         'av': lambda: _ubus('ns.webprotection', 'get-av-status'),
         'sandbox': lambda: _ubus('ns.webprotection', 'get-sandbox-status'),
+        'atp': lambda: _client('/usr/sbin/nexwall-atp', 'status'),
         'web_rules': lambda: _ubus('ns.webprotection', 'list-rules'),
         'web_settings': lambda: _ubus('ns.webprotection', 'get-settings'),
         'web_inspection': lambda: _ubus('ns.webprotection', 'get-inspection-status'),

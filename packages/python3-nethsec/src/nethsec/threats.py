@@ -28,8 +28,9 @@ SYSLOG = '/var/log/messages'
 SNORT_DIR = '/var/log/snort'
 AV_DETECTIONS = '/var/lib/nexwall-av/detections.json'
 SQUID_LOG = '/var/log/squid/access.log'
+ATP_EVENTS = '/mnt/data/atp/events.jsonl'
 
-LAYERS = ['threat_shield', 'geo', 'dns', 'ips', 'web', 'antivirus', 'sandbox']
+LAYERS = ['threat_shield', 'geo', 'dns', 'ips', 'web', 'antivirus', 'sandbox', 'atp']
 SEVERITIES = ['low', 'medium', 'high', 'critical']
 
 # Weights of the "devices at risk" list. They are printed in the executive report: no hidden score.
@@ -194,6 +195,29 @@ def parse_av_detection(entry):
             'client': str(entry.get('client') or ''), 'remote': '', 'reason': reason, 'detail': str(entry.get('detail') or '')}
 
 
+def parse_atp_event(line):
+    """An advisory event of the ATP flow scorer (one JSON line of nexwall-atp): a host whose behaviour looks like an infected machine's. It is never a block."""
+    try:
+        data = json.loads(line)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(data, dict) or data.get('layer') != 'atp' or not data.get('host') or data.get('level') not in ('review', 'high'):
+        return None
+    try:
+        ts = int(data['ts'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    remote = ''
+    for ind in data.get('indicators') or []:
+        if isinstance(ind, dict) and ind.get('value'):
+            remote = str(ind['value'])
+            break
+    evidence = '; '.join(str(e) for e in (data.get('evidence') or [])[:4])
+    return {'ts': ts, 'layer': 'atp', 'action': 'detected', 'severity': 'high' if data['level'] == 'high' else 'medium', 'client': str(data['host']),
+            'remote': remote, 'reason': 'behaviour model: %s' % data['level'],
+            'detail': ('score %s; %s' % (data.get('score'), evidence))[:300]}
+
+
 def parse_squid_line(line):
     """A request Squid refused (policy of Web Protection). Internal requests of the firewall itself are ignored."""
     parts = line.split()
@@ -332,6 +356,13 @@ def collect(db=None, now=None):
                 if ev:
                     events.append(ev)
         result['web'] = add_events(db, events)
+
+        events = []
+        for line in read_new_lines(db, 'atp', ATP_EVENTS):
+            ev = parse_atp_event(line)
+            if ev:
+                events.append(ev)
+        result['atp'] = add_events(db, events)
 
         prune(db, now)
         db.commit()

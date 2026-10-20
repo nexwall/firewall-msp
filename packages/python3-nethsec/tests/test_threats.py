@@ -137,3 +137,38 @@ def test_syslog_content_filter_blocked_and_logged():
     assert ev['reason'] == 'content: gambling' and ev['detail'] == 'rule Content test, profile school, score 87'
     logged = threats.parse_syslog_line(line.replace('content-blocked', 'content-logged'), NOW)
     assert logged['action'] == 'detected' and logged['reason'] == 'content: gambling'
+
+
+ATP_LINE = json.dumps({'layer': 'atp', 'kind': 'flow-behaviour', 'host': '192.168.1.50', 'score': 0.9991, 'level': 'high', 'model': 'm', 'version': '1', 'window': 900,
+                       'ts': NOW - 60, 'evidence': ['contacts a destination at regular intervals (regularity 0.97)', '3 DNS name(s) with a generated look'],
+                       'indicators': [{'type': 'ip', 'value': '203.0.113.9', 'port': 8443, 'beacon': 0.97}]})
+
+
+def test_atp_event_is_advisory_with_the_evidence(tmp_path):
+    ev = threats.parse_atp_event(ATP_LINE)
+    assert ev['layer'] == 'atp' and ev['action'] == 'detected' and ev['severity'] == 'high'
+    assert ev['client'] == '192.168.1.50' and ev['remote'] == '203.0.113.9'
+    assert 'regular intervals' in ev['detail'] and 'score 0.9991' in ev['detail']
+    review = json.dumps(dict(json.loads(ATP_LINE), level='review', indicators=[]))
+    assert threats.parse_atp_event(review)['severity'] == 'medium' and threats.parse_atp_event(review)['remote'] == ''
+
+
+def test_atp_event_rejects_what_is_not_an_event():
+    for bad in ('', 'not json', '[]', json.dumps({'layer': 'atp', 'host': 'h', 'level': 'normal', 'ts': 1}),
+                json.dumps({'layer': 'ips', 'host': 'h', 'level': 'high', 'ts': 1}), json.dumps({'layer': 'atp', 'level': 'high', 'ts': 1}),
+                json.dumps({'layer': 'atp', 'host': 'h', 'level': 'high'})):
+        assert threats.parse_atp_event(bad) is None
+
+
+def test_collect_reads_the_atp_file_and_the_layer_is_counted(tmp_path, monkeypatch):
+    path = tmp_path / 'events.jsonl'
+    path.write_text(ATP_LINE + '\n' + 'torn line without end')
+    for name in ('SYSLOG', 'SQUID_LOG', 'AV_DETECTIONS'):
+        monkeypatch.setattr(threats, name, str(tmp_path / 'none'))
+    monkeypatch.setattr(threats, 'SNORT_DIR', str(tmp_path / 'nosnort'))
+    monkeypatch.setattr(threats, 'ATP_EVENTS', str(path))
+    db = mem(tmp_path)
+    assert threats.collect(db, now=NOW)['atp'] == 1
+    assert threats.collect(db, now=NOW)['atp'] == 0                       # the cursor moved on
+    assert threats.summary(db, days=1, now=NOW)['by_layer']['atp'] == 1
+    assert 'atp' in threats.LAYERS
