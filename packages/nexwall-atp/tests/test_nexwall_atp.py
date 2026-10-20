@@ -127,5 +127,37 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn('192.168.1.50', json.dumps(ev['indicators']))
 
 
+class ReadFlowsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.mod = load(self.tmp)
+        os.environ.pop('FLOWS_JSON', None)
+        self.mod.FLOWS_URL = 'http://127.0.0.1:9/flows'       # nothing listens there
+        self._run = self.mod.subprocess.run
+        self.addCleanup(setattr, self.mod.subprocess, 'run', self._run)     # the module object is the shared subprocess module
+
+    def test_every_page_is_read_when_the_daemon_is_not_there(self):
+        pages = {1: {'flows': [1, 2], 'last_page': 3}, 2: {'flows': [3], 'last_page': 3}, 3: {'flows': [4], 'last_page': 3}}
+        calls = []
+
+        class P:
+            def __init__(self, out):
+                self.stdout = out
+
+        def fake_run(cmd, **kw):
+            arg = json.loads(cmd[-1])
+            calls.append(arg)
+            return P(json.dumps(pages[arg['page']]))
+        self.mod.subprocess.run = fake_run
+        self.assertEqual(self.mod.read_flows(), [1, 2, 3, 4])
+        self.assertEqual([c['page'] for c in calls], [1, 2, 3])
+
+    def test_nothing_answering_is_none(self):
+        class P:
+            stdout = ''
+        self.mod.subprocess.run = lambda *a, **k: P()
+        self.assertIsNone(self.mod.read_flows())
+
+
 if __name__ == '__main__':
     unittest.main()

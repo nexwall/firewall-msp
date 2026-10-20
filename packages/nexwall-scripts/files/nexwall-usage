@@ -265,13 +265,39 @@ def topology():
     return {'zones': zones, 'networks': nets}
 
 
+FLOWS_URL = 'http://127.0.0.1:8080/flows'     # the flow daemon behind `ubus call ns.flows list`: every flow, no paging, no sorting
+PAGE = 1000
+MAX_PAGES = 50
+
+
 def read_flows():
+    """Every flow the DPI engine keeps. `ns.flows list` answers one page of 10 flows by default, so the daemon is asked directly; when it does not
+    answer, the pages of the ubus call are read one by one."""
     p = os.environ.get('FLOWS_JSON')
-    text = open(p).read() if p else _run(['ubus', 'call', 'ns.flows', 'list'])
+    if p:
+        try:
+            with open(p) as fp:
+                return json.load(fp).get('flows', [])
+        except (OSError, ValueError):
+            return []
     try:
-        return json.loads(text).get('flows', [])
-    except ValueError:
-        return []
+        import urllib.request
+        with urllib.request.urlopen(FLOWS_URL, timeout=10) as r:
+            flows = json.loads(r.read().decode()).get('flows')
+        if isinstance(flows, list):
+            return flows
+    except Exception:       # noqa: BLE001 - fall back to the pages
+        pass
+    out = []
+    for page in range(1, MAX_PAGES + 1):
+        try:
+            d = json.loads(_run(['ubus', 'call', 'ns.flows', 'list', json.dumps({'per_page': PAGE, 'page': page})]))
+        except ValueError:
+            break
+        out += d.get('flows', [])
+        if page >= int(d.get('last_page') or 1):
+            break
+    return out
 
 
 def read_bytes(dev):

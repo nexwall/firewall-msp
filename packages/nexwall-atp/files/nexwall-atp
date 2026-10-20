@@ -71,17 +71,41 @@ def is_internal(ip):
     return a.is_private and not a.is_loopback and not a.is_link_local
 
 
+FLOWS_URL = 'http://127.0.0.1:8080/flows'     # the flow daemon behind `ubus call ns.flows list`: every flow, no paging, no sorting
+PAGE = 1000
+MAX_PAGES = 50
+
+
 def read_flows():
+    """Every flow the DPI engine keeps, or None when nothing answers. `ns.flows list` answers one page of 10 flows by default, so the daemon is asked
+    directly; when it does not answer, the pages of the ubus call are read one by one."""
     p = os.environ.get('FLOWS_JSON')
-    try:
-        if p:
+    if p:
+        try:
             with open(p) as fp:
-                text = fp.read()
-        else:
-            text = subprocess.run(['ubus', 'call', 'ns.flows', 'list'], capture_output=True, text=True, timeout=30).stdout
-        return json.loads(text).get('flows', [])
+                return json.load(fp).get('flows', [])
+        except (OSError, ValueError, AttributeError):
+            return None
+    try:
+        import urllib.request
+        with urllib.request.urlopen(FLOWS_URL, timeout=10) as r:
+            flows = json.loads(r.read().decode()).get('flows')
+        if isinstance(flows, list):
+            return flows
+    except Exception:       # noqa: BLE001 - fall back to the pages
+        pass
+    out = []
+    try:
+        for page in range(1, MAX_PAGES + 1):
+            text = subprocess.run(['ubus', 'call', 'ns.flows', 'list', json.dumps({'per_page': PAGE, 'page': page})],
+                                  capture_output=True, text=True, timeout=30).stdout
+            d = json.loads(text)
+            out += d.get('flows', [])
+            if page >= int(d.get('last_page') or 1):
+                break
     except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
-        return None
+        return out or None
+    return out
 
 
 def flow_records(entries):

@@ -192,3 +192,40 @@ def test_one_mac_several_ips_is_one_device_but_routed_ips_are_separate(mod):
     r1 = mod.endpoint_id('10.50.0.10', 'aa:bb:cc:dd:ee:99', 's', nets)
     r2 = mod.endpoint_id('10.50.0.11', 'aa:bb:cc:dd:ee:99', 's', nets)
     assert r1 != r2                                                 # routed in behind a router: counted by IP, not by the router's MAC
+
+
+def test_read_flows_reads_every_page_when_the_daemon_is_not_there(mod, monkeypatch):
+    pages = {1: {'flows': [{'n': 1}, {'n': 2}], 'last_page': 3}, 2: {'flows': [{'n': 3}], 'last_page': 3}, 3: {'flows': [{'n': 4}], 'last_page': 3}}
+    calls = []
+
+    def fake_run(cmd):
+        arg = json.loads(cmd[-1])
+        calls.append(arg)
+        return json.dumps(pages[arg['page']])
+    monkeypatch.setattr(mod, '_run', fake_run)
+    monkeypatch.setattr(mod, 'FLOWS_URL', 'http://127.0.0.1:9/flows')       # nothing listens there
+    monkeypatch.delenv('FLOWS_JSON', raising=False)
+    assert [f['n'] for f in mod.read_flows()] == [1, 2, 3, 4]
+    assert [c['page'] for c in calls] == [1, 2, 3] and all(c['per_page'] == mod.PAGE for c in calls)
+
+
+def test_read_flows_prefers_the_daemon(mod, monkeypatch):
+    import http.server
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps({'flows': [{'n': i} for i in range(25)]}).encode()
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+    srv = http.server.HTTPServer(('127.0.0.1', 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(mod, 'FLOWS_URL', 'http://127.0.0.1:%d/flows' % srv.server_port)
+    monkeypatch.setattr(mod, '_run', lambda cmd: (_ for _ in ()).throw(AssertionError('the pages must not be read')))
+    monkeypatch.delenv('FLOWS_JSON', raising=False)
+    assert len(mod.read_flows()) == 25
+    srv.shutdown()
