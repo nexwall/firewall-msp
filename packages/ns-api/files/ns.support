@@ -1,0 +1,249 @@
+#!/usr/bin/python3
+
+#
+# Copyright (C) 2026 Nexwall
+# SPDX-License-Identifier: GPL-2.0-only
+#
+
+# Support Packets: fixed, read-only diagnostics that the cloud controller can run through ubus.
+#
+# The packets are shipped read-only in PACKETS_DIR (one <id>.sh and one <id>.json each, generated from the
+# controller catalog). This script never builds a shell line from the input: the packet is chosen by id from
+# that directory, every argument is validated against the packet's own definition and passed as a separate
+# argv value to /bin/sh. Time, output size and concurrency are limited.
+#
+# ubus call ns.support list
+# ubus call ns.support run '{"id": "ping", "args": ["1.1.1.1", "3"]}'
+
+import fcntl
+import ipaddress
+import json
+import os
+import re
+import select
+import signal
+import subprocess
+import sys
+import time
+
+PACKETS_DIR = '/usr/share/nexwall/support-packets'
+LOCK_FILE = '/var/run/ns-support.lock'
+MAX_ARG_LEN = 253
+ID_RE = re.compile(r'^[a-z0-9][a-z0-9-]{0,39}$')
+WORD_RE = re.compile(r'^[A-Za-z0-9._:][A-Za-z0-9._:-]{0,63}$')
+LABEL_RE = re.compile(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
+
+
+class Invalid(Exception):
+    pass
+
+
+def load(packet_id, base=None):
+    if not isinstance(packet_id, str) or not ID_RE.match(packet_id):
+        raise Invalid('unknown packet')
+    base = base or PACKETS_DIR
+    meta_path = os.path.join(base, packet_id + '.json')
+    script_path = os.path.join(base, packet_id + '.sh')
+    if not os.path.isfile(meta_path) or not os.path.isfile(script_path):
+        raise Invalid('unknown packet')
+    with open(meta_path) as f:
+        return json.load(f), script_path
+
+
+def check_int(name, value, lo, hi):
+    if not re.fullmatch(r'[0-9]{1,9}', value):
+        raise Invalid('%s: not a number' % name)
+    n = int(value)
+    if n < lo or n > hi:
+        raise Invalid('%s: out of range' % name)
+    return str(n)
+
+
+def check_fqdn(name, value):
+    host = value[:-1] if value.endswith('.') else value
+    if not host or len(host) > 253:
+        raise Invalid('%s: not a valid name' % name)
+    for label in host.split('.'):
+        if not LABEL_RE.match(label):
+            raise Invalid('%s: not a valid name' % name)
+    return host
+
+
+def check_ip(name, value, v4=True, v6=True):
+    try:
+        addr = ipaddress.ip_address(value)
+    except ValueError:
+        raise Invalid('%s: not an IP address' % name)
+    if '%' in value or (addr.version == 4 and not v4) or (addr.version == 6 and not v6):
+        raise Invalid('%s: wrong address family' % name)
+    return str(addr)
+
+
+def validate(param, value):
+    """Return the canonical value of one argument (same rules as the controller catalog)."""
+    name = param['name']
+    if not isinstance(value, str):
+        raise Invalid('%s: must be text' % name)
+    if value == '':
+        value = param.get('default', '')
+    if value == '':
+        if param.get('required'):
+            raise Invalid('%s: required' % name)
+        return ''
+    if len(value) > MAX_ARG_LEN:
+        raise Invalid('%s: too long' % name)
+    if any(ord(c) <= 0x20 or ord(c) >= 0x7f for c in value):
+        raise Invalid('%s: unsupported character' % name)
+    kind = param.get('kind')
+    if kind == 'ipv4':
+        return check_ip(name, value, True, False)
+    if kind == 'ipv6':
+        return check_ip(name, value, False, True)
+    if kind == 'ip':
+        return check_ip(name, value)
+    if kind == 'cidr':
+        try:
+            return str(ipaddress.ip_network(value, strict=False))
+        except ValueError:
+            raise Invalid('%s: not a network in CIDR notation' % name)
+    if kind == 'fqdn':
+        return check_fqdn(name, value)
+    if kind == 'host':
+        try:
+            return check_ip(name, value)
+        except Invalid:
+            return check_fqdn(name, value)
+    if kind == 'port':
+        return check_int(name, value, 1, 65535)
+    if kind in ('int', 'integer'):
+        lo = param.get('min', 0)
+        return check_int(name, value, lo, param.get('max', lo))
+    if kind == 'word':
+        if not WORD_RE.match(value):
+            raise Invalid('%s: only letters, digits and . _ : - are allowed' % name)
+        return value
+    if kind == 'enum':
+        if value not in param.get('enum', []):
+            raise Invalid('%s: not one of the allowed values' % name)
+        return value
+    raise Invalid('%s: unknown kind' % name)
+
+
+def build_args(meta, args):
+    if args is None:
+        args = []
+    if not isinstance(args, list) or len(args) > len(meta['params']):
+        raise Invalid('wrong number of arguments')
+    out = []
+    for i, p in enumerate(meta['params']):
+        out.append(validate(p, args[i] if i < len(args) else ''))
+    return out
+
+
+def execute(script_path, args, timeout, max_output):
+    """Run the packet script; return (code, stdout, stderr, truncated, timed_out)."""
+    env = {'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL': 'C', 'HOME': '/tmp'}
+    proc = subprocess.Popen(['/bin/sh', script_path] + args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, env=env, start_new_session=True, close_fds=True)
+    deadline = time.monotonic() + timeout
+    bufs = {proc.stdout: bytearray(), proc.stderr: bytearray()}
+    open_fds = set(bufs)
+    truncated = False
+    timed_out = False
+    while open_fds:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            timed_out = True
+            break
+        ready, _, _ = select.select(list(open_fds), [], [], min(left, 0.5))
+        for f in ready:
+            chunk = os.read(f.fileno(), 65536)
+            if not chunk:
+                open_fds.discard(f)
+                continue
+            room = max_output - len(bufs[f])
+            if room > 0:
+                bufs[f] += chunk[:room]
+            if len(chunk) > room:
+                truncated = True
+        if truncated:
+            break
+    if timed_out or truncated:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    try:
+        code = proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        code = proc.wait()
+    return (124 if timed_out else code,
+            bufs[proc.stdout].decode('utf-8', 'replace'), bufs[proc.stderr].decode('utf-8', 'replace'),
+            truncated, timed_out)
+
+
+def cleanup(meta):
+    """Fixed cleanup command of the packet (for example stopping a capture), run even after a timeout or failure."""
+    command = meta.get('cleanup', '')
+    if command:
+        try:
+            subprocess.run(['/bin/sh', '-c', command], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL': 'C'}, timeout=15)
+        except (subprocess.SubprocessError, OSError):
+            pass
+
+
+def run(request, base=None, lock_file=None):
+    packet_id = request.get('id')
+    try:
+        meta, script_path = load(packet_id, base)
+        args = build_args(meta, request.get('args'))
+    except Invalid as e:
+        return {'error': str(e)}
+    lock = open(lock_file or LOCK_FILE, 'w')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock.close()
+        return {'error': 'another support packet is running'}
+    try:
+        start = time.monotonic()
+        try:
+            code, out, err, truncated, timed_out = execute(script_path, args, int(meta['timeout_sec']), int(meta['max_output']))
+        finally:
+            cleanup(meta)
+        return {'id': packet_id, 'code': code, 'stdout': out, 'stderr': err, 'truncated': truncated,
+                'timed_out': timed_out, 'duration_ms': int((time.monotonic() - start) * 1000)}
+    finally:
+        lock.close()
+
+
+def list_packets(base=None):
+    base = base or PACKETS_DIR
+    packets = []
+    if os.path.isdir(base):
+        for name in sorted(os.listdir(base)):
+            if name.endswith('.json'):
+                try:
+                    meta, _ = load(name[:-5], base)
+                except (Invalid, ValueError):
+                    continue
+                packets.append({'id': meta['id'], 'class': meta['class'], 'params': meta['params']})
+    return {'packets': packets}
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        sys.exit(1)
+    if sys.argv[1] == 'list':
+        print(json.dumps({'list': {}, 'run': {'id': 'str', 'args': 'array'}}))
+    elif sys.argv[1] == 'call' and len(sys.argv) > 2:
+        if sys.argv[2] == 'list':
+            print(json.dumps(list_packets()))
+        elif sys.argv[2] == 'run':
+            try:
+                req = json.loads(sys.stdin.read() or '{}')
+            except ValueError:
+                req = {}
+            print(json.dumps(run(req if isinstance(req, dict) else {})))

@@ -1,0 +1,22 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "logs-search",
+ "max_output": 65536,
+ "params": [
+  {
+   "kind": "word",
+   "name": "word",
+   "required": true
+  },
+  {
+   "default": "30",
+   "kind": "int",
+   "max": 200,
+   "min": 5,
+   "name": "lines",
+   "required": false
+  }
+ ],
+ "timeout_sec": 20
+}

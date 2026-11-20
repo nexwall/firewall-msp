@@ -97,6 +97,11 @@ define Package/ns-api/install
 	$(INSTALL_DATA) ./files/ns.flashstart.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.dpireport $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./files/ns.dpireport.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_BIN) ./files/ns.support $(1)/usr/libexec/rpcd/
+	$(INSTALL_DATA) ./files/ns.support.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_DIR) $(1)/usr/share/nexwall/support-packets
+	$(INSTALL_DATA) ./support-packets/*.json $(1)/usr/share/nexwall/support-packets/
+	$(INSTALL_DATA) ./support-packets/*.sh $(1)/usr/share/nexwall/support-packets/
 	$(INSTALL_BIN) ./files/ns.report $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./files/ns.report.json $(1)/usr/share/rpcd/acl.d/
 	$(INSTALL_BIN) ./files/ns.dedalo $(1)/usr/libexec/rpcd/

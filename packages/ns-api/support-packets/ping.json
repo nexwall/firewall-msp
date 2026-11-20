@@ -1,0 +1,22 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "ping",
+ "max_output": 65536,
+ "params": [
+  {
+   "kind": "host",
+   "name": "host",
+   "required": true
+  },
+  {
+   "default": "3",
+   "kind": "int",
+   "max": 10,
+   "min": 1,
+   "name": "count",
+   "required": false
+  }
+ ],
+ "timeout_sec": 40
+}

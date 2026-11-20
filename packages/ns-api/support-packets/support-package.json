@@ -1,0 +1,8 @@
+{
+ "class": "R1",
+ "cleanup": "",
+ "id": "support-package",
+ "max_output": 8192,
+ "params": [],
+ "timeout_sec": 60
+}

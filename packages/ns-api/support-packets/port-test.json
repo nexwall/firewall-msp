@@ -1,0 +1,19 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "port-test",
+ "max_output": 65536,
+ "params": [
+  {
+   "kind": "host",
+   "name": "host",
+   "required": true
+  },
+  {
+   "kind": "port",
+   "name": "port",
+   "required": true
+  }
+ ],
+ "timeout_sec": 20
+}

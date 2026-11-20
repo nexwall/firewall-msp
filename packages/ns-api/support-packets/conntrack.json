@@ -1,0 +1,14 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "conntrack",
+ "max_output": 65536,
+ "params": [
+  {
+   "kind": "ip",
+   "name": "dst",
+   "required": false
+  }
+ ],
+ "timeout_sec": 20
+}

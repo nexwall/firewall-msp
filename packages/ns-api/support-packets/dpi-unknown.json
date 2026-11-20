@@ -1,0 +1,17 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "dpi-unknown",
+ "max_output": 65536,
+ "params": [
+  {
+   "default": "30",
+   "kind": "int",
+   "max": 100,
+   "min": 5,
+   "name": "lines",
+   "required": false
+  }
+ ],
+ "timeout_sec": 40
+}

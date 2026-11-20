@@ -1,0 +1,22 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "traceroute",
+ "max_output": 65536,
+ "params": [
+  {
+   "kind": "host",
+   "name": "host",
+   "required": true
+  },
+  {
+   "default": "5",
+   "kind": "int",
+   "max": 15,
+   "min": 1,
+   "name": "hops",
+   "required": false
+  }
+ ],
+ "timeout_sec": 60
+}

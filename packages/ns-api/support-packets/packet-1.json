@@ -1,0 +1,42 @@
+{
+ "class": "R1",
+ "cleanup": "drppkt --cleanup",
+ "id": "packet-1",
+ "max_output": 65536,
+ "params": [
+  {
+   "kind": "ip",
+   "name": "src",
+   "required": false
+  },
+  {
+   "kind": "ip",
+   "name": "dst",
+   "required": false
+  },
+  {
+   "kind": "port",
+   "name": "port",
+   "required": false
+  },
+  {
+   "enum": [
+    "tcp",
+    "udp",
+    "icmp"
+   ],
+   "kind": "enum",
+   "name": "proto",
+   "required": false
+  },
+  {
+   "default": "20",
+   "kind": "int",
+   "max": 60,
+   "min": 5,
+   "name": "seconds",
+   "required": false
+  }
+ ],
+ "timeout_sec": 90
+}

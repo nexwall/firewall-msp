@@ -1,0 +1,26 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "service-detail",
+ "max_output": 65536,
+ "params": [
+  {
+   "enum": [
+    "firewall",
+    "dnsmasq",
+    "nginx",
+    "dropbear",
+    "ns-plug",
+    "snort",
+    "mwan3",
+    "ns-ui",
+    "dpi",
+    "openvpn"
+   ],
+   "kind": "enum",
+   "name": "service",
+   "required": true
+  }
+ ],
+ "timeout_sec": 30
+}

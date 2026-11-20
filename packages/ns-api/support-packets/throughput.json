@@ -1,0 +1,8 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "throughput",
+ "max_output": 65536,
+ "params": [],
+ "timeout_sec": 40
+}

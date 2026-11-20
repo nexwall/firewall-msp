@@ -1,0 +1,19 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "dns-resolve",
+ "max_output": 65536,
+ "params": [
+  {
+   "kind": "fqdn",
+   "name": "fqdn",
+   "required": true
+  },
+  {
+   "kind": "ip",
+   "name": "server",
+   "required": false
+  }
+ ],
+ "timeout_sec": 30
+}

@@ -1,0 +1,14 @@
+{
+ "class": "R0",
+ "cleanup": "",
+ "id": "https-check",
+ "max_output": 65536,
+ "params": [
+  {
+   "kind": "fqdn",
+   "name": "fqdn",
+   "required": true
+  }
+ ],
+ "timeout_sec": 30
+}

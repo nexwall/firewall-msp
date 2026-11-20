@@ -1,0 +1,13 @@
+{
+  "support-packets": {
+    "description": "Run Nexwall Support Packets (fixed read-only diagnostics)",
+    "write": {},
+    "read": {
+      "ubus": {
+        "ns.support": [
+          "*"
+        ]
+      }
+    }
+  }
+}
